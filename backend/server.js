@@ -1,10 +1,10 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const xlsx = require('xlsx');
-const { execFile } = require('child_process');
 const path = require('path');
-const db = require('./database');
+const db = require('./database'); // PostgreSQL pool
 
 const app = express();
 // Enable Cross-Origin Resource Sharing for the React frontend
@@ -16,8 +16,8 @@ app.use(express.json());
 const upload = multer({ dest: 'uploads/' });
 
 // --- ENDPOINT: Upload Excel ---
-// Receives an Excel file, parses it, and saves requirements to the SQLite database.
-app.post('/api/upload', upload.single('file'), (req, res) => {
+// Receives an Excel file, parses it, and saves requirements to Neon PostgreSQL database.
+app.post('/api/upload', upload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
     try {
@@ -29,70 +29,91 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
         // Use a single timestamp for all requirements in this upload session
         const uploadTime = new Date().toISOString();
 
-        // Prepare database insertion statement
-        const stmt = db.prepare("INSERT INTO requirements (requirement_sentence, created_at, batch_name) VALUES (?, ?, ?)");
-        data.forEach(row => {
-            // Support multiple column names for the requirement text
-            const text = row['Requirement Description'] 
-                      || row['Requirement'] 
-                      || row['requirement_sentence'] 
-                      || row['Description']
-                      || (Object.keys(row).length > 1 ? row[Object.keys(row)[1]] : row[Object.keys(row)[0]]);
-            if (text) {
-                stmt.run(text, uploadTime, batch_name || 'Untitled Batch');
+        const client = await db.connect();
+        try {
+            await client.query('BEGIN');
+
+            for (const row of data) {
+                // Support multiple column names for the requirement text
+                const text = row['Requirement Description'] 
+                          || row['Requirement'] 
+                          || row['requirement_sentence'] 
+                          || row['Description']
+                          || (Object.keys(row).length > 1 ? row[Object.keys(row)[1]] : row[Object.keys(row)[0]]);
+                if (text) {
+                    await client.query(
+                        "INSERT INTO requirements (requirement_sentence, created_at, batch_name) VALUES ($1, $2, $3)",
+                        [text, uploadTime, batch_name || 'Untitled Batch']
+                    );
+                }
             }
-        });
-        stmt.finalize(() => {
+
+            await client.query('COMMIT');
             res.json({ message: 'File uploaded and parsed successfully' });
-        });
+        } catch (dbErr) {
+            await client.query('ROLLBACK');
+            console.error('Upload DB error:', dbErr);
+            res.status(500).json({ error: 'Failed to insert requirements into database' });
+        } finally {
+            client.release();
+        }
     } catch (err) {
-        console.error(err);
+        console.error('File process error:', err);
         res.status(500).json({ error: 'Failed to process file' });
     }
 });
 
 // Get Requirements
-app.get('/api/requirements', (req, res) => {
-    db.all("SELECT * FROM requirements ORDER BY created_at DESC", (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
+app.get('/api/requirements', async (req, res) => {
+    try {
+        const result = await db.query("SELECT * FROM requirements ORDER BY id DESC");
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Update a requirement manually
-app.put('/api/requirements/:id', (req, res) => {
+app.put('/api/requirements/:id', async (req, res) => {
     const { requirement_sentence } = req.body;
-    db.run(
-        "UPDATE requirements SET requirement_sentence = ?, completeness_status = 'Completed by User' WHERE id = ?",
-        [requirement_sentence, req.params.id],
-        function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ message: 'Requirement updated successfully' });
-        }
-    );
+    try {
+        await db.query(
+            "UPDATE requirements SET requirement_sentence = $1, completeness_status = 'Completed by User' WHERE id = $2",
+            [requirement_sentence, req.params.id]
+        );
+        res.json({ message: 'Requirement updated successfully' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
-// --- NEW ENDPOINT: Rename a Batch ---
+// --- ENDPOINT: Rename a Batch ---
 // Updates the batch_name for all requirements that share a specific created_at timestamp.
-app.put('/api/batches/:timestamp', (req, res) => {
+app.put('/api/batches/:timestamp', async (req, res) => {
     const { batch_name } = req.body;
     const { timestamp } = req.params;
     
-    db.run(
-        "UPDATE requirements SET batch_name = ? WHERE created_at = ?",
-        [batch_name, timestamp],
-        function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ message: 'Batch renamed successfully', count: this.changes });
-        }
-    );
+    try {
+        const result = await db.query(
+            "UPDATE requirements SET batch_name = $1 WHERE created_at = $2",
+            [batch_name, timestamp]
+        );
+        res.json({ message: 'Batch renamed successfully', count: result.rowCount });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // --- ENDPOINT: Process Requirements (Validation & Generation) ---
 // Triggers the Python AI service to perform NLP analysis and artifact generation.
-app.post('/api/process', (req, res) => {
-    db.all("SELECT id, requirement_sentence FROM requirements", (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
+app.post('/api/process', async (req, res) => {
+    try {
+        const result = await db.query("SELECT id, requirement_sentence FROM requirements");
+        const rows = result.rows;
+
         if (rows.length === 0) return res.status(400).json({ error: 'No requirements found' });
 
         const sentences = rows.map(r => r.requirement_sentence);
@@ -112,7 +133,7 @@ app.post('/api/process', (req, res) => {
             stderr += data.toString();
         });
         
-        pythonProcess.on('close', (code) => {
+        pythonProcess.on('close', async (code) => {
             if (code !== 0) {
                 console.error("Python script error:", stderr);
                 // Fallback to simple logic if Python is not available or fails
@@ -125,7 +146,7 @@ app.post('/api/process', (req, res) => {
                     acceptance_criteria: 'Pending'
                 }));
                 
-                updateDatabase(fallbackResults, res);
+                await updateDatabase(fallbackResults, res);
                 return;
             }
 
@@ -140,7 +161,7 @@ app.post('/api/process', (req, res) => {
                     ...resultItem,
                     id: idLookup[resultItem.requirement]
                 }));
-                updateDatabase(finalResults, res);
+                await updateDatabase(finalResults, res);
             } catch (parseErr) {
                 console.error("Parse error:", parseErr, stdout);
                 res.status(500).json({ error: 'Failed to parse AI service output' });
@@ -150,43 +171,52 @@ app.post('/api/process', (req, res) => {
         // Send requirements data to Python via stdin
         pythonProcess.stdin.write(JSON.stringify(sentences));
         pythonProcess.stdin.end();
-    });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
-function updateDatabase(results, res) {
-    db.serialize(() => {
-        db.run("BEGIN TRANSACTION");
-        const stmt = db.prepare(`
-            UPDATE requirements 
-            SET completeness_status = ?, 
-                epic = ?, feature = ?, user_story = ?, acceptance_criteria = ?
-            WHERE id = ?
-        `);
-        results.forEach(r => {
-            stmt.run(
-                r.status, 
-                r.epic || '', 
-                r.feature || '', 
-                r.user_story || '', 
-                r.acceptance_criteria || '', 
-                r.id
+async function updateDatabase(results, res) {
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+        for (const r of results) {
+            await client.query(
+                `UPDATE requirements 
+                 SET completeness_status = $1, 
+                     epic = $2, feature = $3, user_story = $4, acceptance_criteria = $5
+                 WHERE id = $6`,
+                [
+                    r.status, 
+                    r.epic || '', 
+                    r.feature || '', 
+                    r.user_story || '', 
+                    r.acceptance_criteria || '', 
+                    r.id
+                ]
             );
-        });
-        stmt.finalize();
-        db.run("COMMIT", (err) => {
-            if (err) return res.status(500).json({ error: "DB Update Failed" });
-            res.json({ message: "Processing complete", count: results.length });
-        });
-    });
+        }
+        await client.query('COMMIT');
+        res.json({ message: "Processing complete", count: results.length });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("DB Update Error:", err);
+        res.status(500).json({ error: "DB Update Failed" });
+    } finally {
+        client.release();
+    }
 }
 
 // Export specific batch to Excel
-app.get('/api/export/batch', (req, res) => {
+app.get('/api/export/batch', async (req, res) => {
     const { timestamp } = req.query;
     if (!timestamp) return res.status(400).json({ error: 'Timestamp is required' });
 
-    db.all("SELECT * FROM requirements WHERE created_at = ?", [timestamp], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
+    try {
+        const result = await db.query("SELECT * FROM requirements WHERE created_at = $1", [timestamp]);
+        const rows = result.rows;
         if (rows.length === 0) return res.status(404).json({ error: 'No requirements found for this batch' });
         
         const worksheet = xlsx.utils.json_to_sheet(rows);
@@ -199,18 +229,21 @@ app.get('/api/export/batch', (req, res) => {
         
         res.download(filePath, (downloadErr) => {
             if (!downloadErr) {
-                // Optional: delete file after download to keep server clean
                 const fs = require('fs');
                 if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
             }
         });
-    });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Export all to Excel
-app.get('/api/export', (req, res) => {
-    db.all("SELECT * FROM requirements", (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
+app.get('/api/export', async (req, res) => {
+    try {
+        const result = await db.query("SELECT * FROM requirements ORDER BY id ASC");
+        const rows = result.rows;
         
         const worksheet = xlsx.utils.json_to_sheet(rows);
         const workbook = xlsx.utils.book_new();
@@ -220,10 +253,13 @@ app.get('/api/export', (req, res) => {
         xlsx.writeFile(workbook, filePath);
         
         res.download(filePath);
-    });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Backend server running on port ${PORT}`);
+    console.log(`Backend server running on port ${PORT} with Neon PostgreSQL`);
 });
