@@ -1,22 +1,71 @@
+// Research/backend/server.js
+// ==========================================================
+// UNIFIED RESEARCH & CHANGE MANAGEMENT BACKEND SERVER
+// Supports:
+// 1. Requirements Ingestion & Clustering Pipeline (Port 3000)
+// 2. ReqChange AI Change Request Management & Impact Analysis
+// ==========================================================
+
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const bodyParser = require('body-parser');
 const multer = require('multer');
 const xlsx = require('xlsx');
 const path = require('path');
-const db = require('./database'); // PostgreSQL pool
+const fs = require('fs');
+
+// Database connectors
+const db = require('./database'); // Neon PostgreSQL pool for requirements pipeline
+const { initializeDatabase, getDatabase } = require('./models/database'); // Change Management DB
+const modelLoader = require('./ml_model/modelLoader'); // Change Management ML Model Loader
+
+// Routes
+const changeRequestRoutes = require('./routes/changeRequestRoutes');
 
 const app = express();
-// Enable Cross-Origin Resource Sharing for the React frontend
+const PORT = process.env.PORT || 3000;
+
+// Enable Cross-Origin Resource Sharing
 app.use(cors());
-// Parse incoming JSON payloads
+
+// Body parser middleware
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.json());
+
+// Attach Change Management DB to requests if available
+app.use((req, res, next) => {
+    try {
+        req.db = getDatabase();
+        next();
+    } catch (error) {
+        next();
+    }
+});
 
 // Configure Multer for Excel file uploads
 const upload = multer({ dest: 'uploads/' });
 
+// ==========================================================
+// 1. CHANGE MANAGEMENT MODULE ROUTES
+// ==========================================================
+app.use('/api/change-requests', changeRequestRoutes);
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+    res.json({ 
+        status: 'OK', 
+        message: 'Unified Research & Change Management Server is active',
+        timestamp: new Date().toISOString()
+    });
+});
+
+// ==========================================================
+// 2. REQUIREMENTS PIPELINE ROUTES
+// ==========================================================
+
 // --- ENDPOINT: Upload Excel ---
-// Receives an Excel file, parses it, and saves requirements to Neon PostgreSQL database.
 app.post('/api/upload', upload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
@@ -26,15 +75,12 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
         const sheetName = workbook.SheetNames[0];
         const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
-        // Use a single timestamp for all requirements in this upload session
         const uploadTime = new Date().toISOString();
-
         const client = await db.connect();
         try {
             await client.query('BEGIN');
 
             for (const row of data) {
-                // Support multiple column names for the requirement text
                 const text = row['Requirement Description'] 
                           || row['Requirement'] 
                           || row['requirement_sentence'] 
@@ -89,8 +135,7 @@ app.put('/api/requirements/:id', async (req, res) => {
     }
 });
 
-// --- ENDPOINT: Rename a Batch ---
-// Updates the batch_name for all requirements that share a specific created_at timestamp.
+// Rename a Batch
 app.put('/api/batches/:timestamp', async (req, res) => {
     const { batch_name } = req.body;
     const { timestamp } = req.params;
@@ -107,8 +152,7 @@ app.put('/api/batches/:timestamp', async (req, res) => {
     }
 });
 
-// --- ENDPOINT: Process Requirements (Validation & Generation) ---
-// Triggers the Python AI service to perform NLP analysis and artifact generation.
+// Process Requirements (Validation & Generation via Python)
 app.post('/api/process', async (req, res) => {
     try {
         const result = await db.query("SELECT id, requirement_sentence FROM requirements");
@@ -119,7 +163,6 @@ app.post('/api/process', async (req, res) => {
         const sentences = rows.map(r => r.requirement_sentence);
         const scriptPath = path.join(__dirname, 'ai_service.py');
 
-        // Spawn a child process to run the Python script
         const { spawn } = require('child_process');
         const pythonProcess = spawn('python', [scriptPath, 'process']);
         let stdout = '';
@@ -136,7 +179,6 @@ app.post('/api/process', async (req, res) => {
         pythonProcess.on('close', async (code) => {
             if (code !== 0) {
                 console.error("Python script error:", stderr);
-                // Fallback to simple logic if Python is not available or fails
                 const fallbackResults = rows.map(r => ({
                     id: r.id,
                     status: r.requirement_sentence.length > 20 ? 'Complete' : 'Incomplete: Too short',
@@ -151,12 +193,10 @@ app.post('/api/process', async (req, res) => {
             }
 
             try {
-                // Parse the JSON output from the Python script
                 const results = JSON.parse(stdout);
                 const idLookup = {};
                 rows.forEach(r => { idLookup[r.requirement_sentence] = r.id; });
                 
-                // Map results back to original DB IDs
                 const finalResults = results.map(resultItem => ({
                     ...resultItem,
                     id: idLookup[resultItem.requirement]
@@ -168,7 +208,6 @@ app.post('/api/process', async (req, res) => {
             }
         });
         
-        // Send requirements data to Python via stdin
         pythonProcess.stdin.write(JSON.stringify(sentences));
         pythonProcess.stdin.end();
 
@@ -229,7 +268,6 @@ app.get('/api/export/batch', async (req, res) => {
         
         res.download(filePath, (downloadErr) => {
             if (!downloadErr) {
-                const fs = require('fs');
                 if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
             }
         });
@@ -259,7 +297,49 @@ app.get('/api/export', async (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Backend server running on port ${PORT} with Neon PostgreSQL`);
-});
+// ==========================================================
+// 3. SERVER INITIALIZATION
+// ==========================================================
+async function startServer() {
+    try {
+        console.log('🚀 Initializing Unified Research & Change Management Server...');
+
+        // Initialize Change Management DB Schema
+        try {
+            await initializeDatabase();
+            console.log('✅ Change Management Database initialized');
+        } catch (dbErr) {
+            console.warn('⚠️ Change Management Database warning:', dbErr.message);
+        }
+
+        // Initialize ML Impact Model
+        try {
+            await modelLoader.loadModel();
+            console.log('✅ ReqChange AI ML Model loaded successfully');
+        } catch (modelError) {
+            console.warn('⚠️ ReqChange AI ML Model warning:', modelError.message);
+        }
+
+        app.listen(PORT, () => {
+            console.log(`\n======================================================`);
+            console.log(`🚀 Unified Backend Server active on http://localhost:${PORT}`);
+            console.log(`======================================================`);
+            console.log(`📋 Change Management Endpoints:`);
+            console.log(`   GET  http://localhost:${PORT}/api/change-requests/projects`);
+            console.log(`   GET  http://localhost:${PORT}/api/change-requests/all`);
+            console.log(`   POST http://localhost:${PORT}/api/change-requests/submit`);
+            console.log(`   GET  http://localhost:${PORT}/api/change-requests/stats`);
+            console.log(`📋 Requirements Pipeline Endpoints:`);
+            console.log(`   GET  http://localhost:${PORT}/api/requirements`);
+            console.log(`   POST http://localhost:${PORT}/api/upload`);
+            console.log(`   POST http://localhost:${PORT}/api/process`);
+            console.log(`   GET  http://localhost:${PORT}/api/export`);
+            console.log(`======================================================\n`);
+        });
+
+    } catch (error) {
+        console.error('❌ Server startup error:', error);
+    }
+}
+
+startServer();
