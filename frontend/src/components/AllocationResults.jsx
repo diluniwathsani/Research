@@ -4,7 +4,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 
 const ItemTypes = { TASK: 'task' };
 
-// Rotating accent palette used for developer avatars / progress bars
+// Rotating accent palette used for developer avatars / role badges
 const AVATAR_THEMES = [
   { bg: 'bg-indigo-500', soft: 'bg-indigo-50 dark:bg-indigo-500/10', text: 'text-indigo-600 dark:text-indigo-300' },
   { bg: 'bg-amber-500', soft: 'bg-amber-50 dark:bg-amber-500/10', text: 'text-amber-600 dark:text-amber-300' },
@@ -31,19 +31,19 @@ const DraggableTask = ({ task }) => {
   return (
     <div
       ref={drag}
-      className={`px-3 py-2.5 mb-2 rounded-xl border cursor-move transition-all hover:translate-x-1 hover:shadow-sm ${complexityStyles(task.predicted_complexity)}`}
+      className={`px-3.5 py-3 mb-2.5 rounded-xl border cursor-move transition-all hover:translate-x-1 hover:shadow-md ${complexityStyles(task.predicted_complexity)}`}
       style={{ opacity: isDragging ? 0.5 : 1 }}
     >
-      <div className="flex justify-between items-center mb-1">
-        <strong className="text-[13px] text-slate-700 dark:text-slate-200">{task.story_id}</strong>
-        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/70 dark:bg-black/20 text-slate-600 dark:text-slate-300">
+      <div className="flex justify-between items-center gap-2 mb-1.5">
+        <strong className="text-sm font-bold text-slate-800 dark:text-slate-100">{task.story_id}</strong>
+        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-white/80 dark:bg-black/25 text-slate-700 dark:text-slate-200 whitespace-nowrap">
           {task.allocated_hours}h
         </span>
       </div>
-      <div className="text-xs text-slate-500 dark:text-slate-400 mb-1 font-medium truncate">
+      <div className="text-sm text-slate-600 dark:text-slate-300 mb-1.5 font-medium leading-snug">
         {task.title || task.story_id}
       </div>
-      <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-400 dark:text-slate-500">
+      <div className="text-xs uppercase tracking-wide font-semibold text-slate-400 dark:text-slate-400">
         {task.predicted_complexity || 'MEDIUM'} • {task.matched_domain || 'general'}
       </div>
     </div>
@@ -77,20 +77,20 @@ const DeveloperColumn = ({ developer, tasks, onDrop, theme }) => {
     >
       {/* Header */}
       <div className="p-4">
-        <div className="flex items-center gap-3 mb-3">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white text-base shrink-0 ${theme.bg}`}>
+        <div className="flex items-center gap-3 mb-4">
+          <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-white text-lg shrink-0 ${theme.bg}`}>
             {developer.name?.charAt(0)}
           </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <strong className="text-sm text-slate-800 dark:text-slate-100 truncate">{developer.name}</strong>
+            <div className="flex items-center gap-2 flex-wrap">
+              <strong className="text-[15px] font-bold text-slate-800 dark:text-slate-100 truncate">{developer.name}</strong>
               {developer.role && (
-                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${theme.soft} ${theme.text}`}>
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${theme.soft} ${theme.text}`}>
                   {developer.role}
                 </span>
               )}
             </div>
-            <div className="text-[11px] text-slate-400 dark:text-slate-500 capitalize truncate">
+            <div className="text-xs text-slate-500 dark:text-slate-400 capitalize truncate mt-0.5">
               {developer.primary_domain || 'general'} • {developer.skill_level || 'developer'}
             </div>
           </div>
@@ -98,35 +98,35 @@ const DeveloperColumn = ({ developer, tasks, onDrop, theme }) => {
 
         <div className="flex justify-between gap-4">
           <div>
-            <div className="text-[10px] text-slate-400 dark:text-slate-500">Used</div>
-            <div className="text-base font-bold text-slate-800 dark:text-slate-100">{used}h</div>
+            <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">Used</div>
+            <div className="text-xl font-bold text-slate-800 dark:text-slate-100">{used}h</div>
           </div>
           <div className="text-right">
-            <div className="text-[10px] text-slate-400 dark:text-slate-500">Capacity</div>
-            <div className="text-base font-bold text-slate-500 dark:text-slate-400">{capacity}h</div>
+            <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">Capacity</div>
+            <div className="text-xl font-bold text-slate-500 dark:text-slate-400">{capacity}h</div>
           </div>
         </div>
       </div>
 
       {/* Utilization bar */}
       <div className="px-4 pb-3">
-        <div className="h-1.5 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden mb-1.5">
+        <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden mb-2">
           <div className={`h-full rounded-full transition-all ${getUtilizationBar()}`} style={{ width: `${Math.min(utilization, 100)}%` }} />
         </div>
-        <div className="text-[11px] text-slate-400 dark:text-slate-500">
+        <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
           {utilization.toFixed(0)}% utilized · {remaining}h remaining
         </div>
       </div>
 
       {/* Tasks */}
-      <div className="px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-700 min-h-[140px] max-h-[360px] overflow-y-auto">
+      <div className="px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-700 min-h-[150px] max-h-[380px] overflow-y-auto">
         {tasks.length === 0 ? (
           <div className="text-center py-8 text-slate-300 dark:text-slate-600">
             <span className="text-2xl block mb-2">📭</span>
-            <p className="text-xs">No tasks assigned</p>
+            <p className="text-sm">No tasks assigned</p>
           </div>
         ) : (
-          <div className="pt-2">
+          <div className="pt-2.5">
             {tasks.map(task => (
               <DraggableTask key={task.story_id} task={task} />
             ))}
@@ -157,7 +157,7 @@ const AllocationResults = ({ assignments, developers, tasks, selectedSprint, onR
     return (
       <div className="text-center py-16">
         <span className="w-10 h-10 mx-auto rounded-full border-4 border-indigo-100 dark:border-indigo-500/20 border-t-indigo-500 animate-spin block mb-4" />
-        <p className="text-sm text-slate-400 dark:text-slate-500">AI is analyzing and allocating tasks...</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">AI is analyzing and allocating tasks...</p>
       </div>
     );
   }
@@ -169,13 +169,13 @@ const AllocationResults = ({ assignments, developers, tasks, selectedSprint, onR
         <div className="flex justify-between items-center flex-wrap gap-4 mb-6 px-5 py-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
           <div>
             <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Allocation Results</h2>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
               Sprint: {selectedSprint?.name} · {tasks.length} tasks allocated to {developers.length} developers
             </p>
           </div>
           <button
             onClick={onBack}
-            className="px-5 py-2 rounded-full text-xs font-semibold border border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            className="px-5 py-2.5 rounded-full text-sm font-semibold border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
           >
             ← Back to Tasks
           </button>
@@ -192,20 +192,20 @@ const AllocationResults = ({ assignments, developers, tasks, selectedSprint, onR
               <button
                 onClick={onRebalance}
                 disabled={loading}
-                className="px-5 py-2 rounded-full text-xs font-semibold bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20 dark:hover:bg-amber-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-5 py-2.5 rounded-full text-sm font-semibold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20 dark:hover:bg-amber-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 🔄 Rebalance AI
               </button>
               <button
                 onClick={onSave}
-                className="px-5 py-2 rounded-full text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 shadow-sm shadow-emerald-600/20 transition-colors"
+                className="px-5 py-2.5 rounded-full text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-500 shadow-sm shadow-emerald-600/20 transition-colors"
               >
                 💾 Save Allocation
               </button>
             </div>
           </div>
 
-          <div className="grid gap-5 mb-5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+          <div className="grid gap-5 mb-5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))' }}>
             {developers.map((dev, i) => (
               <DeveloperColumn
                 key={dev.id}
@@ -219,26 +219,26 @@ const AllocationResults = ({ assignments, developers, tasks, selectedSprint, onR
 
           {/* Summary */}
           <div className="pt-5 border-t border-slate-100 dark:border-slate-800">
-            <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+            <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))' }}>
               <div className="flex items-center gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700">
                 <span className="text-2xl">📊</span>
                 <div>
-                  <div className="text-xs text-slate-400 dark:text-slate-500">Total Hours Allocated</div>
-                  <div className="text-lg font-bold text-slate-800 dark:text-slate-100">{totalHours}h</div>
+                  <div className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Hours Allocated</div>
+                  <div className="text-xl font-bold text-slate-800 dark:text-slate-100">{totalHours}h</div>
                 </div>
               </div>
               <div className="flex items-center gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700">
                 <span className="text-2xl">👥</span>
                 <div>
-                  <div className="text-xs text-slate-400 dark:text-slate-500">Total Capacity Used</div>
-                  <div className="text-lg font-bold text-slate-800 dark:text-slate-100">{totalCapacity}h</div>
+                  <div className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Capacity Used</div>
+                  <div className="text-xl font-bold text-slate-800 dark:text-slate-100">{totalCapacity}h</div>
                 </div>
               </div>
               <div className="flex items-center gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700">
                 <span className="text-2xl">📈</span>
                 <div>
-                  <div className="text-xs text-slate-400 dark:text-slate-500">Overall Utilization</div>
-                  <div className={`text-lg font-bold ${utilization > 100 ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                  <div className="text-sm font-medium text-slate-500 dark:text-slate-400">Overall Utilization</div>
+                  <div className={`text-xl font-bold ${utilization > 100 ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
                     {utilization.toFixed(1)}%
                   </div>
                 </div>
@@ -246,8 +246,8 @@ const AllocationResults = ({ assignments, developers, tasks, selectedSprint, onR
               <div className="flex items-center gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700">
                 <span className="text-2xl">⚖️</span>
                 <div>
-                  <div className="text-xs text-slate-400 dark:text-slate-500">Allocation Status</div>
-                  <div className={`text-lg font-bold ${isBalanced ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
+                  <div className="text-sm font-medium text-slate-500 dark:text-slate-400">Allocation Status</div>
+                  <div className={`text-xl font-bold ${isBalanced ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
                     {isBalanced ? 'Balanced' : 'Over Capacity'}
                   </div>
                 </div>
