@@ -1,0 +1,252 @@
+.allocation-board-container {
+  background: white;
+  border-radius: 20px;
+  padding: 24px;
+  margin-top: 32px;
+  border: 1px solid #e2e8f0;
+}
+
+.allocation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.allocation-header h3 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.allocation-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.rebalance-btn, .save-btn {
+  padding: 10px 20px;
+  border-radius: 40px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: none;
+}
+
+.rebalance-btn {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.rebalance-btn:hover {
+  background: #e2e8f0;
+  transform: translateY(-1px);
+}
+
+.save-btn {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+}
+
+.save-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.developers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.developer-column {
+  background: #f8fafc;
+  border-radius: 16px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.developer-column.drag-over {
+  border-color: #667eea;
+  background: #f1f5f9;
+}
+
+.developer-header {
+  padding: 16px;
+  color: white;
+}
+
+.developer-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.developer-avatar {
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.developer-skill {
+  display: block;
+  font-size: 11px;
+  opacity: 0.9;
+  text-transform: capitalize;
+}
+
+.developer-stats {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.stat {
+  flex: 1;
+}
+
+.stat-label {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.stat-value {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.developer-progress {
+  padding: 12px 16px;
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.progress-bar {
+  height: 6px;
+  border-radius: 10px;
+  transition: width 0.3s ease;
+  margin-bottom: 8px;
+}
+
+.progress-text {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.developer-tasks {
+  padding: 12px;
+  min-height: 200px;
+}
+
+.task-card {
+  padding: 12px;
+  margin-bottom: 8px;
+  border-radius: 12px;
+  cursor: move;
+  transition: all 0.2s ease;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.task-card:hover {
+  transform: translateX(4px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.task-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.task-hours {
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.task-card-complexity {
+  font-size: 10px;
+  color: #64748b;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.empty-tasks {
+  text-align: center;
+  padding: 40px 20px;
+  color: #94a3b8;
+}
+
+.empty-tasks span {
+  font-size: 32px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.empty-tasks p {
+  font-size: 13px;
+}
+
+.allocation-summary {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 2px solid #e2e8f0;
+}
+
+.summary-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+}
+
+.stat-icon {
+  font-size: 28px;
+}
+
+.stat-number {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+@media (max-width: 768px) {
+  .allocation-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .developers-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .summary-stats {
+    grid-template-columns: 1fr;
+  }
+}
