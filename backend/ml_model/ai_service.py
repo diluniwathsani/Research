@@ -25,10 +25,17 @@ except OSError:
     except:
         nlp = None
 
-# Attempt to load ML models from the parent directory (Research)
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SVM_PATH = os.path.join(BASE_DIR, 'model_svm_tuned.pkl')
-TFIDF_PATH = os.path.join(BASE_DIR, 'tfidf_vectorizer.pkl')
+# Attempt to load ML models from the current directory (backend) or parent directory (Research)
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(CURRENT_DIR)
+
+SVM_PATH = os.path.join(CURRENT_DIR, 'model_svm_tuned.pkl')
+if not os.path.exists(SVM_PATH):
+    SVM_PATH = os.path.join(BASE_DIR, 'model_svm_tuned.pkl')
+
+TFIDF_PATH = os.path.join(CURRENT_DIR, 'tfidf_vectorizer.pkl')
+if not os.path.exists(TFIDF_PATH):
+    TFIDF_PATH = os.path.join(BASE_DIR, 'tfidf_vectorizer.pkl')
 
 best_model = None
 tfidf = None

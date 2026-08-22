@@ -117,7 +117,10 @@ app.post('/api/process', async (req, res) => {
         if (rows.length === 0) return res.status(400).json({ error: 'No requirements found' });
 
         const sentences = rows.map(r => r.requirement_sentence);
-        const scriptPath = path.join(__dirname, 'ai_service.py');
+        const fs = require('fs');
+        const mlModelPath = path.join(__dirname, 'ml_model', 'ai_service.py');
+        const scriptPath = fs.existsSync(mlModelPath) ? mlModelPath : path.join(__dirname, 'ai_service.py');
+
 
         // Spawn a child process to run the Python script
         const { spawn } = require('child_process');
@@ -259,7 +262,94 @@ app.get('/api/export', async (req, res) => {
     }
 });
 
+// --- REST ENDPOINTS FOR CONNECTED MODULES ---
+
+// Team Members / Resources
+app.get('/api/resources', async (req, res) => {
+    try {
+        const result = await db.query("SELECT * FROM team_members ORDER BY name ASC");
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/resources', async (req, res) => {
+    const { id, name, role, avatar, color, capacity_hours, allocated_hours, assigned_epics, skills, status } = req.body;
+    try {
+        await db.query(
+            `INSERT INTO team_members (id, name, role, avatar, color, capacity_hours, allocated_hours, assigned_epics, skills, status)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             ON CONFLICT (id) DO UPDATE SET 
+             allocated_hours = EXCLUDED.allocated_hours, 
+             assigned_epics = EXCLUDED.assigned_epics, 
+             status = EXCLUDED.status`,
+            [id, name, role, avatar, color, capacity_hours || 40, allocated_hours || 0, assigned_epics || [], skills || [], status || 'Optimal']
+        );
+        res.json({ message: 'Resource saved successfully' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Sprint Tasks / Kanban Items
+app.get('/api/sprint-tasks', async (req, res) => {
+    try {
+        const result = await db.query("SELECT * FROM sprint_tasks ORDER BY id DESC");
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/sprint-tasks', async (req, res) => {
+    const { id, requirement_sentence, epic, user_story, acceptance_criteria, column_name, points, assignee } = req.body;
+    try {
+        await db.query(
+            `INSERT INTO sprint_tasks (id, requirement_sentence, epic, user_story, acceptance_criteria, column_name, points, assignee)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             ON CONFLICT (id) DO UPDATE SET column_name = EXCLUDED.column_name, assignee = EXCLUDED.assignee`,
+            [id, requirement_sentence, epic, user_story, acceptance_criteria, column_name || 'Backlog', points || 3, assignee || 'Unassigned']
+        );
+        res.json({ message: 'Sprint task saved successfully' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Change Requests
+app.get('/api/change-requests', async (req, res) => {
+    try {
+        const result = await db.query("SELECT * FROM change_requests ORDER BY request_date DESC");
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/change-requests', async (req, res) => {
+    const { id, req_id, title, category, priority, impact_score, requested_by, request_date, status, description, rework_hours } = req.body;
+    try {
+        await db.query(
+            `INSERT INTO change_requests (id, req_id, title, category, priority, impact_score, requested_by, request_date, status, description, rework_hours)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+             ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status`,
+            [id, req_id, title, category, priority, impact_score, requested_by, request_date, status || 'Pending', description, rework_hours || 4]
+        );
+        res.json({ message: 'Change request saved successfully' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Backend server running on port ${PORT} with Neon PostgreSQL`);
 });
+
