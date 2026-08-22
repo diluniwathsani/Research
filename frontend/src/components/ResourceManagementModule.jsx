@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { 
   Users, Code, UserCheck, Briefcase, Cpu, Layers, Search, Plus, 
   Filter, CheckCircle2, Clock, BarChart3, ChevronRight, X, AlertTriangle, ShieldCheck 
@@ -76,6 +77,49 @@ export default function ResourceManagementModule({ requirements = [] }) {
   const [assignmentEpic, setAssignmentEpic] = useState('');
   const [assignmentMemberId, setAssignmentMemberId] = useState('');
 
+  // Sync with Backend PostgreSQL API
+  useEffect(() => {
+    const fetchDBResources = async () => {
+      try {
+        const res = await axios.get('http://localhost:3000/api/resources');
+        if (res.data && res.data.length > 0) {
+          const formatted = res.data.map(m => ({
+            id: m.id,
+            name: m.name,
+            role: m.role,
+            avatar: m.avatar || m.name.split(' ').map(n=>n[0]).join(''),
+            color: m.color || 'bg-indigo-600',
+            capacityHours: m.capacity_hours || 40,
+            allocatedHours: m.allocated_hours || 0,
+            assignedEpics: m.assigned_epics || [],
+            skills: m.skills || ['Engineering'],
+            status: m.status || 'Optimal'
+          }));
+          setTeamMembers(formatted);
+        } else {
+          // Initial seed
+          INITIAL_TEAM.forEach(async (m) => {
+            await axios.post('http://localhost:3000/api/resources', {
+              id: m.id,
+              name: m.name,
+              role: m.role,
+              avatar: m.avatar,
+              color: m.color,
+              capacity_hours: m.capacityHours,
+              allocated_hours: m.allocatedHours,
+              assigned_epics: m.assignedEpics,
+              skills: m.skills,
+              status: m.status
+            });
+          });
+        }
+      } catch (err) {
+        console.error("Resource API fetch error:", err);
+      }
+    };
+    fetchDBResources();
+  }, []);
+
   // Extract unique epics from requirements
   const epics = Array.from(new Set(requirements.map(r => r.epic).filter(Boolean)));
   const displayEpics = epics.length > 0 ? epics : ['Requirements Engine', 'AI Validation', 'Database Sync', 'Export Service'];
@@ -94,23 +138,46 @@ export default function ResourceManagementModule({ requirements = [] }) {
     return matchesSearch && matchesRole;
   });
 
-  const handleAssignEpic = (e) => {
+  const handleAssignEpic = async (e) => {
     e.preventDefault();
     if (!assignmentMemberId || !assignmentEpic) return;
 
-    setTeamMembers(prev => prev.map(m => {
+    let updatedMember = null;
+    const nextMembers = teamMembers.map(m => {
       if (m.id === assignmentMemberId) {
         const epicsSet = new Set([...m.assignedEpics, assignmentEpic]);
         const newAllocated = Math.min(m.capacityHours, m.allocatedHours + 5);
-        return {
+        updatedMember = {
           ...m,
           assignedEpics: Array.from(epicsSet),
           allocatedHours: newAllocated,
           status: newAllocated >= 38 ? 'Near Capacity' : 'Optimal'
         };
+        return updatedMember;
       }
       return m;
-    }));
+    });
+
+    setTeamMembers(nextMembers);
+
+    if (updatedMember) {
+      try {
+        await axios.post('http://localhost:3000/api/resources', {
+          id: updatedMember.id,
+          name: updatedMember.name,
+          role: updatedMember.role,
+          avatar: updatedMember.avatar,
+          color: updatedMember.color,
+          capacity_hours: updatedMember.capacityHours,
+          allocated_hours: updatedMember.allocatedHours,
+          assigned_epics: updatedMember.assignedEpics,
+          skills: updatedMember.skills,
+          status: updatedMember.status
+        });
+      } catch (err) {
+        console.error("Failed to save resource update:", err);
+      }
+    }
 
     setIsAssignModalOpen(false);
     setAssignmentEpic('');
@@ -118,6 +185,7 @@ export default function ResourceManagementModule({ requirements = [] }) {
   };
 
   return (
+
     <div className="space-y-6">
       {/* Header Banner */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 md:p-8 text-white shadow-xl border border-slate-800">
