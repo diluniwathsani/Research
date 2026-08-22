@@ -1,0 +1,48 @@
+{
+  "feature_columns": [
+    "story_points",
+    "priority_score",
+    "risk_score",
+    "complexity_score",
+    "change_severity",
+    "team_size_impact",
+    "budget_impact",
+    "hours_per_member_norm",
+    "progress_stage",
+    "progress_risk",
+    "sprint_number",
+    "sprint_risk",
+    "priority_risk",
+    "priority_complexity",
+    "risk_complexity",
+    "team_budget",
+    "progress_priority",
+    "story_points_norm",
+    "urgency_story"
+  ],
+  "priority_map": {
+    "Low": 1,
+    "Medium": 3,
+    "High": 5,
+    "Critical": 7
+  },
+  "risk_map": {
+    "Low": 1,
+    "Medium": 3,
+    "High": 5
+  },
+  "complexity_map": {
+    "Low": 1,
+    "Medium": 3,
+    "High": 5
+  },
+  "impact_map": {
+    "0": "LOW",
+    "1": "MEDIUM",
+    "2": "HIGH"
+  },
+  "model_version": "3.0_final",
+  "accuracy": 0.9555555555555556,
+  "cv_mean": 0.9616922998832547,
+  "cv_std": 0.012157178834682883
+}

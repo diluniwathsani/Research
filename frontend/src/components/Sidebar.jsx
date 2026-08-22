@@ -38,10 +38,10 @@ export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount }
     {
       id: 'changerequests',
       label: 'Change Requests',
-      subtitle: 'Reserved for Team Member',
+      subtitle: 'ReqChange AI & Governance',
       icon: GitPullRequest,
-      badge: 'Blank',
-      color: 'from-slate-400 to-slate-500',
+      badge: 'Active',
+      color: 'from-amber-500 to-rose-600',
     },
   ];
 
