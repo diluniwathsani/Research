@@ -16,6 +16,10 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+const changeRequestRoutes = require('./routes/changeRequestRoutes');
+app.use('/api/change-requests', changeRequestRoutes);
+
+
 // ================= SKILL MATCHING HELPER =================
 
 function calculateSkillMatchScore(developerSkills, requiredSkills) {
