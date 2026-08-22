@@ -1,32 +1,24 @@
 // ================= DATABASE CONFIGURATION =================
 // Neon PostgreSQL connection
 
-// Load environment variables FIRST
-require('dotenv').config({ path: './.env' });
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
-// Debug logging
-console.log('📁 Current directory:', __dirname);
-console.log('🔍 DATABASE_URL exists:', !!process.env.DATABASE_URL);
+const connectionString = process.env.DATABASE_URL || "postgresql://neondb_owner:npg_WwhL4l9AFUIr@ep-little-moon-ayl6lfl8.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require";
 
 const { Pool } = require('pg');
 
-if (!process.env.DATABASE_URL) {
-    console.error('❌ DATABASE_URL is not defined in .env');
-    console.error('Please create a .env file with:');
-    console.error('DATABASE_URL=postgresql://username:password@host/database');
-    console.error('Current working directory:', process.cwd());
-    process.exit(1);
-}
-
 // Create connection pool
 const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: connectionString,
     ssl: {
         rejectUnauthorized: false
     },
     connectionTimeoutMillis: 10000,
     idleTimeoutMillis: 30000,
 });
+
 
 // ================= TEST DATABASE CONNECTION =================
 

@@ -10,7 +10,8 @@ const pool = require('./database');  // ← Use database.js
 require('dotenv').config();
 
 const app = express();
-const PORT = 3001;  // Change to 3002 if port 3001 is busy
+const PORT = process.env.PORT || 3000;
+
 
 app.use(cors());
 app.use(express.json());
@@ -50,9 +51,8 @@ function calculateSkillMatchScore(developerSkills, requiredSkills) {
     return Math.round(score);
 }
 
-}
-
 // ================= PROJECTS =================
+
 
 const PROJECTS = [{ id: 1, name: 'AI Sprint Allocation System' }];
 app.get('/api/projects', (req, res) => { res.json(PROJECTS); });
@@ -397,9 +397,9 @@ app.post('/api/change-requests', async (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 3000;
-
 // ================= SAVE FINAL ASSIGNMENTS =================
+
+
 
 app.post('/api/task-assignments', async (req, res) => {
     try {
