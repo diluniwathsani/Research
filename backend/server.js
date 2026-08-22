@@ -1,345 +1,353 @@
-// Research/backend/server.js
-// ==========================================================
-// UNIFIED RESEARCH & CHANGE MANAGEMENT BACKEND SERVER
-// Supports:
-// 1. Requirements Ingestion & Clustering Pipeline (Port 3000)
-// 2. ReqChange AI Change Request Management & Impact Analysis
-// ==========================================================
+// Load environment variables from the current directory
+require('dotenv').config({ path: './.env' });
 
-require('dotenv').config();
+// Debug: Check if .env is loaded
+console.log('📁 Current directory:', __dirname);
+console.log('🔍 DATABASE_URL:', process.env.DATABASE_URL ? '✅ Found' : '❌ Not found');
 const express = require('express');
 const cors = require('cors');
-const bodyParser = require('body-parser');
-const multer = require('multer');
-const xlsx = require('xlsx');
-const path = require('path');
-const fs = require('fs');
-
-// Database connectors
-const db = require('./database'); // Neon PostgreSQL pool for requirements pipeline
-const { initializeDatabase, getDatabase } = require('./models/database'); // Change Management DB
-const modelLoader = require('./ml_model/modelLoader'); // Change Management ML Model Loader
-
-// Routes
-const changeRequestRoutes = require('./routes/changeRequestRoutes');
+const pool = require('./database');  // ← Use database.js
+require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = 3001;  // Change to 3002 if port 3001 is busy
 
-// Enable Cross-Origin Resource Sharing
 app.use(cors());
-
-// Body parser middleware
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.json());
 
-// Attach Change Management DB to requests if available
-app.use((req, res, next) => {
-    try {
-        req.db = getDatabase();
-        next();
-    } catch (error) {
-        next();
+// ================= SKILL MATCHING HELPER =================
+
+function calculateSkillMatchScore(developerSkills, requiredSkills) {
+    // If there are no required skills, any developer is a 100% match
+    if (!requiredSkills || requiredSkills.length === 0) {
+        return 100;
     }
-});
+    // If required skills exist but developer has no skills, match is 0%
+    if (!developerSkills || developerSkills.length === 0) {
+        return 0;
+    }
 
-// Configure Multer for Excel file uploads
-const upload = multer({ dest: 'uploads/' });
+    // Normalize developer skills into a consistent array of trimmed, lowercase strings
+    let devSkillArray = [];
+    if (Array.isArray(developerSkills)) {
+        devSkillArray = developerSkills.map(s => s.trim().toLowerCase());
+    } else if (typeof developerSkills === 'string') {
+        devSkillArray = developerSkills.split(',').map(s => s.trim().toLowerCase());
+    } else {
+        devSkillArray = [];
+    }
 
-// ==========================================================
-// 1. CHANGE MANAGEMENT MODULE ROUTES
-// ==========================================================
-app.use('/api/change-requests', changeRequestRoutes);
+    const requiredLower = requiredSkills.map(s => s.trim().toLowerCase());
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-    res.json({ 
-        status: 'OK', 
-        message: 'Unified Research & Change Management Server is active',
-        timestamp: new Date().toISOString()
-    });
-});
-
-// ==========================================================
-// 2. REQUIREMENTS PIPELINE ROUTES
-// ==========================================================
-
-// --- ENDPOINT: Upload Excel ---
-app.post('/api/upload', upload.single('file'), async (req, res) => {
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-
-    try {
-        const { batch_name } = req.body;
-        const workbook = xlsx.readFile(req.file.path);
-        const sheetName = workbook.SheetNames[0];
-        const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
-
-        const uploadTime = new Date().toISOString();
-        const client = await db.connect();
-        try {
-            await client.query('BEGIN');
-
-            for (const row of data) {
-                const text = row['Requirement Description'] 
-                          || row['Requirement'] 
-                          || row['requirement_sentence'] 
-                          || row['Description']
-                          || (Object.keys(row).length > 1 ? row[Object.keys(row)[1]] : row[Object.keys(row)[0]]);
-                if (text) {
-                    await client.query(
-                        "INSERT INTO requirements (requirement_sentence, created_at, batch_name) VALUES ($1, $2, $3)",
-                        [text, uploadTime, batch_name || 'Untitled Batch']
-                    );
-                }
-            }
-
-            await client.query('COMMIT');
-            res.json({ message: 'File uploaded and parsed successfully' });
-        } catch (dbErr) {
-            await client.query('ROLLBACK');
-            console.error('Upload DB error:', dbErr);
-            res.status(500).json({ error: 'Failed to insert requirements into database' });
-        } finally {
-            client.release();
+    let matched = 0;
+    for (const req of requiredLower) {
+        if (devSkillArray.includes(req)) {
+            matched++;
         }
-    } catch (err) {
-        console.error('File process error:', err);
-        res.status(500).json({ error: 'Failed to process file' });
+    }
+
+    const score = (matched / requiredSkills.length) * 100;
+    return Math.round(score);
+}
+
+// ================= PROJECTS =================
+
+const PROJECTS = [{ id: 1, name: 'AI Sprint Allocation System' }];
+app.get('/api/projects', (req, res) => { res.json(PROJECTS); });
+
+// ================= SPRINTS =================
+
+const SPRINTS = [
+    { id: 1, name: 'Sprint 1', projectId: 1 },
+    { id: 2, name: 'Sprint 2', projectId: 1 }
+];
+app.get('/api/projects/:projectId/sprints', (req, res) => {
+    const projectId = parseInt(req.params.projectId);
+    const filtered = SPRINTS.filter(s => s.projectId === projectId);
+    res.json(filtered);
+});
+
+// ================= TASKS =================
+
+const TEST_TASKS = {
+    1: [
+        {
+            story_id: 'US001',
+            title: 'Fix login bug',
+            priority: 'HIGH',
+            estimated_hours: 8,
+            story_points: 2,
+            complexity: 'LOW',
+            required_domain: 'backend',
+            required_skills: ['JavaScript', 'SQL']
+        },
+        {
+            story_id: 'US002',
+            title: 'Add dark mode',
+            priority: 'MEDIUM',
+            estimated_hours: 16,
+            story_points: 3,
+            complexity: 'MEDIUM',
+            required_domain: 'frontend',
+            required_skills: ['JavaScript', 'React', 'CSS']
+        },
+        {
+            story_id: 'US003',
+            title: 'Write documentation',
+            priority: 'LOW',
+            estimated_hours: 4,
+            story_points: 1,
+            complexity: 'LOW',
+            required_domain: 'general',
+            required_skills: ['Communication']
+        },
+        {
+            story_id: 'US007',
+            title: 'Optimize database indexing',
+            priority: 'HIGH',
+            estimated_hours: 32,
+            story_points: 8,
+            complexity: 'HIGH',
+            required_domain: 'backend',
+            required_skills: ['SQL', 'Python', 'Database']
+        },
+        {
+            story_id: 'US008',
+            title: 'Train ML model',
+            priority: 'HIGH',
+            estimated_hours: 40,
+            story_points: 13,
+            complexity: 'HIGH',
+            required_domain: 'ai',
+            required_skills: ['Python', 'ML', 'TensorFlow']
+        },
+        {
+            story_id: 'US009',
+            title: 'Responsive design',
+            priority: 'MEDIUM',
+            estimated_hours: 20,
+            story_points: 5,
+            complexity: 'MEDIUM',
+            required_domain: 'frontend',
+            required_skills: ['CSS', 'React', 'HTML']
+        }
+    ],
+    2: [
+        {
+            story_id: 'US004',
+            title: 'Optimize database',
+            priority: 'HIGH',
+            estimated_hours: 24,
+            story_points: 5,
+            complexity: 'MEDIUM',
+            required_domain: 'backend',
+            required_skills: ['SQL', 'Python']
+        },
+        {
+            story_id: 'US005',
+            title: 'Create API docs',
+            priority: 'LOW',
+            estimated_hours: 6,
+            story_points: 2,
+            complexity: 'LOW',
+            required_domain: 'general',
+            required_skills: ['Communication', 'Writing']
+        },
+        {
+            story_id: 'US006',
+            title: 'Implement ML feature',
+            priority: 'HIGH',
+            estimated_hours: 40,
+            story_points: 8,
+            complexity: 'HIGH',
+            required_domain: 'ai',
+            required_skills: ['Python', 'ML', 'Data Science']
+        }
+    ]
+};
+
+app.get('/api/sprints/:sprintId/tasks', (req, res) => {
+    const sprintId = parseInt(req.params.sprintId);
+    const tasks = TEST_TASKS[sprintId] || [];
+    console.log(`📦 Serving ${tasks.length} tasks`);
+    res.json(tasks);
+});
+
+// ================= DEVELOPERS CRUD =================
+
+app.get('/api/developers', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM developers ORDER BY name');
+        const developers = result.rows.map(dev => ({
+            ...dev,
+            languages: dev.languages ? dev.languages.split(',') : []
+        }));
+        res.json(developers);
+    } catch (error) {
+        console.error('Error fetching developers:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
-// Get Requirements
-app.get('/api/requirements', async (req, res) => {
-    try {
-        const result = await db.query("SELECT * FROM requirements ORDER BY id DESC");
-        res.json(result.rows);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: err.message });
-    }
-});
+// ================= SIMPLIFIED ALLOCATION FUNCTION =================
 
-// Update a requirement manually
-app.put('/api/requirements/:id', async (req, res) => {
-    const { requirement_sentence } = req.body;
+function allocateTasks(tasks, developers) {
+    const priorityOrder = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+
+    // Sort tasks by priority
+    const sortedTasks = [...tasks].sort((a, b) =>
+        (priorityOrder[a.priority] ?? 1) - (priorityOrder[b.priority] ?? 1)
+    );
+
+    // Prepare developers
+    let devs = developers.map(dev => ({
+        ...dev,
+        remaining: dev.capacity_hours,
+        primary_domain: dev.primary_domain || 'general',
+        languages: Array.isArray(dev.languages) ? dev.languages : (dev.languages ? dev.languages.split(',').map(s => s.trim()) : [])
+    }));
+
+    const assignments = [];
+
+    for (const task of sortedTasks) {
+        const neededDomain = task.required_domain || 'general';
+        const requiredSkills = task.required_skills || [];
+
+        // Step 1: Filter developers by PRIMARY DOMAIN + CAPACITY
+        let candidates = devs.map(dev => ({
+            ...dev,
+            skillScore: calculateSkillMatchScore(dev.languages, requiredSkills)
+        })).filter(dev => {
+            const domainOk = (dev.primary_domain === neededDomain || neededDomain === 'general');
+            const capacityOk = dev.remaining >= task.estimated_hours;
+            return domainOk && capacityOk;
+        });
+
+        // Fallback: Any developer with capacity
+        if (candidates.length === 0) {
+            candidates = devs.filter(dev => dev.remaining >= task.estimated_hours)
+                .map(dev => ({ ...dev, skillScore: calculateSkillMatchScore(dev.languages, requiredSkills) }));
+            console.warn(`⚠️ No domain match for task ${task.story_id}; using any available developer.`);
+        }
+
+        if (candidates.length === 0) {
+            console.warn(`❌ No developer with capacity for task ${task.story_id}`);
+            continue;
+        }
+
+        // Sort by Skill Match Score (highest first)
+        candidates.sort((a, b) => {
+            if (a.skillScore !== b.skillScore) return b.skillScore - a.skillScore;
+            return b.remaining - a.remaining;
+        });
+
+        const chosen = candidates[0];
+
+        // Assign task
+        chosen.remaining -= task.estimated_hours;
+
+        console.log(`
+✅ Assigned ${task.story_id} - "${task.title}"
+   Developer: ${chosen.name} (${chosen.primary_domain})
+   Skill Match: ${chosen.skillScore}%
+   Remaining Capacity: ${chosen.remaining}h
+        `);
+
+        assignments.push({
+            story_id: task.story_id,
+            title: task.title || '',
+            developer_id: chosen.id,
+            developer_name: chosen.name,
+            allocated_hours: task.estimated_hours,
+            predicted_complexity: task.complexity,
+            matched_domain: neededDomain,
+            skill_match_score: chosen.skillScore
+        });
+    }
+
+    return assignments;
+}
+
+// ================= RUN ALLOCATION =================
+
+app.post('/api/allocate', async (req, res) => {
     try {
-        await db.query(
-            "UPDATE requirements SET requirement_sentence = $1, completeness_status = 'Completed by User' WHERE id = $2",
-            [requirement_sentence, req.params.id]
+        const { tasks, sprint_id } = req.body;
+        if (!tasks || !Array.isArray(tasks) || tasks.length === 0) {
+            return res.status(400).json({ error: 'No tasks provided' });
+        }
+
+        // Load developers from PostgreSQL
+        const result = await pool.query(
+            'SELECT id, name, role, capacity_hours, primary_domain, languages FROM developers'
         );
-        res.json({ message: 'Requirement updated successfully' });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: err.message });
-    }
-});
 
-// Rename a Batch
-app.put('/api/batches/:timestamp', async (req, res) => {
-    const { batch_name } = req.body;
-    const { timestamp } = req.params;
-    
-    try {
-        const result = await db.query(
-            "UPDATE requirements SET batch_name = $1 WHERE created_at = $2",
-            [batch_name, timestamp]
-        );
-        res.json({ message: 'Batch renamed successfully', count: result.rowCount });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: err.message });
-    }
-});
+        const developers = result.rows;
 
-// Process Requirements (Validation & Generation via Python)
-app.post('/api/process', async (req, res) => {
-    try {
-        const result = await db.query("SELECT id, requirement_sentence FROM requirements");
-        const rows = result.rows;
+        if (developers.length === 0) {
+            return res.status(400).json({ error: 'No developers found' });
+        }
 
-        if (rows.length === 0) return res.status(400).json({ error: 'No requirements found' });
+        const assignments = allocateTasks(tasks, developers);
 
-        const sentences = rows.map(r => r.requirement_sentence);
-        const scriptPath = path.join(__dirname, 'ai_service.py');
-
-        const { spawn } = require('child_process');
-        const pythonProcess = spawn('python', [scriptPath, 'process']);
-        let stdout = '';
-        let stderr = '';
-        
-        pythonProcess.stdout.on('data', (data) => {
-            stdout += data.toString();
-        });
-        
-        pythonProcess.stderr.on('data', (data) => {
-            stderr += data.toString();
-        });
-        
-        pythonProcess.on('close', async (code) => {
-            if (code !== 0) {
-                console.error("Python script error:", stderr);
-                const fallbackResults = rows.map(r => ({
-                    id: r.id,
-                    status: r.requirement_sentence.length > 20 ? 'Complete' : 'Incomplete: Too short',
-                    epic: 'Pending Generation',
-                    feature: 'Pending',
-                    user_story: 'Pending',
-                    acceptance_criteria: 'Pending'
-                }));
-                
-                await updateDatabase(fallbackResults, res);
-                return;
+        // Save allocations to DB if sprint_id is provided
+        if (sprint_id && assignments.length > 0) {
+            for (const a of assignments) {
+                await pool.query(
+                    `INSERT INTO allocations (sprint_id, story_id, developer_id, allocated_hours, predicted_complexity)
+                     VALUES ($1, $2, $3, $4, $5)`,
+                    [sprint_id, a.story_id, a.developer_id, a.allocated_hours, a.predicted_complexity]
+                );
             }
+        }
 
-            try {
-                const results = JSON.parse(stdout);
-                const idLookup = {};
-                rows.forEach(r => { idLookup[r.requirement_sentence] = r.id; });
-                
-                const finalResults = results.map(resultItem => ({
-                    ...resultItem,
-                    id: idLookup[resultItem.requirement]
-                }));
-                await updateDatabase(finalResults, res);
-            } catch (parseErr) {
-                console.error("Parse error:", parseErr, stdout);
-                res.status(500).json({ error: 'Failed to parse AI service output' });
-            }
-        });
-        
-        pythonProcess.stdin.write(JSON.stringify(sentences));
-        pythonProcess.stdin.end();
-
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: err.message });
+        res.json({ success: true, assignments });
+    } catch (error) {
+        console.error('Allocation error:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
-async function updateDatabase(results, res) {
-    const client = await db.connect();
+// ================= SAVE FINAL ASSIGNMENTS =================
+
+app.post('/api/task-assignments', async (req, res) => {
     try {
-        await client.query('BEGIN');
-        for (const r of results) {
-            await client.query(
-                `UPDATE requirements 
-                 SET completeness_status = $1, 
-                     epic = $2, feature = $3, user_story = $4, acceptance_criteria = $5
-                 WHERE id = $6`,
-                [
-                    r.status, 
-                    r.epic || '', 
-                    r.feature || '', 
-                    r.user_story || '', 
-                    r.acceptance_criteria || '', 
-                    r.id
-                ]
+        const { sprint_id, assignments } = req.body;
+        if (!sprint_id || !assignments) {
+            return res.status(400).json({ error: 'Missing sprint_id or assignments' });
+        }
+
+        for (const a of assignments) {
+            await pool.query(
+                `INSERT INTO allocations (sprint_id, story_id, developer_id, allocated_hours, predicted_complexity)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [sprint_id, a.story_id, a.developer_id, a.allocated_hours, a.predicted_complexity]
             );
         }
-        await client.query('COMMIT');
-        res.json({ message: "Processing complete", count: results.length });
-    } catch (err) {
-        await client.query('ROLLBACK');
-        console.error("DB Update Error:", err);
-        res.status(500).json({ error: "DB Update Failed" });
-    } finally {
-        client.release();
-    }
-}
 
-// Export specific batch to Excel
-app.get('/api/export/batch', async (req, res) => {
-    const { timestamp } = req.query;
-    if (!timestamp) return res.status(400).json({ error: 'Timestamp is required' });
-
-    try {
-        const result = await db.query("SELECT * FROM requirements WHERE created_at = $1", [timestamp]);
-        const rows = result.rows;
-        if (rows.length === 0) return res.status(404).json({ error: 'No requirements found for this batch' });
-        
-        const worksheet = xlsx.utils.json_to_sheet(rows);
-        const workbook = xlsx.utils.book_new();
-        xlsx.utils.book_append_sheet(workbook, worksheet, "Batch Artifacts");
-        
-        const fileName = `requirement_set_${timestamp.replace(/[:.]/g, '-')}.xlsx`;
-        const filePath = path.join(__dirname, fileName);
-        xlsx.writeFile(workbook, filePath);
-        
-        res.download(filePath, (downloadErr) => {
-            if (!downloadErr) {
-                if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-            }
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// Export all to Excel
-app.get('/api/export', async (req, res) => {
-    try {
-        const result = await db.query("SELECT * FROM requirements ORDER BY id ASC");
-        const rows = result.rows;
-        
-        const worksheet = xlsx.utils.json_to_sheet(rows);
-        const workbook = xlsx.utils.book_new();
-        xlsx.utils.book_append_sheet(workbook, worksheet, "All Artifacts");
-        
-        const filePath = path.join(__dirname, 'all_requirements.xlsx');
-        xlsx.writeFile(workbook, filePath);
-        
-        res.download(filePath);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// ==========================================================
-// 3. SERVER INITIALIZATION
-// ==========================================================
-async function startServer() {
-    try {
-        console.log('🚀 Initializing Unified Research & Change Management Server...');
-
-        // Initialize Change Management DB Schema
-        try {
-            await initializeDatabase();
-            console.log('✅ Change Management Database initialized');
-        } catch (dbErr) {
-            console.warn('⚠️ Change Management Database warning:', dbErr.message);
-        }
-
-        // Initialize ML Impact Model
-        try {
-            await modelLoader.loadModel();
-            console.log('✅ ReqChange AI ML Model loaded successfully');
-        } catch (modelError) {
-            console.warn('⚠️ ReqChange AI ML Model warning:', modelError.message);
-        }
-
-        app.listen(PORT, () => {
-            console.log(`\n======================================================`);
-            console.log(`🚀 Unified Backend Server active on http://localhost:${PORT}`);
-            console.log(`======================================================`);
-            console.log(`📋 Change Management Endpoints:`);
-            console.log(`   GET  http://localhost:${PORT}/api/change-requests/projects`);
-            console.log(`   GET  http://localhost:${PORT}/api/change-requests/all`);
-            console.log(`   POST http://localhost:${PORT}/api/change-requests/submit`);
-            console.log(`   GET  http://localhost:${PORT}/api/change-requests/stats`);
-            console.log(`📋 Requirements Pipeline Endpoints:`);
-            console.log(`   GET  http://localhost:${PORT}/api/requirements`);
-            console.log(`   POST http://localhost:${PORT}/api/upload`);
-            console.log(`   POST http://localhost:${PORT}/api/process`);
-            console.log(`   GET  http://localhost:${PORT}/api/export`);
-            console.log(`======================================================\n`);
-        });
-
+        res.json({ success: true, message: `Saved ${assignments.length} assignments` });
     } catch (error) {
-        console.error('❌ Server startup error:', error);
+        console.error('Save error:', error);
+        res.status(500).json({ error: error.message });
     }
-}
+});
 
-startServer();
+// ================= START SERVER =================
+
+app.listen(PORT, () => {
+    console.log('='.repeat(50));
+    console.log(`✅ Backend running on http://localhost:${PORT}`);
+    console.log('='.repeat(50));
+    console.log('GET  /api/projects');
+    console.log('GET  /api/projects/:id/sprints');
+    console.log('GET  /api/sprints/:id/tasks');
+    console.log('GET  /api/developers');
+    console.log('POST /api/allocate');
+    console.log('POST /api/task-assignments');
+    console.log('='.repeat(50));
+    console.log('\n📋 SIMPLIFIED RULES:');
+    console.log('   1. Domain Match (primary_domain === task.required_domain)');
+    console.log('   2. Capacity Available (remaining >= task hours)');
+    console.log('   3. Skill Match Score (higher is better)');
+    console.log('   4. Fallback: Any developer with capacity');
+});
