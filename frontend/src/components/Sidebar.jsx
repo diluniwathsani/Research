@@ -1,7 +1,22 @@
-import React from 'react';
-import { LayoutDashboard, FileCode, Users, Calendar, GitPullRequest, Sparkles, ChevronRight, HardDrive, Layers } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { LayoutDashboard, FileCode, Users, Calendar, GitPullRequest, Sparkles, ChevronRight, Layers } from 'lucide-react';
 
 export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount }) {
+  const [member2Stats, setMember2Stats] = useState({ stories: 0, sprints: 0 });
+
+  useEffect(() => {
+    fetch("http://localhost:8080/api/stories")
+      .then((res) => res.json())
+      .then((data) => {
+        const storiesList = data.stories || [];
+        setMember2Stats({
+          stories: storiesList.length,
+          sprints: Math.ceil(storiesList.length / 5),
+        });
+      })
+      .catch((err) => console.error("Sidebar API Error:", err));
+  }, []);
+
   const menuItems = [
     {
       id: 'artifacts',
@@ -30,10 +45,10 @@ export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount }
     {
       id: 'projects',
       label: 'Project Management',
-      subtitle: 'Reserved for Team Member',
+      subtitle: 'AI Sprint Planning',
       icon: Calendar,
-      badge: 'Blank',
-      color: 'from-slate-400 to-slate-500',
+      badge: member2Stats.stories > 0 ? `${member2Stats.stories} Stories` : 'Active',
+      color: 'from-emerald-500 to-teal-600',
     },
     {
       id: 'changerequests',
@@ -48,7 +63,6 @@ export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount }
   return (
     <aside className="w-64 bg-white dark:bg-slate-800/95 border-r border-slate-200 dark:border-slate-700/80 flex flex-col justify-between shrink-0 transition-colors duration-200 shadow-sm">
       
-      {/* Navigation Links */}
       <div className="p-4 space-y-6">
         <div>
           <h3 className="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
@@ -113,32 +127,40 @@ export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount }
           </nav>
         </div>
 
-        {/* Quick System Stats Box */}
         <div className="p-3.5 rounded-2xl bg-gradient-to-br from-slate-900 to-indigo-950 text-white shadow-md border border-indigo-900/50 relative overflow-hidden">
           <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-indigo-500/10 rounded-full blur-xl"></div>
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider flex items-center gap-1">
-              <Sparkles size={12} /> ML Stats
+              <Sparkles size={12} /> Global ML Stats
             </span>
             <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
           </div>
+          
           <div className="grid grid-cols-2 gap-2 my-2 text-center">
             <div className="bg-white/5 p-1.5 rounded-lg border border-white/10">
-              <span className="text-xs text-slate-400 block">Requirements</span>
+              <span className="text-[9px] text-slate-400 block uppercase">Reqs</span>
               <span className="text-sm font-bold text-white">{reqCount}</span>
             </div>
             <div className="bg-white/5 p-1.5 rounded-lg border border-white/10">
-              <span className="text-xs text-slate-400 block">Epics</span>
+              <span className="text-[9px] text-slate-400 block uppercase">Epics</span>
               <span className="text-sm font-bold text-indigo-300">{epicCount}</span>
             </div>
+            <div className="bg-emerald-900/20 p-1.5 rounded-lg border border-emerald-500/30">
+              <span className="text-[9px] text-emerald-400 block uppercase">Stories</span>
+              <span className="text-sm font-bold text-white">{member2Stats.stories}</span>
+            </div>
+            <div className="bg-emerald-900/20 p-1.5 rounded-lg border border-emerald-500/30">
+              <span className="text-[9px] text-emerald-400 block uppercase">Sprints</span>
+              <span className="text-sm font-bold text-emerald-300">{member2Stats.sprints}</span>
+            </div>
           </div>
-          <p className="text-[10px] text-slate-400 text-center">
-            SVM & spaCy NLP Pipeline
+          
+          <p className="text-[9px] text-slate-400 text-center leading-tight mt-1">
+            SVM & spaCy NLP • Random Forest Engine
           </p>
         </div>
       </div>
 
-      {/* Footer System Info */}
       <div className="p-4 border-t border-slate-200 dark:border-slate-700/80">
         <div className="flex items-center space-x-3">
           <div className="p-2 bg-slate-100 dark:bg-slate-700/70 rounded-lg text-slate-500 dark:text-slate-400">
