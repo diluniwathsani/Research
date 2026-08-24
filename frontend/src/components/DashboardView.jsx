@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-  FileText, ShieldCheck, Layers, ArrowUpRight, Upload, RefreshCw, Download, Zap, LayoutDashboard, Code, Info 
+  FileText, ShieldCheck, Layers, ArrowUpRight, LayoutDashboard, Calendar 
 } from 'lucide-react';
 
 export default function DashboardView({ 
@@ -89,44 +89,56 @@ export default function DashboardView({
           System Modules Overview & Integration Status
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           
-          {/* Active Module Card */}
           <div className="p-5 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 font-bold text-sm">
                 <FileText size={18} />
-                <span>Development Artifact Engineering Module</span>
+                <span>Development Artifacts</span>
               </div>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-600 text-white">
-                Active & Complete
+                Active
               </span>
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-300">
-              Complete requirement sentence ingestion, spaCy NLP dependency parsing, RFC 2119 completeness validation, SVM topic clustering, and automatic User Story & Acceptance Criteria generation.
+              Complete requirement sentence ingestion, spaCy NLP dependency parsing, RFC 2119 completeness validation, and SVM topic clustering.
             </p>
-            <button
-              onClick={() => setActiveTab('artifacts')}
-              className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 pt-1"
-            >
+            <button onClick={() => setActiveTab('artifacts')} className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 pt-1">
               Go to Module <ArrowUpRight size={14} />
             </button>
           </div>
 
-          {/* Reserved Module Cards */}
-          <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 space-y-3">
+          <div className="p-5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 font-bold text-sm">
+                <Calendar size={18} />
+                <span>Project Management</span>
+              </div>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-600 text-white">
+                Active
+              </span>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              AI Sprint Planning Engine featuring Random Forest priority prediction, effort estimation (R² 0.992), and dynamic Greedy Bin-Packing sprint allocation.
+            </p>
+            <button onClick={() => setActiveTab('projects')} className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 pt-1">
+              Go to Module <ArrowUpRight size={14} />
+            </button>
+          </div>
+
+          <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 space-y-3 opacity-70">
             <div className="flex items-center justify-between">
               <span className="font-bold text-sm text-slate-700 dark:text-slate-300">Other System Modules</span>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                Blank Placeholders
+                Pending
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-              Resource Management, Project Management, and Change Request modules have been kept clean and blank for team member integration.
+              Resource Management and Change Request modules have been kept clean and blank for team member integration.
             </p>
             <div className="flex gap-2 text-[10px] text-slate-400 pt-1">
               <span className="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">Resource Mgmt</span>
-              <span className="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">Project Mgmt</span>
               <span className="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">Change Requests</span>
             </div>
           </div>
