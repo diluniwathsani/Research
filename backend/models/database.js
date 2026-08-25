@@ -36,10 +36,10 @@ if (!process.env.DATABASE_URL) {
 // DATABASE CONNECTOR: Neon PostgreSQL ONLY
 // ============================================
 
-const { Pool } = require('pg');
+// Use single shared connection pool from database.js
+const pool = require('../database');
 
 let db = null;
-let pool = null;
 
 // PostgreSQL wrapper exposing SQLite-like interface (.all, .get, .run, .exec)
 class PostgresDbWrapper {
@@ -47,11 +47,26 @@ class PostgresDbWrapper {
         this.pool = pool;
     }
 
+    async queryWithRetry(fn) {
+        try {
+            return await fn();
+        } catch (err) {
+            if (err.message.includes('terminated') || err.message.includes('timeout')) {
+                console.warn('⚠️ Neon PostgreSQL connection dropped, retrying query...');
+                await new Promise(r => setTimeout(r, 100));
+                return await fn();
+            }
+            throw err;
+        }
+    }
+
     async all(sql, params = []) {
         try {
             const adaptedSql = this.adaptSql(sql);
-            const res = await this.pool.query(adaptedSql, params);
-            return res.rows;
+            return await this.queryWithRetry(async () => {
+                const res = await this.pool.query(adaptedSql, params);
+                return res.rows;
+            });
         } catch (error) {
             console.error('PostgreSQL all() error:', error.message);
             console.error('SQL:', sql);
@@ -62,8 +77,10 @@ class PostgresDbWrapper {
     async get(sql, params = []) {
         try {
             const adaptedSql = this.adaptSql(sql);
-            const res = await this.pool.query(adaptedSql, params);
-            return res.rows[0] || null;
+            return await this.queryWithRetry(async () => {
+                const res = await this.pool.query(adaptedSql, params);
+                return res.rows[0] || null;
+            });
         } catch (error) {
             console.error('PostgreSQL get() error:', error.message);
             console.error('SQL:', sql);
@@ -74,8 +91,9 @@ class PostgresDbWrapper {
     async run(sql, params = []) {
         try {
             const adaptedSql = this.adaptSql(sql);
-            const res = await this.pool.query(adaptedSql, params);
-            return res;
+            return await this.queryWithRetry(async () => {
+                return await this.pool.query(adaptedSql, params);
+            });
         } catch (error) {
             console.error('PostgreSQL run() error:', error.message);
             console.error('SQL:', sql);
@@ -86,7 +104,9 @@ class PostgresDbWrapper {
     async exec(sql) {
         try {
             const adaptedSql = this.adaptSql(sql);
-            return await this.pool.query(adaptedSql);
+            return await this.queryWithRetry(async () => {
+                return await this.pool.query(adaptedSql);
+            });
         } catch (error) {
             console.error('PostgreSQL exec() error:', error.message);
             console.error('SQL:', sql);
@@ -121,33 +141,8 @@ async function initializeDatabase() {
     }
 
     try {
-        console.log('📡 Connecting to Neon PostgreSQL database...');
-        console.log(`📡 Connection string: ${databaseUrl.substring(0, 50)}...`);
+        console.log('📡 Connecting to Neon PostgreSQL database using shared connection pool...');
         
-        pool = new Pool({
-            connectionString: databaseUrl,
-            ssl: { 
-                rejectUnauthorized: false 
-            },
-            max: 20,
-            idleTimeoutMillis: 30000,
-            connectionTimeoutMillis: 10000,
-        });
-
-        pool.on('error', (err) => {
-            console.warn('⚠️ Neon PostgreSQL Pool Notice (models/database):', err.message);
-        });
-
-        // Test connection with timeout
-        const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Connection timeout after 10 seconds')), 10000);
-        });
-        
-        const connectionPromise = pool.query('SELECT NOW()');
-        await Promise.race([connectionPromise, timeoutPromise]);
-        
-        console.log('✅ Connected to Neon PostgreSQL successfully!');
-
         db = new PostgresDbWrapper(pool);
 
         await createTables();

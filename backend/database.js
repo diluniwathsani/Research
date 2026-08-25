@@ -9,20 +9,19 @@ const connectionString = process.env.DATABASE_URL || "postgresql://neondb_owner:
 
 const { Pool } = require('pg');
 
-// Create connection pool
+// Create connection pool optimized for Neon Serverless PostgreSQL
 const pool = new Pool({
     connectionString: connectionString,
     ssl: {
         rejectUnauthorized: false
     },
-    max: 20,
-    connectionTimeoutMillis: 5000,
-    idleTimeoutMillis: 30000,
-    allowExitOnIdle: false
+    max: 10,
+    connectionTimeoutMillis: 0,
+    idleTimeoutMillis: 10000,
 });
 
-pool.on('error', (err, client) => {
-    console.warn('⚠️ Neon PostgreSQL Pool Connection Notice:', err.message);
+pool.on('error', (err) => {
+    console.warn('⚠️ Neon Pool Notice:', err.message);
 });
 
 
