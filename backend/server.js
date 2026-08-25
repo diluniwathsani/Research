@@ -965,6 +965,9 @@ app.post('/api/user-stories', async (req, res) => {
 app.get('/api/sprint-plan', async (req, res) => {
     try {
         const projectId = req.query.project_id;
+        const effectivePid = (projectId && projectId !== 'ALL') ? projectId : 'P00001';
+
+        // 1. Fetch user stories from DB (or requirements fallback)
         let query = "SELECT * FROM user_stories ORDER BY story_id DESC";
         let params = [];
         if (projectId && projectId !== 'ALL') {
@@ -975,24 +978,37 @@ app.get('/api/sprint-plan', async (req, res) => {
         const storiesResult = await pool.query(query, params);
         let stories = storiesResult.rows;
 
-        // If no user_stories exist in DB, fallback to requirements table
+        // If no user_stories exist in DB, fallback to requirements table and auto-populate user_stories
         if (!stories || stories.length === 0) {
             const reqResult = await pool.query("SELECT * FROM requirements ORDER BY id DESC");
-            stories = reqResult.rows.map((r, idx) => ({
-                story_id: `US-${r.id}`,
-                title: r.user_story || r.requirement_sentence,
-                story_points: 3 + (idx % 5),
-                priority: idx % 2 === 0 ? 'HIGH' : 'MEDIUM',
-                estimated_hours: (3 + (idx % 5)) * 6,
-                status: 'IN_PROGRESS'
-            }));
+            const reqRows = reqResult.rows || [];
+            
+            for (let idx = 0; idx < reqRows.length; idx++) {
+                const r = reqRows[idx];
+                const sId = `US-${r.id}`;
+                const cleanSent = (r.requirement_sentence || '').endsWith('.') ? r.requirement_sentence.slice(0, -1) : r.requirement_sentence;
+                const storyTitle = r.user_story && r.user_story !== 'Pending' ? r.user_story : `As a System User, I want to ${cleanSent ? cleanSent.charAt(0).toLowerCase() + cleanSent.slice(1) : 'use this feature'}.`;
+                const points = 3 + (idx % 5);
+
+                try {
+                    await pool.query(`
+                        INSERT INTO user_stories (story_id, user_story_id, project_id, sprint_id, title, description, story_points, priority, status, assigned_to)
+                        VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9)
+                        ON CONFLICT (story_id) DO NOTHING
+                    `, [sId, effectivePid, 'SPR-01', storyTitle, r.acceptance_criteria || '', points, points >= 5 ? 'HIGH' : 'MEDIUM', 'IN_PROGRESS', 'Unassigned']);
+                } catch (uErr) {}
+            }
+
+            const freshStoriesRes = await pool.query("SELECT * FROM user_stories ORDER BY story_id DESC");
+            stories = freshStoriesRes.rows || [];
         }
 
-        // 2-Week Sprint Allocation Engine (Max 30 SP per 2-week sprint)
+        // 2. Automated 2-Week Sprint Allocation Engine (Max 30 SP per 2-week sprint)
         const MAX_SP_PER_SPRINT = 30;
         let currentSprint = 1;
         let currentSprintPoints = 0;
         const plannedTasks = [];
+        const updatePromises = [];
 
         for (let i = 0; i < stories.length; i++) {
             const story = stories[i];
@@ -1002,6 +1018,8 @@ app.get('/api/sprint-plan', async (req, res) => {
                 currentSprintPoints = 0;
             }
             currentSprintPoints += points;
+            const targetSprintId = `SPR-0${currentSprint}`;
+
             plannedTasks.push({
                 story_id: story.story_id || story.user_story_id || `US-${i+1}`,
                 title: story.title || story.user_story || 'User Story Requirement',
@@ -1009,27 +1027,36 @@ app.get('/api/sprint-plan', async (req, res) => {
                 story_points: points,
                 estimated_hours: points * 6,
                 sprint_number: currentSprint,
+                sprint_id: targetSprintId,
                 duration_weeks: 2,
                 status: story.status || 'IN_PROGRESS'
             });
+
+            if (story.story_id) {
+                updatePromises.push(
+                    pool.query(
+                        "UPDATE user_stories SET sprint_id = $1, project_id = $2 WHERE story_id = $3",
+                        [targetSprintId, effectivePid, story.story_id]
+                    ).catch(() => {})
+                );
+            }
         }
 
-        // Upsert calculated sprints into PostgreSQL sprints table
-        try {
-            const effectivePid = projectId && projectId !== 'ALL' ? projectId : 'P00001';
-            for (let sNum = 1; sNum <= currentSprint; sNum++) {
-                const sId = `SPR-0${sNum}`;
-                await pool.query(`
-                    INSERT INTO sprints (sprint_id, project_id, sprint_name, sprint_number, status, capacity_story_points)
-                    VALUES ($1, $2, $3, $4, $5, 30)
-                    ON CONFLICT (sprint_id) DO UPDATE SET
-                    project_id = EXCLUDED.project_id,
-                    status = EXCLUDED.status
-                `, [sId, effectivePid, `Sprint ${sNum}`, sNum, sNum === 1 ? 'ACTIVE' : 'PENDING']);
-            }
-        } catch (spErr) {
-            console.warn('Notice syncing sprint plan to DB:', spErr.message);
-        }
+        // 3. Automatically create/upsert sprint rows into PostgreSQL sprints table in background
+        Promise.all(updatePromises).then(async () => {
+            try {
+                for (let sNum = 1; sNum <= currentSprint; sNum++) {
+                    const sId = `SPR-0${sNum}`;
+                    await pool.query(`
+                        INSERT INTO sprints (sprint_id, project_id, sprint_name, sprint_number, status, capacity_story_points)
+                        VALUES ($1, $2, $3, $4, $5, 30)
+                        ON CONFLICT (sprint_id) DO UPDATE SET
+                        project_id = EXCLUDED.project_id,
+                        status = EXCLUDED.status
+                    `, [sId, effectivePid, `Sprint ${sNum}`, sNum, sNum === 1 ? 'ACTIVE' : 'PENDING']);
+                }
+            } catch (spErr) {}
+        }).catch(() => {});
 
         res.json({
             status: 'success',
@@ -1088,6 +1115,22 @@ app.post('/api/replan-full', async (req, res) => {
                 sprint_number: currentSprint,
                 duration_weeks: 2
             });
+        }
+
+        // Upsert calculated sprints into PostgreSQL sprints table
+        try {
+            for (let sNum = 1; sNum <= currentSprint; sNum++) {
+                const sId = `SPR-${sNum < 10 ? '0' + sNum : sNum}`;
+                await pool.query(`
+                    INSERT INTO sprints (sprint_id, project_id, sprint_name, sprint_number, status, capacity_story_points)
+                    VALUES ($1, $2, $3, $4, $5, 30)
+                    ON CONFLICT (sprint_id) DO UPDATE SET
+                    project_id = EXCLUDED.project_id,
+                    status = EXCLUDED.status
+                `, [sId, pid, `Sprint ${sNum}`, sNum, sNum === 1 ? 'ACTIVE' : 'PENDING']);
+            }
+        } catch (spErr) {
+            console.warn('Notice syncing replan to DB:', spErr.message);
         }
 
         res.json({

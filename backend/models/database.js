@@ -134,6 +134,10 @@ async function initializeDatabase() {
             connectionTimeoutMillis: 10000,
         });
 
+        pool.on('error', (err) => {
+            console.warn('⚠️ Neon PostgreSQL Pool Notice (models/database):', err.message);
+        });
+
         // Test connection with timeout
         const timeoutPromise = new Promise((_, reject) => {
             setTimeout(() => reject(new Error('Connection timeout after 10 seconds')), 10000);

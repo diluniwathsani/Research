@@ -4,19 +4,27 @@ export default function SprintPlanOutput({ selectedProjectId }) {
   const [sprints, setSprints] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const [errorMessage, setErrorMessage] = useState(null);
+
   const fetchSprintPlan = async () => {
     setLoading(true);
+    setErrorMessage(null);
     try {
       let data = null;
       const url = selectedProjectId 
         ? `http://localhost:3000/api/sprint-plan?project_id=${encodeURIComponent(selectedProjectId)}`
         : "http://localhost:3000/api/sprint-plan";
       
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+
       try {
-        const res = await fetch(url);
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
         const text = await res.text();
         data = JSON.parse(text.replace(/NaN/g, '0'));
       } catch (e) {
+        clearTimeout(timeoutId);
         const fallbackUrl = selectedProjectId
           ? `http://localhost:8080/api/sprint-plan?project_id=${encodeURIComponent(selectedProjectId)}`
           : "http://localhost:8080/api/sprint-plan";
@@ -26,8 +34,9 @@ export default function SprintPlanOutput({ selectedProjectId }) {
       }
 
       if (data && data.status === "success" && data.tasks) {
+        const safeTasks = Array.isArray(data.tasks) ? data.tasks : (data.tasks?.data || []);
         const groupedSprints = {};
-        data.tasks.forEach(task => {
+        safeTasks.forEach(task => {
           const sNum = task.sprint_number || 1;
           if (!groupedSprints[sNum]) {
             groupedSprints[sNum] = {
@@ -44,9 +53,15 @@ export default function SprintPlanOutput({ selectedProjectId }) {
         });
         
         setSprints(Object.values(groupedSprints));
+      } else if (data && data.status === "error") {
+        setSprints([]);
+        setErrorMessage(data.message || "Failed to calculate automated 2-week sprint plan.");
+      } else {
+        setSprints([]);
       }
     } catch (err) {
       console.error("Sprint Fetch Error:", err);
+      setErrorMessage("Failed to calculate sprint plan. Please verify backend service connection.");
     } finally {
       setLoading(false);
     }
@@ -58,14 +73,34 @@ export default function SprintPlanOutput({ selectedProjectId }) {
 
   return (
     <div className="space-y-6 text-slate-100 p-2">
-      <div>
-        <h2 className="text-2xl font-extrabold text-white">Generated Sprint Plan</h2>
-        <p className="text-xs text-slate-400 mt-1">
-          Automated sprint breakdown and story point allocations
-        </p>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-extrabold text-white">Generated Sprint Plan</h2>
+          <p className="text-xs text-slate-400 mt-1">
+            Automated sprint breakdown and story point allocations based on 2-week capacity logic (Max 30 SP per sprint)
+          </p>
+        </div>
+        <button
+          onClick={fetchSprintPlan}
+          disabled={loading}
+          className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-2 shrink-0"
+        >
+          <span>⚡ Auto-Create Sprints from User Stories</span>
+        </button>
       </div>
 
-      {sprints.length > 0 ? (
+      {errorMessage && (
+        <div className="p-4 rounded-xl font-bold text-xs bg-rose-500/20 text-rose-300 border border-rose-500/30 shadow-md">
+          ⚠️ {errorMessage}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-12 text-center text-slate-400 text-sm shadow-lg space-y-3">
+          <div className="inline-block w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="font-semibold text-slate-200">Calculating 2-Week Sprint Allocation & Syncing to PostgreSQL Database...</p>
+        </div>
+      ) : sprints.length > 0 ? (
         <div className="space-y-4">
           {sprints.map((sprint, idx) => (
             <div key={idx} className="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-6 shadow-lg animate-in fade-in zoom-in duration-300">

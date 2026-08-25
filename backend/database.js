@@ -15,16 +15,23 @@ const pool = new Pool({
     ssl: {
         rejectUnauthorized: false
     },
-    connectionTimeoutMillis: 10000,
+    max: 20,
+    connectionTimeoutMillis: 5000,
     idleTimeoutMillis: 30000,
+    allowExitOnIdle: false
+});
+
+pool.on('error', (err, client) => {
+    console.warn('⚠️ Neon PostgreSQL Pool Connection Notice:', err.message);
 });
 
 
-// ================= TEST DATABASE CONNECTION =================
+// ================= TEST DATABASE CONNECTION & TABLE AUTO-CREATION =================
 
 (async () => {
+    let client = null;
     try {
-        const client = await pool.connect();
+        client = await pool.connect();
         console.log('✅ Connected to Neon PostgreSQL database.');
 
         // ================= CREATE REQUIREMENTS TABLE =================
@@ -136,13 +143,11 @@ const pool = new Pool({
             console.log('✅ Sample developers inserted.');
         }
 
-        client.release();
         console.log('✅ Database initialization complete!');
-
     } catch (err) {
         console.error('❌ Error connecting to Neon PostgreSQL:', err.message);
-        console.error('Please check your DATABASE_URL in .env file');
-        process.exit(1);
+    } finally {
+        if (client) client.release();
     }
 })();
 

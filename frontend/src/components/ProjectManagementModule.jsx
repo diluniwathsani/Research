@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
-  Calendar, Code, Layers, CheckCircle2, Clock, PlayCircle, Plus, 
+  Calendar, Layers, CheckCircle2, Clock, PlayCircle, Plus, 
   Search, Filter, ChevronLeft, ChevronRight, LayoutGrid, List, AlertCircle, X, ShieldCheck,
-  LayoutDashboard, FileText, Zap, BarChart2
+  FileText, Zap, BarChart2
 } from 'lucide-react';
 
-import DashboardView from './DashboardView';
 import AddStories from '../pages/AddStories';
 import SprintPlanOutput from '../pages/SprintPlanOutput';
 import Performance from '../pages/Performance';
 
 export default function ProjectManagementModule({ requirements = [] }) {
+  const safeRequirements = Array.isArray(requirements) ? requirements : (requirements?.data || []);
   const [activeTab, setActiveTab] = useState('kanban');
   
   // Kanban & Roadmap State
@@ -26,16 +26,23 @@ export default function ProjectManagementModule({ requirements = [] }) {
   const [newTaskEpic, setNewTaskEpic] = useState('General');
   const [newTaskStatus, setNewTaskStatus] = useState('Backlog');
 
-  // Initialize tasks from incoming requirements or defaults and sync to DB
+  // Initialize tasks from incoming requirements or fetch directly from backend API
   useEffect(() => {
-    if (requirements.length > 0) {
-      const initial = requirements.map((req, idx) => {
+    const mapRequirementsToTasks = (reqList) => {
+      return reqList.map((req, idx) => {
         let col = req.status || (idx % 4 === 0 ? 'Done' : idx % 3 === 0 ? 'In Progress' : 'Backlog');
+        let storyTitle = req.user_story;
+        if (!storyTitle || storyTitle === 'Pending' || storyTitle.trim() === '') {
+          const sent = req.requirement_sentence || '';
+          const cleanText = sent.endsWith('.') ? sent.slice(0, -1) : sent;
+          storyTitle = `As a System User, I want to ${cleanText.charAt(0).toLowerCase() + cleanText.slice(1)}.`;
+        }
+
         const taskObj = {
           id: req.id || `req-${idx}`,
           requirement_sentence: req.requirement_sentence,
-          epic: req.epic || 'Unassigned',
-          user_story: req.user_story || 'As a system user, I want this feature implemented.',
+          epic: req.epic && req.epic !== 'Pending Generation' ? req.epic : 'General',
+          user_story: storyTitle,
           acceptance_criteria: req.acceptance_criteria || 'Given valid input, verify system response.',
           column: col,
           points: 3 + (idx % 5),
@@ -47,7 +54,7 @@ export default function ProjectManagementModule({ requirements = [] }) {
           story_id: `US-${req.id || idx + 101}`,
           project_id: 'P00001',
           sprint_id: 'SPR-01',
-          title: req.user_story || req.requirement_sentence,
+          title: storyTitle,
           description: req.acceptance_criteria || '',
           story_points: 3 + (idx % 5),
           priority: 'Medium',
@@ -57,43 +64,21 @@ export default function ProjectManagementModule({ requirements = [] }) {
 
         return taskObj;
       });
-      setTasks(initial);
+    };
+
+    if (safeRequirements && safeRequirements.length > 0) {
+      setTasks(mapRequirementsToTasks(safeRequirements));
     } else {
-      // Default initial tasks if none loaded yet
-      setTasks([
-        {
-          id: 1,
-          requirement_sentence: 'The system SHALL authenticate users using PostgreSQL OAuth2 connection pool.',
-          epic: 'Authentication',
-          user_story: 'As a user, I want secure OAuth login.',
-          acceptance_criteria: 'Must return valid JWT token upon auth.',
-          column: 'In Progress',
-          points: 5,
-          assignee: 'Sarah Chen'
-        },
-        {
-          id: 2,
-          requirement_sentence: 'The system SHALL process batch requirement NLP analysis via Python AI engine.',
-          epic: 'AI Processing',
-          user_story: 'As an analyst, I want automated story generation.',
-          acceptance_criteria: 'NLP engine must parse RFC 2119 keywords.',
-          column: 'Backlog',
-          points: 8,
-          assignee: 'Alex Rivera'
-        },
-        {
-          id: 3,
-          requirement_sentence: 'The system SHALL export filtered sprint backlog requirements into formatted Excel sheets.',
-          epic: 'Data Export',
-          user_story: 'As a PM, I want custom spreadsheet exports.',
-          acceptance_criteria: 'Exported file must contain timestamps.',
-          column: 'Done',
-          points: 3,
-          assignee: 'Priya Sharma'
-        }
-      ]);
+      axios.get('http://localhost:3000/api/requirements')
+        .then(res => {
+          const list = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+          if (list.length > 0) {
+            setTasks(mapRequirementsToTasks(list));
+          }
+        })
+        .catch(err => console.warn('Fetch requirements notice:', err.message));
     }
-  }, [requirements]);
+  }, [safeRequirements]);
 
   // Handlers for Kanban movement
   const moveTask = (taskId, direction) => {
@@ -128,12 +113,15 @@ export default function ProjectManagementModule({ requirements = [] }) {
     if (!newTaskSentence.trim()) return;
 
     const newId = Date.now();
+    const cleanSent = newTaskSentence.trim().endsWith('.') ? newTaskSentence.trim().slice(0, -1) : newTaskSentence.trim();
+    const formattedStory = `As a System User, I want to ${cleanSent.charAt(0).toLowerCase() + cleanSent.slice(1)}.`;
+
     const newTask = {
       id: newId,
       requirement_sentence: newTaskSentence,
       epic: newTaskEpic || 'General',
-      user_story: 'As a user, I want this requirement fulfilled.',
-      acceptance_criteria: 'Acceptance criteria pending validation.',
+      user_story: formattedStory,
+      acceptance_criteria: `Acceptance Criteria: Verify ${cleanSent}`,
       column: newTaskStatus,
       points: 3,
       assignee: 'Unassigned'
@@ -141,10 +129,10 @@ export default function ProjectManagementModule({ requirements = [] }) {
 
     axios.post('http://localhost:3000/api/user-stories', {
       story_id: `US-${newId.toString().slice(-4)}`,
-      project_id: 'P00001',
+      project_id: selectedProjectId || 'P00001',
       sprint_id: 'SPR-01',
-      title: newTaskSentence,
-      description: 'New requirement story added in Project Management Module',
+      title: formattedStory,
+      description: `Acceptance Criteria: Verify ${cleanSent}`,
       story_points: 3,
       priority: 'Medium',
       status: newTaskStatus === 'Done' ? 'DONE' : 'IN_PROGRESS',
@@ -240,7 +228,6 @@ export default function ProjectManagementModule({ requirements = [] }) {
     { id: 'sprint-plan', label: 'Sprint Plan Output', icon: FileText },
     { id: 'add-stories', label: 'Add Stories & Requirements', icon: Plus },
     { id: 'governance', label: 'Change Request Governance & Re-plan', icon: ShieldCheck },
-    { id: 'dashboard', label: 'Sprint AI Dashboard', icon: LayoutDashboard },
     { id: 'performance', label: 'Performance Analytics', icon: BarChart2 }
   ];
 
@@ -317,7 +304,6 @@ export default function ProjectManagementModule({ requirements = [] }) {
       </div>
 
       {/* DYNAMIC TAB VIEWS */}
-      {activeTab === 'dashboard' && <DashboardView />}
       {activeTab === 'add-stories' && <AddStories />}
       {activeTab === 'sprint-plan' && <SprintPlanOutput selectedProjectId={selectedProjectId} />}
       {activeTab === 'performance' && <Performance />}
@@ -570,9 +556,21 @@ export default function ProjectManagementModule({ requirements = [] }) {
                               </span>
                             </div>
 
-                            <p className="text-xs text-slate-800 dark:text-slate-200 font-semibold leading-relaxed">
-                              {task.requirement_sentence}
-                            </p>
+                             <div className="space-y-1.5">
+                               <div className="flex items-center gap-1.5">
+                                 <span className="text-[9px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                                   User Story
+                                 </span>
+                               </div>
+                               <p className="text-xs text-slate-900 dark:text-slate-100 font-bold leading-relaxed">
+                                 {task.user_story || (task.requirement_sentence ? `As a System User, I want to ${task.requirement_sentence.toLowerCase()}` : 'Agile User Story')}
+                               </p>
+                               {task.requirement_sentence && (
+                                 <p className="text-[11px] text-slate-400 dark:text-slate-500 italic leading-snug">
+                                   Req: "{task.requirement_sentence}"
+                                 </p>
+                               )}
+                             </div>
 
                             <div className="pt-2 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
                               <span className="text-[10px] font-medium text-slate-400 flex items-center gap-1">
@@ -634,9 +632,14 @@ export default function ProjectManagementModule({ requirements = [] }) {
                           Task #{idx + 1}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">
-                        {t.requirement_sentence}
+                      <p className="text-xs text-slate-800 dark:text-slate-100 font-bold leading-relaxed">
+                        {t.user_story || t.requirement_sentence}
                       </p>
+                      {t.requirement_sentence && t.requirement_sentence !== t.user_story && (
+                        <p className="text-[11px] text-slate-400 dark:text-slate-500 italic">
+                          Req: "{t.requirement_sentence}"
+                        </p>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-4 shrink-0">
