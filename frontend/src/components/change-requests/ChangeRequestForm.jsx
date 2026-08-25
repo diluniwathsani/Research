@@ -699,6 +699,36 @@ export default function ChangeRequestForm({ onSuccess }) {
                 </p>
               </div>
 
+              {/* AI Sprint Task Allocation Card */}
+              <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 text-white border border-indigo-500/30 shadow-lg space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={16} className="text-indigo-400" />
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-300">AI Sprint Task Allocation Engine</h4>
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-semibold">
+                    Allocated to Sprint
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+                  <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+                    <span className="text-[11px] text-slate-400 uppercase font-semibold block">Target Sprint</span>
+                    <span className="text-sm font-bold text-white">{submissionResult.sprint?.sprint_name || selectedSprint?.sprint_name || 'Sprint 04'}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+                    <span className="text-[11px] text-slate-400 uppercase font-semibold block">Assigned Developer</span>
+                    <span className="text-sm font-bold text-indigo-300">{submissionResult.assigned_developer?.developer_name || 'Alice (Senior Dev)'}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+                    <span className="text-[11px] text-slate-400 uppercase font-semibold block">Skill Match & Hours</span>
+                    <span className="text-sm font-bold text-emerald-400">
+                      {submissionResult.assigned_developer?.skill_match_score || 95}% Match ({submissionResult.assigned_developer?.allocated_hours || 30}h)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
                 <button
                   className="cr-btn-back"

@@ -5,8 +5,8 @@ import { Upload as UploadIcon, File, Tag } from 'lucide-react';
 export default function FileUpload({ onUploadSuccess }) {
   // State to hold the currently selected Excel file
   const [file, setFile] = useState(null);
-  // State for the custom batch name
-  const [batchName, setBatchName] = useState("");
+  // State for Project Name
+  const [projectName, setProjectName] = useState("Aurora ERP System");
   // State to manage the loading status while the file is being sent to the backend
   const [uploading, setUploading] = useState(false);
   // Reference to manually trigger or clear the hidden HTML file input
@@ -19,15 +19,18 @@ export default function FileUpload({ onUploadSuccess }) {
     }
   };
 
+  const [uploadError, setUploadError] = useState(null);
+
   // Sends the selected file to the backend server
   const handleUpload = async () => {
     if (!file) return;
     setUploading(true);
+    setUploadError(null);
     
     // FormData is required to safely transmit files via HTTP requests
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('batch_name', batchName || file.name.split('.')[0]); // Fallback to filename
+    formData.append('project_name', projectName.trim() || 'Aurora ERP System');
 
     try {
       // POST the file to the backend API
@@ -36,14 +39,15 @@ export default function FileUpload({ onUploadSuccess }) {
       });
       // Clear the local state and file input after successful upload
       setFile(null);
-      setBatchName("");
+      setUploadError(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
       
       // Notify the parent component (App.jsx) to refresh the table data
       onUploadSuccess();
     } catch (err) {
-      console.error(err);
-      alert('Upload failed');
+      console.error('Upload Error:', err);
+      const errMsg = err.response?.data?.error || err.message || 'File upload failed. Please verify backend server is running.';
+      setUploadError(errMsg);
     } finally {
       setUploading(false);
     }
@@ -83,17 +87,29 @@ export default function FileUpload({ onUploadSuccess }) {
       </label>
       
       {file && (
-        <div className="w-full space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-          <div className="relative">
-            <Tag className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input 
-              type="text"
-              placeholder="Give this batch a name (e.g. Project Alpha)"
-              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg py-2.5 pl-10 pr-4 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-              value={batchName}
-              onChange={(e) => setBatchName(e.target.value)}
-            />
+        <div className="w-full space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-wider">
+              Project Name (Target Project)
+            </label>
+            <div className="relative">
+              <Tag className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input 
+                type="text"
+                placeholder="e.g. Aurora ERP System or Fusion Portal"
+                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 pl-10 pr-4 text-sm font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+              />
+            </div>
           </div>
+
+          {uploadError && (
+            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-semibold">
+              ⚠️ {uploadError}
+            </div>
+          )}
+
           <button 
             onClick={handleUpload}
             disabled={uploading}

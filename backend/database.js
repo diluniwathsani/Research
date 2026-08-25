@@ -28,58 +28,60 @@ const pool = new Pool({
         console.log('✅ Connected to Neon PostgreSQL database.');
 
         // ================= CREATE REQUIREMENTS TABLE =================
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS requirements (
-                id SERIAL PRIMARY KEY,
-                requirement_sentence TEXT NOT NULL,
-                completeness_status TEXT DEFAULT 'Pending',
-                epic TEXT,
-                feature TEXT,
-                user_story TEXT,
-                acceptance_criteria TEXT,
-                batch_name TEXT DEFAULT 'Untitled Batch',
-                created_at TEXT
-            );
+        try {
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS requirements (
+                    id SERIAL PRIMARY KEY,
+                    requirement_sentence TEXT NOT NULL,
+                    completeness_status TEXT DEFAULT 'Pending',
+                    epic TEXT,
+                    feature TEXT,
+                    user_story TEXT,
+                    acceptance_criteria TEXT,
+                    batch_name TEXT DEFAULT 'Untitled Batch',
+                    created_at TEXT
+                )
+            `);
+        } catch (reqTableErr) {
+            console.warn('Notice creating requirements table:', reqTableErr.message);
+        }
 
-            CREATE TABLE IF NOT EXISTS team_members (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                role TEXT NOT NULL,
-                avatar TEXT,
-                color TEXT,
-                capacity_hours INT DEFAULT 40,
-                allocated_hours INT DEFAULT 0,
-                assigned_epics TEXT[],
-                skills TEXT[],
-                status TEXT DEFAULT 'Optimal'
-            );
+        try {
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS team_members (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    avatar TEXT,
+                    color TEXT,
+                    capacity_hours INT DEFAULT 40,
+                    allocated_hours INT DEFAULT 0,
+                    assigned_epics TEXT[],
+                    skills TEXT[],
+                    status TEXT DEFAULT 'Optimal'
+                )
+            `);
+        } catch (tmErr) {
+            console.warn('Notice creating team_members table:', tmErr.message);
+        }
 
-            CREATE TABLE IF NOT EXISTS sprint_tasks (
-                id TEXT PRIMARY KEY,
-                requirement_sentence TEXT NOT NULL,
-                epic TEXT,
-                user_story TEXT,
-                acceptance_criteria TEXT,
-                column_name TEXT DEFAULT 'Backlog',
-                points INT DEFAULT 3,
-                assignee TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS change_requests (
-                id TEXT PRIMARY KEY,
-                req_id TEXT,
-                title TEXT NOT NULL,
-                category TEXT,
-                priority TEXT,
-                impact_score TEXT,
-                requested_by TEXT,
-                request_date TEXT,
-                status TEXT DEFAULT 'Pending',
-                description TEXT,
-                rework_hours INT DEFAULT 4
-            );
-        `);
-        console.log('✅ Requirements table is ready.');
+        try {
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS sprint_tasks (
+                    id TEXT PRIMARY KEY,
+                    requirement_sentence TEXT NOT NULL,
+                    epic TEXT,
+                    user_story TEXT,
+                    acceptance_criteria TEXT,
+                    column_name TEXT DEFAULT 'Backlog',
+                    points INT DEFAULT 3,
+                    assignee TEXT
+                )
+            `);
+        } catch (stErr) {
+            console.warn('Notice creating sprint_tasks table:', stErr.message);
+        }
+        console.log('✅ Base requirements, team_members, and sprint_tasks tables ready.');
 
         // ================= CREATE DEVELOPERS TABLE =================
         await client.query(`
@@ -102,7 +104,7 @@ const pool = new Pool({
         await client.query(`
             CREATE TABLE IF NOT EXISTS allocations (
                 id SERIAL PRIMARY KEY,
-                sprint_id INTEGER,
+                sprint_id TEXT,
                 story_id TEXT,
                 developer_id INTEGER,
                 allocated_hours INTEGER,
@@ -111,6 +113,11 @@ const pool = new Pool({
                 FOREIGN KEY (developer_id) REFERENCES developers(id)
             )
         `);
+        try {
+            await client.query(`ALTER TABLE allocations ALTER COLUMN sprint_id TYPE TEXT USING sprint_id::text`);
+        } catch (alterErr) {
+            // Ignore if column is already TEXT or alter fails
+        }
         console.log('✅ Allocations table is ready.');
 
         // ================= CHECK IF DEVELOPERS EXIST =================

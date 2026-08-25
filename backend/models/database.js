@@ -183,6 +183,22 @@ async function createTables() {
         `);
         console.log('✅ Projects table created');
 
+        // Requirements Table
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS requirements (
+                id SERIAL PRIMARY KEY,
+                requirement_sentence TEXT NOT NULL,
+                completeness_status TEXT DEFAULT 'Pending',
+                epic TEXT,
+                feature TEXT,
+                user_story TEXT,
+                acceptance_criteria TEXT,
+                batch_name TEXT DEFAULT 'Untitled Batch',
+                created_at TEXT
+            );
+        `);
+        console.log('✅ Requirements table created');
+
         // 2. Sprints Table
         await db.exec(`
             CREATE TABLE IF NOT EXISTS sprints (
@@ -240,8 +256,19 @@ async function createTables() {
         `);
         console.log('✅ Resource Allocations table created');
 
-        // 5. Change Requests Table
+        // 5. Change Requests Table (Auto-repair if old schema exists without request_id)
         await db.exec(`
+            DO $$ 
+            BEGIN 
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.tables WHERE table_name = 'change_requests'
+                ) AND NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns WHERE table_name = 'change_requests' AND column_name = 'request_id'
+                ) THEN 
+                    DROP TABLE change_requests CASCADE; 
+                END IF; 
+            END $$;
+
             CREATE TABLE IF NOT EXISTS change_requests (
                 id SERIAL PRIMARY KEY,
                 request_id TEXT UNIQUE NOT NULL,
@@ -322,52 +349,64 @@ async function seedDataIfEmpty() {
         console.log('🌱 Checking if seed data is needed...');
         
         const pCount = await db.get("SELECT COUNT(*) as count FROM projects");
-        if (pCount && parseInt(pCount.count) > 0) {
-            console.log('📊 Data already exists, skipping seed');
-            return;
-        }
-        
-        console.log('🌱 Seeding projects...');
-        
-        const projects = [
-            { project_id: 'P00001', project_name: 'Aurora ERP', description: 'Enterprise resource planning and financial tracking system.', project_manager: 'Michael Henry', team_size: 9, progress_percent: 45, budget_usd: 89900, risk_level: 'Medium', complexity_level: 'Medium', priority: 'High', status: 'ACTIVE' },
-            { project_id: 'P00002', project_name: 'Fusion Portal', description: 'AI-driven customer analytics and self-service portal.', project_manager: 'Anthony Harmon', team_size: 13, progress_percent: 20, budget_usd: 484000, risk_level: 'High', complexity_level: 'High', priority: 'High', status: 'ACTIVE' },
-            { project_id: 'P00003', project_name: 'Aurora Mobile', description: 'Cross-platform mobile companion for warehouse operations.', project_manager: 'Teresa Mcfarland', team_size: 17, progress_percent: 60, budget_usd: 136000, risk_level: 'Low', complexity_level: 'Medium', priority: 'Medium', status: 'ACTIVE' },
-            { project_id: 'P00004', project_name: 'Zenith Connect', description: 'Legacy payment gateway integration (Cancelled project).', project_manager: 'Dana Thornton', team_size: 11, progress_percent: 73, budget_usd: 120000, risk_level: 'High', complexity_level: 'Medium', priority: 'Low', status: 'CANCELLED' },
-            { project_id: 'P00005', project_name: 'Nimbus Connect', description: 'Cloud file synchronizer (Completed project).', project_manager: 'Lisa Lopez', team_size: 12, progress_percent: 100, budget_usd: 28000, risk_level: 'Low', complexity_level: 'Low', priority: 'Medium', status: 'COMPLETED' }
-        ];
+        if (!pCount || parseInt(pCount.count) === 0) {
+            console.log('🌱 Seeding projects...');
+            const projects = [
+                { project_id: 'P00001', project_name: 'Aurora ERP', description: 'Enterprise resource planning and financial tracking system.', project_manager: 'Michael Henry', team_size: 9, progress_percent: 45, budget_usd: 89900, risk_level: 'Medium', complexity_level: 'Medium', priority: 'High', status: 'ACTIVE' },
+                { project_id: 'P00002', project_name: 'Fusion Portal', description: 'AI-driven customer analytics and self-service portal.', project_manager: 'Anthony Harmon', team_size: 13, progress_percent: 20, budget_usd: 484000, risk_level: 'High', complexity_level: 'High', priority: 'High', status: 'ACTIVE' },
+                { project_id: 'P00003', project_name: 'Aurora Mobile', description: 'Cross-platform mobile companion for warehouse operations.', project_manager: 'Teresa Mcfarland', team_size: 17, progress_percent: 60, budget_usd: 136000, risk_level: 'Low', complexity_level: 'Medium', priority: 'Medium', status: 'ACTIVE' },
+                { project_id: 'P00004', project_name: 'Zenith Connect', description: 'Legacy payment gateway integration (Cancelled project).', project_manager: 'Dana Thornton', team_size: 11, progress_percent: 73, budget_usd: 120000, risk_level: 'High', complexity_level: 'Medium', priority: 'Low', status: 'CANCELLED' },
+                { project_id: 'P00005', project_name: 'Nimbus Connect', description: 'Cloud file synchronizer (Completed project).', project_manager: 'Lisa Lopez', team_size: 12, progress_percent: 100, budget_usd: 28000, risk_level: 'Low', complexity_level: 'Low', priority: 'Medium', status: 'COMPLETED' }
+            ];
 
-        for (const p of projects) {
-            await db.run(`
-                INSERT INTO projects (project_id, project_name, description, project_manager, team_size, progress_percent, budget_usd, risk_level, complexity_level, priority, status)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-                ON CONFLICT (project_id) DO NOTHING;
-            `, [p.project_id, p.project_name, p.description, p.project_manager, p.team_size, p.progress_percent, p.budget_usd, p.risk_level, p.complexity_level, p.priority, p.status]);
+            for (const p of projects) {
+                await db.run(`
+                    INSERT INTO projects (project_id, project_name, description, project_manager, team_size, progress_percent, budget_usd, risk_level, complexity_level, priority, status)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                    ON CONFLICT (project_id) DO NOTHING;
+                `, [p.project_id, p.project_name, p.description, p.project_manager, p.team_size, p.progress_percent, p.budget_usd, p.risk_level, p.complexity_level, p.priority, p.status]);
+            }
+            console.log('✅ Projects seeded');
         }
-        console.log('✅ Projects seeded');
 
-        console.log('🌱 Seeding sprints...');
-        
-        const sprints = [
-            { sprint_id: 'SPR-01', project_id: 'P00001', sprint_name: 'Sprint 1 - Core Auth & Setup', sprint_number: 1, status: 'COMPLETED', start_date: '2026-06-01', end_date: '2026-06-15', capacity_story_points: 35 },
-            { sprint_id: 'SPR-02', project_id: 'P00001', sprint_name: 'Sprint 2 - Financial Ledger Module', sprint_number: 2, status: 'ACTIVE', start_date: '2026-08-10', end_date: '2026-08-25', capacity_story_points: 40 },
-            { sprint_id: 'SPR-03', project_id: 'P00001', sprint_name: 'Sprint 3 - Multi-Currency Reporting', sprint_number: 3, status: 'PENDING', start_date: '2026-08-26', end_date: '2026-09-10', capacity_story_points: 45 },
-            { sprint_id: 'SPR-04', project_id: 'P00002', sprint_name: 'Sprint 1 - AI Pipeline & Ingestion', sprint_number: 1, status: 'ACTIVE', start_date: '2026-08-01', end_date: '2026-08-20', capacity_story_points: 50 },
-            { sprint_id: 'SPR-05', project_id: 'P00002', sprint_name: 'Sprint 2 - Dashboard Widgets & Alerts', sprint_number: 2, status: 'PENDING', start_date: '2026-08-21', end_date: '2026-09-05', capacity_story_points: 45 },
-            { sprint_id: 'SPR-06', project_id: 'P00002', sprint_name: 'Sprint 0 - Feasibility Spike', sprint_number: 0, status: 'CLOSED', start_date: '2026-07-01', end_date: '2026-07-15', capacity_story_points: 20 },
-            { sprint_id: 'SPR-07', project_id: 'P00003', sprint_name: 'Sprint 1 - Barcode Scanner Integration', sprint_number: 1, status: 'COMPLETED', start_date: '2026-07-01', end_date: '2026-07-15', capacity_story_points: 30 },
-            { sprint_id: 'SPR-08', project_id: 'P00003', sprint_name: 'Sprint 2 - Offline Sync Engine', sprint_number: 2, status: 'ACTIVE', start_date: '2026-08-12', end_date: '2026-08-28', capacity_story_points: 42 },
-            { sprint_id: 'SPR-09', project_id: 'P00003', sprint_name: 'Sprint 3 - Bluetooth Thermal Printing', sprint_number: 3, status: 'PENDING', start_date: '2026-08-29', end_date: '2026-09-12', capacity_story_points: 38 }
-        ];
+        const sCount = await db.get("SELECT COUNT(*) as count FROM sprints");
+        if (!sCount || parseInt(sCount.count) === 0) {
+            console.log('🌱 Seeding sprints...');
+            // Ensure default projects exist for foreign key constraint
+            const defaultProjects = [
+                { project_id: 'P00001', project_name: 'Aurora ERP', description: 'Enterprise resource planning and financial tracking system.', project_manager: 'Michael Henry', team_size: 9, progress_percent: 45, budget_usd: 89900, risk_level: 'Medium', complexity_level: 'Medium', priority: 'High', status: 'ACTIVE' },
+                { project_id: 'P00002', project_name: 'Fusion Portal', description: 'AI-driven customer analytics and self-service portal.', project_manager: 'Anthony Harmon', team_size: 13, progress_percent: 20, budget_usd: 484000, risk_level: 'High', complexity_level: 'High', priority: 'High', status: 'ACTIVE' },
+                { project_id: 'P00003', project_name: 'Aurora Mobile', description: 'Cross-platform mobile companion for warehouse operations.', project_manager: 'Teresa Mcfarland', team_size: 17, progress_percent: 60, budget_usd: 136000, risk_level: 'Low', complexity_level: 'Medium', priority: 'Medium', status: 'ACTIVE' }
+            ];
+            for (const dp of defaultProjects) {
+                await db.run(`
+                    INSERT INTO projects (project_id, project_name, description, project_manager, team_size, progress_percent, budget_usd, risk_level, complexity_level, priority, status)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                    ON CONFLICT (project_id) DO NOTHING;
+                `, [dp.project_id, dp.project_name, dp.description, dp.project_manager, dp.team_size, dp.progress_percent, dp.budget_usd, dp.risk_level, dp.complexity_level, dp.priority, dp.status]);
+            }
 
-        for (const s of sprints) {
-            await db.run(`
-                INSERT INTO sprints (sprint_id, project_id, sprint_name, sprint_number, status, start_date, end_date, capacity_story_points)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                ON CONFLICT (sprint_id) DO NOTHING;
-            `, [s.sprint_id, s.project_id, s.sprint_name, s.sprint_number, s.status, s.start_date, s.end_date, s.capacity_story_points]);
+            const sprints = [
+                { sprint_id: 'SPR-01', project_id: 'P00001', sprint_name: 'Sprint 1 - Core Auth & Setup', sprint_number: 1, status: 'COMPLETED', start_date: '2026-06-01', end_date: '2026-06-15', capacity_story_points: 35 },
+                { sprint_id: 'SPR-02', project_id: 'P00001', sprint_name: 'Sprint 2 - Financial Ledger Module', sprint_number: 2, status: 'ACTIVE', start_date: '2026-08-10', end_date: '2026-08-25', capacity_story_points: 40 },
+                { sprint_id: 'SPR-03', project_id: 'P00001', sprint_name: 'Sprint 3 - Multi-Currency Reporting', sprint_number: 3, status: 'PENDING', start_date: '2026-08-26', end_date: '2026-09-10', capacity_story_points: 45 },
+                { sprint_id: 'SPR-04', project_id: 'P00002', sprint_name: 'Sprint 1 - AI Pipeline & Ingestion', sprint_number: 1, status: 'ACTIVE', start_date: '2026-08-01', end_date: '2026-08-20', capacity_story_points: 50 },
+                { sprint_id: 'SPR-05', project_id: 'P00002', sprint_name: 'Sprint 2 - Dashboard Widgets & Alerts', sprint_number: 2, status: 'PENDING', start_date: '2026-08-21', end_date: '2026-09-05', capacity_story_points: 45 },
+                { sprint_id: 'SPR-06', project_id: 'P00002', sprint_name: 'Sprint 0 - Feasibility Spike', sprint_number: 0, status: 'CLOSED', start_date: '2026-07-01', end_date: '2026-07-15', capacity_story_points: 20 },
+                { sprint_id: 'SPR-07', project_id: 'P00003', sprint_name: 'Sprint 1 - Barcode Scanner Integration', sprint_number: 1, status: 'COMPLETED', start_date: '2026-07-01', end_date: '2026-07-15', capacity_story_points: 30 },
+                { sprint_id: 'SPR-08', project_id: 'P00003', sprint_name: 'Sprint 2 - Offline Sync Engine', sprint_number: 2, status: 'ACTIVE', start_date: '2026-08-12', end_date: '2026-08-28', capacity_story_points: 42 },
+                { sprint_id: 'SPR-09', project_id: 'P00003', sprint_name: 'Sprint 3 - Bluetooth Thermal Printing', sprint_number: 3, status: 'PENDING', start_date: '2026-08-29', end_date: '2026-09-12', capacity_story_points: 38 }
+            ];
+
+            for (const s of sprints) {
+                await db.run(`
+                    INSERT INTO sprints (sprint_id, project_id, sprint_name, sprint_number, status, start_date, end_date, capacity_story_points)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    ON CONFLICT (sprint_id) DO NOTHING;
+                `, [s.sprint_id, s.project_id, s.sprint_name, s.sprint_number, s.status, s.start_date, s.end_date, s.capacity_story_points]);
+            }
+            console.log('✅ Sprints seeded');
         }
-        console.log('✅ Sprints seeded');
 
         console.log('🌱 Seeding user stories...');
         

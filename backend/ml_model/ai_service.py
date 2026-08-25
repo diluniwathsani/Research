@@ -14,16 +14,8 @@ warnings.filterwarnings('ignore')
 try:
     import spacy
     nlp = spacy.load("en_core_web_sm")
-except ImportError:
+except Exception:
     nlp = None
-except OSError:
-    # Auto-download the model if it's missing on the system
-    os.system('python -m spacy download en_core_web_sm')
-    try:
-        import spacy
-        nlp = spacy.load("en_core_web_sm")
-    except:
-        nlp = None
 
 # Attempt to load ML models from the current directory (backend) or parent directory (Research)
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -45,8 +37,7 @@ try:
         best_model = joblib.load(SVM_PATH)
         tfidf = joblib.load(TFIDF_PATH)
 except Exception as e:
-    print(json.dumps({"error": f"Model load error: {str(e)}"}))
-    sys.exit(1)
+    sys.stderr.write(f"Model load warning: {str(e)}\n")
 
 def check_completeness(text):
     """

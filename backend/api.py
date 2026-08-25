@@ -1,23 +1,31 @@
+import os
+import pickle
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import pickle
-import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_DIR = os.path.join(BASE_DIR, 'ml_model') if os.path.exists(os.path.join(BASE_DIR, 'ml_model')) else os.path.join(BASE_DIR, 'ml_models')
+PRIORITY_MODEL_PATH = os.path.join(MODEL_DIR, 'priority_model.pkl')
+TFIDF_PATH = os.path.join(MODEL_DIR, 'priority_tfidf.pkl')
+EFFORT_MODEL_PATH = os.path.join(MODEL_DIR, 'effort_model.pkl')
 
 app = Flask(__name__)
 CORS(app) 
 
-# File paths pointing to your folder structure
-PRIORITY_MODEL_PATH = os.path.join('Training', 'sprint-models', 'priority_model.pkl')
-TFIDF_PATH = os.path.join('Training', 'sprint-models', 'priority_tfidf.pkl')
-EFFORT_MODEL_PATH = os.path.join('Training', 'sprint-models', 'effort_model.pkl')
+priority_model = None
+priority_tfidf = None
+effort_model = None
 
 try:
-    priority_model = pickle.load(open(PRIORITY_MODEL_PATH, 'rb'))
-    priority_tfidf = pickle.load(open(TFIDF_PATH, 'rb'))
-    effort_model = pickle.load(open(EFFORT_MODEL_PATH, 'rb'))
-    print("✅ All AI models loaded successfully!")
-except FileNotFoundError as e:
-    print(f"❌ Error loading models: {e}")
+    if os.path.exists(PRIORITY_MODEL_PATH) and os.path.exists(TFIDF_PATH):
+        priority_model = pickle.load(open(PRIORITY_MODEL_PATH, 'rb'))
+        priority_tfidf = pickle.load(open(TFIDF_PATH, 'rb'))
+        print(f"[OK] Priority AI models loaded successfully from {MODEL_DIR}!")
+    if os.path.exists(EFFORT_MODEL_PATH):
+        effort_model = pickle.load(open(EFFORT_MODEL_PATH, 'rb'))
+        print(f"[OK] Effort AI model loaded successfully!")
+except Exception as e:
+    print(f"[WARN] Error/warning loading models: {e}")
 
 # In-memory storage for sprint tasks
 sprint_tasks = [
@@ -32,17 +40,24 @@ sprint_tasks = [
 @app.route('/api/replan-full', methods=['POST'])
 def add_story_and_predict():
     try:
-        data = request.json
+        data = request.json or {}
         title = data.get('title', '')
         description = data.get('description', '')
         story_id = data.get('story_id', f"US00{len(sprint_tasks)+1}")
         points = int(data.get('story_points', 3))
         
         full_text = title + " " + description
-        text_features = priority_tfidf.transform([full_text])
         
-        priority_pred = priority_model.predict(text_features)[0]
-        priority_text = "HIGH" if priority_pred == 1 else "LOW"
+        if priority_model and priority_tfidf:
+            try:
+                text_features = priority_tfidf.transform([full_text])
+                priority_pred = priority_model.predict(text_features)[0]
+                priority_text = "HIGH" if priority_pred == 1 else "LOW"
+            except Exception as model_err:
+                print("Model prediction fallback:", model_err)
+                priority_text = "HIGH" if (points >= 8 or any(kw in full_text.lower() for kw in ['security', 'crash', 'critical', 'auth', 'payment', 'timeout'])) else "LOW"
+        else:
+            priority_text = "HIGH" if (points >= 8 or any(kw in full_text.lower() for kw in ['security', 'crash', 'critical', 'auth', 'payment', 'timeout'])) else "LOW"
         
         estimated_hours = points * 8
         

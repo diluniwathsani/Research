@@ -26,24 +26,41 @@ export default function ResourceManagementModule() {
   // ================= LOAD PROJECTS =================
   useEffect(() => {
     axios.get(`${EXPRESS_API}/projects`)
-      .then(res => setProjects(res.data))
+      .then(res => {
+        const list = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+        setProjects(list);
+        if (list.length > 0 && !selectedProject) {
+          setSelectedProject(list[0]);
+        }
+      })
       .catch(err => console.error('Error loading projects:', err));
   }, []);
 
   // ================= LOAD DEVELOPERS =================
   useEffect(() => {
     axios.get(`${EXPRESS_API}/developers`)
-      .then(res => setDevelopers(res.data))
+      .then(res => {
+        const list = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+        setDevelopers(list);
+      })
       .catch(err => console.error('Error loading developers:', err));
   }, []);
 
   // ================= LOAD SPRINTS =================
   useEffect(() => {
     if (!selectedProject) return;
-    axios.get(`${EXPRESS_API}/projects/${selectedProject.id}/sprints`)
-      .then(res => setSprints(res.data))
+    const projId = selectedProject.id || selectedProject.project_id;
+    axios.get(`${EXPRESS_API}/projects/${projId}/sprints`)
+      .then(res => {
+        const list = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+        setSprints(list);
+        if (list.length > 0) {
+          setSelectedSprint(list[0]);
+        } else {
+          setSelectedSprint(null);
+        }
+      })
       .catch(err => console.error('Error loading sprints:', err));
-    setSelectedSprint(null);
     setTasks([]);
     setAssignments([]);
     setShowResults(false);
@@ -52,10 +69,12 @@ export default function ResourceManagementModule() {
   // ================= LOAD TASKS =================
   useEffect(() => {
     if (!selectedSprint) return;
+    const spId = selectedSprint.id || selectedSprint.sprint_id;
+    const projId = selectedProject ? (selectedProject.id || selectedProject.project_id) : null;
     setLoading(true);
-    axios.get(`${EXPRESS_API}/sprints/${selectedSprint.id}/tasks`)
+    axios.get(`${EXPRESS_API}/sprints/${spId}/tasks${projId ? `?project_id=${projId}` : ''}`)
       .then(res => {
-        const taskData = Array.isArray(res.data) ? res.data : [];
+        const taskData = Array.isArray(res.data) ? res.data : (res.data?.data || []);
         setTasks(taskData);
         setApiSource('express');
       })
@@ -82,9 +101,10 @@ export default function ResourceManagementModule() {
     try {
       const response = await axios.post(`${EXPRESS_API}/allocate`, {
         tasks: tasks,
-        sprint_id: selectedSprint ? selectedSprint.id : null
+        sprint_id: selectedSprint ? (selectedSprint.id || selectedSprint.sprint_id) : null
       });
-      setAssignments(response.data.assignments);
+      const allocs = response.data?.assignments || response.data?.data || [];
+      setAssignments(allocs);
       setShowResults(true);
     } catch (error) {
       console.error('Allocation error:', error);
@@ -99,9 +119,10 @@ export default function ResourceManagementModule() {
     try {
       const response = await axios.post(`${EXPRESS_API}/allocate`, {
         tasks: tasks,
-        sprint_id: selectedSprint ? selectedSprint.id : null
+        sprint_id: selectedSprint ? (selectedSprint.id || selectedSprint.sprint_id) : null
       });
-      setAssignments(response.data.assignments);
+      const allocs = response.data?.assignments || response.data?.data || [];
+      setAssignments(allocs);
     } catch (error) {
       console.error('Rebalance error:', error);
       alert('Rebalance failed: ' + (error.response?.data?.error || error.message));
@@ -114,7 +135,7 @@ export default function ResourceManagementModule() {
     if (!selectedSprint) return;
     try {
       await axios.post(`${EXPRESS_API}/task-assignments`, {
-        sprint_id: selectedSprint.id,
+        sprint_id: selectedSprint.id || selectedSprint.sprint_id,
         assignments: assignments
       });
       alert('Allocation saved successfully!');
@@ -127,8 +148,8 @@ export default function ResourceManagementModule() {
   // ================= DRAG & DROP =================
   const handleTaskMove = (task, fromDevId, toDevId) => {
     const updatedAssignments = assignments.map(a => {
-      if (a.story_id === task.story_id) {
-        const targetDev = developers.find(d => d.id === toDevId);
+      if (String(a.story_id) === String(task.story_id)) {
+        const targetDev = developers.find(d => String(d.id) === String(toDevId));
         return {
           ...a,
           developer_id: toDevId,

@@ -139,6 +139,17 @@ export const approveChangeRequest = async (id, data) => {
   }
 };
 
+// Manually trigger AI Sprint Task Allocation for a Change Request
+export const allocateChangeRequestSprint = async (id) => {
+  try {
+    const response = await api.post(`/change-requests/${id}/allocate-sprint`);
+    return response.data;
+  } catch (error) {
+    console.error(`Error allocating sprint for ${id}:`, error);
+    throw error;
+  }
+};
+
 // ============================================
 // 6. DASHBOARD & SCOPE CREEP APIS
 // ============================================

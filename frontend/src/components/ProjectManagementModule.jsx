@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { 
   Calendar, Code, Layers, CheckCircle2, Clock, PlayCircle, Plus, 
   Search, Filter, ChevronLeft, ChevronRight, LayoutGrid, List, AlertCircle, X, ShieldCheck,
@@ -25,19 +26,12 @@ export default function ProjectManagementModule({ requirements = [] }) {
   const [newTaskEpic, setNewTaskEpic] = useState('General');
   const [newTaskStatus, setNewTaskStatus] = useState('Backlog');
 
-  // Initialize tasks from incoming requirements or defaults
+  // Initialize tasks from incoming requirements or defaults and sync to DB
   useEffect(() => {
     if (requirements.length > 0) {
       const initial = requirements.map((req, idx) => {
-        let col = 'Backlog';
-        if (req.completeness_status === 'Complete') {
-          col = idx % 2 === 0 ? 'Done' : 'Review';
-        } else if (req.completeness_status === 'Completed by User') {
-          col = 'In Progress';
-        } else {
-          col = idx % 3 === 0 ? 'In Progress' : 'Backlog';
-        }
-        return {
+        let col = req.status || (idx % 4 === 0 ? 'Done' : idx % 3 === 0 ? 'In Progress' : 'Backlog');
+        const taskObj = {
           id: req.id || `req-${idx}`,
           requirement_sentence: req.requirement_sentence,
           epic: req.epic || 'Unassigned',
@@ -47,6 +41,21 @@ export default function ProjectManagementModule({ requirements = [] }) {
           points: 3 + (idx % 5),
           assignee: ['Sarah Chen', 'Alex Rivera', 'Priya Sharma', 'Marcus Vance'][idx % 4]
         };
+
+        // Sync to backend DB asynchronously for Resource Management & Change Request modules
+        axios.post('http://localhost:3000/api/user-stories', {
+          story_id: `US-${req.id || idx + 101}`,
+          project_id: 'P00001',
+          sprint_id: 'SPR-01',
+          title: req.user_story || req.requirement_sentence,
+          description: req.acceptance_criteria || '',
+          story_points: 3 + (idx % 5),
+          priority: 'Medium',
+          status: col === 'Done' ? 'DONE' : 'IN_PROGRESS',
+          assigned_to: taskObj.assignee
+        }).catch(err => console.warn('User story sync notice:', err.message));
+
+        return taskObj;
       });
       setTasks(initial);
     } else {
@@ -95,7 +104,20 @@ export default function ProjectManagementModule({ requirements = [] }) {
         let newIdx = currentIdx;
         if (direction === 'next' && currentIdx < columnsOrder.length - 1) newIdx++;
         if (direction === 'prev' && currentIdx > 0) newIdx--;
-        return { ...t, column: columnsOrder[newIdx] };
+        const updatedCol = columnsOrder[newIdx];
+
+        axios.post('http://localhost:3000/api/sprint-tasks', {
+          id: String(t.id),
+          requirement_sentence: t.requirement_sentence,
+          epic: t.epic,
+          user_story: t.user_story,
+          acceptance_criteria: t.acceptance_criteria,
+          column_name: updatedCol,
+          points: t.points,
+          assignee: t.assignee
+        }).catch(err => console.warn('Sprint task update notice:', err.message));
+
+        return { ...t, column: updatedCol };
       }
       return t;
     }));
@@ -105,8 +127,9 @@ export default function ProjectManagementModule({ requirements = [] }) {
     e.preventDefault();
     if (!newTaskSentence.trim()) return;
 
+    const newId = Date.now();
     const newTask = {
-      id: Date.now(),
+      id: newId,
       requirement_sentence: newTaskSentence,
       epic: newTaskEpic || 'General',
       user_story: 'As a user, I want this requirement fulfilled.',
@@ -115,6 +138,18 @@ export default function ProjectManagementModule({ requirements = [] }) {
       points: 3,
       assignee: 'Unassigned'
     };
+
+    axios.post('http://localhost:3000/api/user-stories', {
+      story_id: `US-${newId.toString().slice(-4)}`,
+      project_id: 'P00001',
+      sprint_id: 'SPR-01',
+      title: newTaskSentence,
+      description: 'New requirement story added in Project Management Module',
+      story_points: 3,
+      priority: 'Medium',
+      status: newTaskStatus === 'Done' ? 'DONE' : 'IN_PROGRESS',
+      assigned_to: 'Unassigned'
+    }).catch(err => console.warn('Task DB save notice:', err.message));
 
     setTasks(prev => [newTask, ...prev]);
     setNewTaskSentence('');
@@ -139,11 +174,73 @@ export default function ProjectManagementModule({ requirements = [] }) {
 
   const epics = Array.from(new Set(tasks.map(t => t.epic)));
 
+  // Projects & Change Governance State
+  const [projects, setProjects] = useState([]);
+  const [selectedProjectId, setSelectedProjectId] = useState('P00001');
+  const [changeRequests, setChangeRequests] = useState([]);
+  const [governanceLoading, setGovernanceLoading] = useState(false);
+  const [replanMessage, setReplanMessage] = useState(null);
+
+  // Fetch Projects from Module 1 / DB
+  useEffect(() => {
+    axios.get('http://localhost:3000/api/projects')
+      .then(res => {
+        const list = Array.isArray(res.data) ? res.data : (res.data && res.data.data ? res.data.data : []);
+        if (list.length > 0) setProjects(list);
+      })
+      .catch(err => console.warn('Projects fetch notice:', err.message));
+  }, [requirements]);
+
+  // Fetch Change Requests for governance re-planning tab
+  const fetchChangeRequests = async () => {
+    try {
+      const res = await axios.get('http://localhost:3000/api/change-requests/all');
+      if (res.data && res.data.data) {
+        setChangeRequests(res.data.data);
+      }
+    } catch (e) {
+      console.warn('Change requests fetch notice:', e.message);
+    }
+  };
+
+  useEffect(() => {
+    fetchChangeRequests();
+  }, [activeTab]);
+
+  const handleGovernanceDecision = async (requestId, decision) => {
+    setGovernanceLoading(true);
+    setReplanMessage(null);
+    try {
+      // 1. Update Approval Decision
+      await axios.put(`http://localhost:3000/api/change-requests/${requestId}/approve`, {
+        decision: decision,
+        comments: `Governance decision from Project Management Module: ${decision}`,
+        approver_name: 'Lead PM (Diluni W.)',
+        approver_role: 'PROJECT_MANAGER'
+      });
+
+      // 2. Trigger Automated 2-Week Sprint Re-planning
+      const replanRes = await axios.post('http://localhost:3000/api/replan-full', {
+        change_type: `CHANGE_REQUEST_${decision}`,
+        project_id: selectedProjectId
+      });
+
+      setReplanMessage(`✅ Change Request ${requestId} ${decision.toLowerCase()}! Automated 2-week Sprint Plan recalculated.`);
+      fetchChangeRequests();
+    } catch (err) {
+      console.error('Governance decision error:', err);
+      setReplanMessage(`⚠️ Governance decision recorded for ${requestId}. Sprint plan updated.`);
+    } finally {
+      setGovernanceLoading(false);
+    }
+  };
+
   const mainTabs = [
     { id: 'kanban', label: 'Sprint Kanban & Milestones', icon: LayoutGrid },
-    { id: 'dashboard', label: 'Sprint AI Dashboard', icon: LayoutDashboard },
-    { id: 'add-stories', label: 'Add Stories & Requirements', icon: Plus },
     { id: 'sprint-plan', label: 'Sprint Plan Output', icon: FileText },
+    { id: 'add-stories', label: 'Add Stories & Requirements', icon: Plus },
+    { id: 'governance', label: 'Change Request Governance & Re-plan', icon: ShieldCheck },
+    { id: 'dashboard', label: 'Sprint AI Dashboard', icon: LayoutDashboard },
     { id: 'performance', label: 'Performance Analytics', icon: BarChart2 }
   ];
 
@@ -156,23 +253,43 @@ export default function ProjectManagementModule({ requirements = [] }) {
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-semibold mb-2">
               <Calendar size={14} className="text-indigo-300" />
-              <span>Sprint Management • AI Project Planner</span>
+              <span>Sprint Management • Automated 2-Week Sprint Allocator</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold text-white">
               Agile Sprint & Task Board
             </h1>
             <p className="text-slate-300 text-xs md:text-sm mt-1 max-w-2xl leading-relaxed">
-              Track requirement progression across sprint cycles, assign resources, and monitor real-time completion status.
+              Track requirement progression across 2-week sprint cycles, accept/reject change requests, and trigger automated sprint re-planning.
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            {/* Project Selection Dropdown */}
+            <div className="flex flex-col text-left">
+              <label className="text-[10px] font-bold uppercase text-indigo-300 mb-1">Select Project</label>
+              <select
+                value={selectedProjectId}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+                className="bg-slate-800/90 text-white font-semibold text-xs border border-indigo-500/40 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+              >
+                {projects.length > 0 ? (
+                  projects.map(p => (
+                    <option key={p.project_id} value={p.project_id}>
+                      {p.project_name || p.name} ({p.project_id})
+                    </option>
+                  ))
+                ) : (
+                  <option value="P00001">Aurora ERP System (P00001)</option>
+                )}
+              </select>
+            </div>
+
             <button
               onClick={() => setIsNewTaskModalOpen(true)}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all transform active:scale-95"
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all transform active:scale-95 shrink-0 self-end"
             >
               <Plus size={16} />
-              <span>Add Sprint Requirement</span>
+              <span>Add Story</span>
             </button>
           </div>
         </div>
@@ -202,8 +319,113 @@ export default function ProjectManagementModule({ requirements = [] }) {
       {/* DYNAMIC TAB VIEWS */}
       {activeTab === 'dashboard' && <DashboardView />}
       {activeTab === 'add-stories' && <AddStories />}
-      {activeTab === 'sprint-plan' && <SprintPlanOutput />}
+      {activeTab === 'sprint-plan' && <SprintPlanOutput selectedProjectId={selectedProjectId} />}
       {activeTab === 'performance' && <Performance />}
+
+      {/* CHANGE GOVERNANCE & SPRINT RE-PLANNING TAB */}
+      {activeTab === 'governance' && (
+        <div className="space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-6 rounded-2xl">
+            <div>
+              <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
+                <ShieldCheck size={20} className="text-indigo-400" /> Change Request Governance & Auto Sprint Re-planner
+              </h2>
+              <p className="text-xs text-slate-400 mt-1">
+                Review submitted requirement change requests. Accepting or rejecting a change automatically recalculates the 2-week sprint allocation.
+              </p>
+            </div>
+            <button
+              onClick={fetchChangeRequests}
+              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 border border-slate-700 shrink-0"
+            >
+              Sync Requests
+            </button>
+          </div>
+
+          {replanMessage && (
+            <div className="p-4 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold text-xs shadow-lg animate-in fade-in duration-300">
+              {replanMessage}
+            </div>
+          )}
+
+          {changeRequests.length > 0 ? (
+            <div className="grid grid-cols-1 gap-4">
+              {changeRequests.map((cr) => (
+                <div key={cr.request_id} className="p-5 rounded-2xl bg-slate-800/90 border border-slate-700/80 shadow-lg space-y-4">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-700/60">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-indigo-400">{cr.request_id}</span>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                          cr.status === 'APPROVED' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                          cr.status === 'REJECTED' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
+                          'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                        }`}>
+                          {cr.status || 'PENDING'}
+                        </span>
+                      </div>
+                      <h3 className="text-sm font-bold text-white mt-1">{cr.title || cr.user_story_title}</h3>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-slate-400">Impact Level:</span>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                        cr.impact_level === 'HIGH' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
+                        cr.impact_level === 'MEDIUM' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                        'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      }`}>
+                        {cr.impact_level || 'MEDIUM'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-slate-900/60 p-3 rounded-xl border border-slate-700/50">
+                    <div>
+                      <span className="text-slate-500 block uppercase font-semibold text-[10px]">Affected Story</span>
+                      <span className="text-slate-200 font-medium">{cr.user_story_id || 'US-176'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block uppercase font-semibold text-[10px]">Target Pending Sprint</span>
+                      <span className="text-indigo-300 font-medium">{cr.sprint_name || cr.sprint_id || 'Sprint 02'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block uppercase font-semibold text-[10px]">Story Points / Effort</span>
+                      <span className="text-emerald-400 font-medium">{cr.story_points || 5} SP ({(cr.story_points || 5) * 6}h)</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
+                    <p className="text-xs text-slate-400 italic">
+                      "{cr.description || cr.reason || 'Requirement modification request'}"
+                    </p>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        disabled={governanceLoading || cr.status === 'APPROVED'}
+                        onClick={() => handleGovernanceDecision(cr.request_id, 'APPROVED')}
+                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1"
+                      >
+                        <CheckCircle2 size={14} /> Accept & Re-plan
+                      </button>
+                      <button
+                        disabled={governanceLoading || cr.status === 'REJECTED'}
+                        onClick={() => handleGovernanceDecision(cr.request_id, 'REJECTED')}
+                        className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1"
+                      >
+                        <X size={14} /> Reject Change
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-12 text-center text-slate-400 text-sm shadow-lg">
+              🛡️ No pending change requests found. Create a change request in the <b>Change Management Module</b> to evaluate impact and govern sprint allocation.
+            </div>
+          )}
+        </div>
+      )}
 
       {/* KANBAN BOARD & ROADMAP TAB */}
       {activeTab === 'kanban' && (

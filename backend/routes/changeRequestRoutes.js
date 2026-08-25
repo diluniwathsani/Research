@@ -17,5 +17,6 @@ router.get('/stats', changeRequestController.getDashboardStats);
 router.get('/scope-creep/:projectId', changeRequestController.getScopeCreepAlert);
 router.get('/:id', changeRequestController.getChangeRequestById);
 router.put('/:id/approve', changeRequestController.updateApproval);
+router.post('/:id/allocate-sprint', changeRequestController.allocateChangeRequestTask);
 
 module.exports = router;

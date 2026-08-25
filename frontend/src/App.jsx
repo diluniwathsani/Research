@@ -34,9 +34,10 @@ function App() {
   const fetchRequirements = async () => {
     try {
       const res = await axios.get('http://localhost:3000/api/requirements');
-      setRequirements(res.data);
+      setRequirements(res.data || []);
+      setError(null);
     } catch (err) {
-      console.error(err);
+      console.error('Fetch requirements error:', err);
       setError("Failed to fetch requirements from backend.");
     }
   };

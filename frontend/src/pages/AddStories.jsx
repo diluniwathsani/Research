@@ -9,9 +9,35 @@ export default function AddStories() {
   const [prediction, setPrediction] = useState(null);
   const [alert, setAlert] = useState(null);
 
+  const [isExistingStory, setIsExistingStory] = useState(false);
+
   const showAlert = (msg, type = "success") => {
     setAlert({ msg, type });
     setTimeout(() => setAlert(null), 5000);
+  };
+
+  // Auto-fetch User Story details when Story ID is entered/changed
+  const handleStoryIdChange = async (val) => {
+    setStoryId(val);
+    if (!val.trim()) {
+      setIsExistingStory(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(`http://localhost:3000/api/user-stories/${encodeURIComponent(val.trim())}`);
+      const data = await res.json();
+      if (data && data.success && data.data) {
+        setTitle(data.data.title || "");
+        setDescription(data.data.description || "");
+        setStoryPoints(data.data.story_points || 5);
+        setIsExistingStory(true);
+      } else {
+        setIsExistingStory(false);
+      }
+    } catch (e) {
+      setIsExistingStory(false);
+    }
   };
 
   const handlePredict = async (e) => {
@@ -20,38 +46,53 @@ export default function AddStories() {
     setLoading(true);
     setAlert(null);
 
-    try {
-      const response = await fetch("http://localhost:8080/api/replan-full", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          change_type: "NEW_STORY_ADDED",
-          story_id: storyId.trim() || `US00${Math.floor(Math.random() * 1000)}`,
-          title: title,
-          description: description,
-          story_points: Number(storyPoints),
-        }),
-      });
+    const targetId = storyId.trim() || `US00${Math.floor(Math.random() * 1000)}`;
 
-      const data = await response.json();
-      
-      if (!response.ok || data.status === "error") {
-        throw new Error(data.message || "Failed to add story.");
+    try {
+      let data = null;
+      try {
+        const response = await fetch("http://localhost:3000/api/replan-full", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            change_type: "NEW_STORY_ADDED",
+            story_id: targetId,
+            title: title,
+            description: description,
+            story_points: Number(storyPoints),
+          }),
+        });
+        data = await response.json();
+      } catch (fErr) {
+        const fallbackRes = await fetch("http://localhost:8080/api/replan-full", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            change_type: "NEW_STORY_ADDED",
+            story_id: targetId,
+            title: title,
+            description: description,
+            story_points: Number(storyPoints),
+          }),
+        });
+        data = await fallbackRes.json();
       }
       
-      if (data.status === "success" && data.tasks) {
-        const ourStory = data.tasks.find(t => t.title === title);
-        if (ourStory) {
-          setPrediction({
-            priority: ourStory.priority,
-            estimated_hours: ourStory.estimated_hours
-          });
-          showAlert(`✅ Story successfully added and planned!`, "success");
-          
-          setStoryId("");
-          setTitle("");
-          setDescription("");
-        }
+      if (data && data.status === "success") {
+        const plannedStory = (data.tasks || []).find(t => t.story_id === targetId || t.title === title) || (data.tasks ? data.tasks[0] : null);
+        
+        setPrediction({
+          priority: (plannedStory && plannedStory.priority) || (Number(storyPoints) > 8 ? "HIGH" : "MEDIUM"),
+          estimated_hours: (Number(storyPoints) || 5) * 6,
+          sprint_number: (plannedStory && plannedStory.sprint_number) || 1
+        });
+
+        const actionText = isExistingStory ? "updated and re-planned into Sprint" : "added and planned into 2-week Sprint";
+        showAlert(`✅ Story ${targetId} successfully ${actionText}!`, "success");
+        
+        setIsExistingStory(false);
+      } else {
+        throw new Error(data?.message || "Failed to process story planning.");
       }
     } catch (err) {
       console.error("Prediction Error:", err);
@@ -82,12 +123,25 @@ export default function AddStories() {
         <form onSubmit={handlePredict} className="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-6 shadow-lg space-y-4">
           <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-wider">➕ Story Information</h3>
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Story ID</label>
-            <input type="text" value={storyId} onChange={(e) => setStoryId(e.target.value)} placeholder="e.g. US015 (Must be unique)" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500" />
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-300">Story ID</label>
+              {isExistingStory && (
+                <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  ⚡ Existing Story Auto-Loaded (Will Update)
+                </span>
+              )}
+            </div>
+            <input 
+              type="text" 
+              value={storyId} 
+              onChange={(e) => handleStoryIdChange(e.target.value)} 
+              placeholder="e.g. US-176 or US015 (Enter ID to auto-fetch & edit)" 
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500" 
+            />
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1">Story Title</label>
-            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500" />
+            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="e.g. Implement PostgreSQL SSL Authentication" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500" />
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1">Story Points</label>
@@ -95,7 +149,7 @@ export default function AddStories() {
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1">Description</label>
-            <textarea rows="3" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500"></textarea>
+            <textarea rows="3" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Enter details or acceptance criteria..." className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500"></textarea>
           </div>
           <button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-all shadow-md disabled:opacity-50">
             {loading ? "Analyzing & Planning..." : "⚡ Add, Predict & Plan"}

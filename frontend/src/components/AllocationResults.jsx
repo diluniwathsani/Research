@@ -137,15 +137,20 @@ const DeveloperColumn = ({ developer, tasks, onDrop, theme }) => {
   );
 };
 
-const AllocationResults = ({ assignments, developers, tasks, selectedSprint, onRebalance, onSave, onTaskMove, onBack, loading, apiSource }) => {
+const AllocationResults = ({ assignments = [], developers = [], tasks = [], selectedSprint, onRebalance, onSave, onTaskMove, onBack, loading, apiSource }) => {
+  const safeAssignments = Array.isArray(assignments) ? assignments : (assignments?.data || []);
+  const safeDevelopers = Array.isArray(developers) ? developers : (developers?.data || []);
+  const safeTasks = Array.isArray(tasks) ? tasks : (tasks?.data || []);
+
   const grouped = {};
-  assignments.forEach(a => {
-    if (!grouped[a.developer_id]) grouped[a.developer_id] = [];
-    grouped[a.developer_id].push(a);
+  safeAssignments.forEach(a => {
+    const key = String(a.developer_id);
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(a);
   });
 
-  const totalHours = assignments.reduce((sum, a) => sum + a.allocated_hours, 0);
-  const totalCapacity = developers.reduce((sum, d) => sum + d.capacity_hours, 0);
+  const totalHours = safeAssignments.reduce((sum, a) => sum + a.allocated_hours, 0);
+  const totalCapacity = safeDevelopers.reduce((sum, d) => sum + d.capacity_hours, 0);
   const isBalanced = totalHours <= totalCapacity;
   const utilization = totalCapacity > 0 ? (totalHours / totalCapacity) * 100 : 0;
 
@@ -170,7 +175,7 @@ const AllocationResults = ({ assignments, developers, tasks, selectedSprint, onR
           <div>
             <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Allocation Results</h2>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Sprint: {selectedSprint?.name} · {tasks.length} tasks allocated to {developers.length} developers
+              Sprint: {selectedSprint?.name || selectedSprint?.sprint_name || 'Selected Sprint'} · {safeTasks.length} tasks allocated to {safeDevelopers.length} developers
             </p>
           </div>
           <button
@@ -206,11 +211,11 @@ const AllocationResults = ({ assignments, developers, tasks, selectedSprint, onR
           </div>
 
           <div className="grid gap-5 mb-5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))' }}>
-            {developers.map((dev, i) => (
+            {safeDevelopers.map((dev, i) => (
               <DeveloperColumn
                 key={dev.id}
                 developer={dev}
-                tasks={grouped[dev.id] || []}
+                tasks={grouped[String(dev.id)] || grouped[dev.id] || []}
                 onDrop={handleDrop}
                 theme={AVATAR_THEMES[i % AVATAR_THEMES.length]}
               />

@@ -61,16 +61,16 @@ export default function DashboardView({
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Parsed from Excel batch</p>
         </div>
 
-        {/* Member 1: Completeness Rate */}
+        {/* Development Artifacts Generated */}
         <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Completeness Score</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Generated Artifacts</span>
             <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400">
               <ShieldCheck size={18} />
             </div>
           </div>
-          <p className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-2">{completenessRate}%</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{completeCount} / {total} valid requirements</p>
+          <p className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-2">{total}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Agile User Stories & Epics Generated</p>
         </div>
 
         {/* YOUR ML STAT: Priority Prediction Accuracy */}

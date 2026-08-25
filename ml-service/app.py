@@ -1,13 +1,18 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import joblib
 import pandas as pd
 
-app = Flask(__name__)
+import os
 
-# Load model and encoders at startup
-model = joblib.load('simplified_model.pkl')
-le_priority = joblib.load('priority_encoder_simple.pkl')
-le_complex = joblib.load('complexity_encoder_simple.pkl')
+app = Flask(__name__)
+CORS(app)
+
+# Load model and encoders at startup using absolute script directory path
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+model = joblib.load(os.path.join(BASE_DIR, 'simplified_model.pkl'))
+le_priority = joblib.load(os.path.join(BASE_DIR, 'priority_encoder_simple.pkl'))
+le_complex = joblib.load(os.path.join(BASE_DIR, 'complexity_encoder_simple.pkl'))
 
 @app.route('/predict', methods=['POST'])
 def predict():

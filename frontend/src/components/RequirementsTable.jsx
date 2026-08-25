@@ -297,15 +297,15 @@ export default function RequirementsTable({ requirements, onUpdate }) {
                                 {reqs.length}
                               </span>
                             </h3>
-                            <div className="flex items-center gap-4 mt-1.5">
+                              <div className="flex items-center gap-4 mt-1.5">
                               <div className="w-40 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                                 <div 
-                                  className="h-full bg-gradient-to-r from-green-400 to-green-600 transition-all duration-1000 ease-out" 
-                                  style={{ width: `${(completeCount / reqs.length) * 100}%` }}
+                                  className="h-full bg-gradient-to-r from-purple-400 to-indigo-600 transition-all duration-1000 ease-out" 
+                                  style={{ width: '100%' }}
                                 ></div>
                               </div>
                               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                {Math.round((completeCount / reqs.length) * 100)}% COMPLETE
+                                {reqs.length} ARTIFACTS GENERATED
                               </span>
                             </div>
                           </div>
@@ -328,7 +328,6 @@ export default function RequirementsTable({ requirements, onUpdate }) {
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/30">
                               {reqs.map((req, idx) => {
-                                const isIncomplete = req.completeness_status?.includes("Incomplete");
                                 const showOutcomes = expandedOutcomes[req.id] || false;
                                 return (
                                   <React.Fragment key={req.id}>
@@ -349,16 +348,13 @@ export default function RequirementsTable({ requirements, onUpdate }) {
                                           </div>
                                         ) : (
                                           <div className="space-y-4">
-                                            <p className={`text-base leading-relaxed font-medium tracking-tight ${isIncomplete ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>
+                                            <p className="text-base leading-relaxed font-medium tracking-tight text-slate-700 dark:text-slate-200">
                                               {req.requirement_sentence}
                                             </p>
                                             <div className="flex items-center gap-4">
-                                              <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-lg text-[9px] font-black border uppercase tracking-widest shadow-sm
-                                                ${isIncomplete ? 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-100 dark:border-red-500/20' : 
-                                                  req.completeness_status?.includes('Complete') ? 'bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 border-green-100 dark:border-green-500/20' : 
-                                                  'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-600'}`}>
-                                                {isIncomplete ? <AlertCircle size={12} className="animate-pulse" /> : (req.completeness_status?.includes('Complete') ? <CheckCircle size={12} /> : null)}
-                                                {req.completeness_status || "Awaiting Analysis"}
+                                              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-lg text-[9px] font-black border uppercase tracking-widest shadow-sm bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-100 dark:border-purple-500/20">
+                                                <CheckCircle size={12} />
+                                                {req.user_story ? 'Agile User Story Artifact Ready' : 'Development Artifact Generated'}
                                               </span>
                                               
                                               {req.epic && (

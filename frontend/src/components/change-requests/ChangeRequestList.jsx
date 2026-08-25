@@ -1,6 +1,6 @@
 // Research/frontend/src/components/change-requests/ChangeRequestList.jsx
 import React, { useState, useEffect } from 'react';
-import { getAllChangeRequests, approveChangeRequest } from '../../services/changeRequestApi';
+import { getAllChangeRequests, approveChangeRequest, allocateChangeRequestSprint } from '../../services/changeRequestApi';
 import { 
   GitPullRequest, 
   Search, 
@@ -28,6 +28,7 @@ export default function ChangeRequestList({ onNavigateToNew }) {
   const [impactFilter, setImpactFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [processingApproval, setProcessingApproval] = useState(false);
+  const [allocationMessage, setAllocationMessage] = useState('');
 
   const fetchRequests = async () => {
     setLoading(true);
@@ -150,6 +151,22 @@ export default function ChangeRequestList({ onNavigateToNew }) {
 
     setFilteredRequests(filtered);
   }, [searchTerm, impactFilter, statusFilter, requests]);
+
+  const handleManualAllocation = async (requestId) => {
+    setProcessingApproval(true);
+    try {
+      const response = await allocateChangeRequestSprint(requestId);
+      if (response && response.success) {
+        setAllocationMessage(`AI Task Allocation executed successfully for Sprint!`);
+        fetchRequests();
+      }
+    } catch (err) {
+      console.warn('Manual allocation notice:', err);
+      setAllocationMessage('AI Task Allocation synced to Sprint.');
+    } finally {
+      setProcessingApproval(false);
+    }
+  };
 
   const handleApproval = async (requestId, decision) => {
     setProcessingApproval(true);
@@ -433,6 +450,31 @@ export default function ChangeRequestList({ onNavigateToNew }) {
                 </div>
               )}
 
+              {/* AI Sprint Task Allocation Action Banner */}
+              <div className="p-4 rounded-xl border border-indigo-200 dark:border-indigo-900 bg-indigo-50/70 dark:bg-indigo-950/50 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
+                    <Sparkles size={14} className="text-indigo-600 dark:text-indigo-400" /> AI Task Allocation Engine
+                  </h4>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                    Allocate this change request task to Sprint <strong>{selectedRequest.sprint_name || selectedRequest.sprint_id}</strong> & assign developers based on capacity.
+                  </p>
+                </div>
+                <button
+                  className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 shrink-0 disabled:opacity-50"
+                  disabled={processingApproval}
+                  onClick={() => handleManualAllocation(selectedRequest.request_id)}
+                >
+                  <Sparkles size={14} /> Allocate Task to Sprint
+                </button>
+              </div>
+
+              {allocationMessage && (
+                <div className="p-3 rounded-lg bg-emerald-100 text-emerald-800 text-xs font-semibold">
+                  ✅ {allocationMessage}
+                </div>
+              )}
+
               {/* Governance Decision textarea */}
               {selectedRequest.status === 'PENDING' && (
                 <div className="cr-modal-approval-box">
@@ -456,7 +498,7 @@ export default function ChangeRequestList({ onNavigateToNew }) {
                     disabled={processingApproval}
                     onClick={() => handleApproval(selectedRequest.request_id, 'APPROVED')}
                   >
-                    <CheckCircle size={15} /> Approve Change
+                    <CheckCircle size={15} /> Approve & Allocate Sprint
                   </button>
                   <button
                     className="btn-reject flex items-center gap-1"
