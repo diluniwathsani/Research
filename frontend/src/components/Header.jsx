@@ -1,9 +1,18 @@
 import React, { useState } from 'react';
-import { Cpu, Search, Bell, Sun, Moon, User, CheckCircle2, ShieldAlert, Sparkles, ChevronDown } from 'lucide-react';
+import { Cpu, Search, Bell, Sun, Moon, User, CheckCircle2, ShieldAlert, Sparkles, ChevronDown, RefreshCw, FolderGit2 } from 'lucide-react';
 
-export default function Header({ isDark, setIsDark, activeTab, reqCount, onRefresh }) {
+export default function Header({ isDark, setIsDark, activeTab, reqCount, onRefresh, projects = [], selectedProjectId, onSelectProject }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefreshClick = async () => {
+    if (onRefresh) {
+      setIsRefreshing(true);
+      await onRefresh();
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
+  };
 
   const moduleTitles = {
     dashboard: 'Executive Overview & Analytics',
@@ -26,10 +35,10 @@ export default function Header({ isDark, setIsDark, activeTab, reqCount, onRefre
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 dark:from-indigo-400 dark:via-purple-300 dark:to-pink-400">
-                  ReqEngine AI
+                  ReqEngine
                 </span>
                 <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700/50">
-                  v2.4 Enterprise
+                  Research Platform
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
@@ -39,26 +48,23 @@ export default function Header({ isDark, setIsDark, activeTab, reqCount, onRefre
           </div>
         </div>
 
-        {/* Middle Section: Global Search Bar */}
-        <div className="hidden md:flex flex-1 max-w-md mx-4">
-          <div className="relative w-full">
-            <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search requirements, epics, user stories, or change requests..."
-              className="w-full pl-10 pr-4 py-2 text-sm bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-slate-700 dark:text-slate-200 placeholder-slate-400 transition-all"
-            />
-          </div>
-        </div>
-
         {/* Right Section: System Health, Actions, Theme & User */}
         <div className="flex items-center space-x-2 sm:space-x-3">
           
           {/* System Health Badge */}
           <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-            <span>AI Pipeline Active</span>
+            <span>System Online</span>
           </div>
+
+          {/* Sync / Refresh Button */}
+          <button
+            onClick={handleRefreshClick}
+            className="p-2.5 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-white bg-slate-100 dark:bg-slate-700/60 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-all"
+            title="Refresh Data from Backend"
+          >
+            <RefreshCw size={18} className={isRefreshing ? "animate-spin text-indigo-600 dark:text-indigo-400" : ""} />
+          </button>
 
           {/* Notifications Dropdown */}
           <div className="relative">

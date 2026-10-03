@@ -4,13 +4,14 @@ import FileUpload from './Upload';
 import RequirementsTable from './RequirementsTable';
 
 export default function DevelopmentArtifactModule({ 
-  requirements, 
-  loading, 
-  error, 
+  requirements = [], 
+  loading = false, 
+  error = null, 
   onFetchRequirements, 
   onProcess, 
   onExport 
 }) {
+  const safeRequirements = Array.isArray(requirements) ? requirements : [];
   return (
     <div className="space-y-6">
       
@@ -22,12 +23,9 @@ export default function DevelopmentArtifactModule({
               <Sparkles size={14} className="text-purple-300" />
               <span>Module 1: Development Artifact Engineering</span>
             </div>
-            <h1 className="text-2xl md:text-3xl font-extrabold">
-              Requirements NLP Validation & Artifact Generator
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
+              Development Artifact Engineering Module
             </h1>
-            <p className="text-slate-300 text-xs md:text-sm mt-1 max-w-2xl leading-relaxed">
-              Upload raw requirement spreadsheets to execute spaCy NLP completeness validation (RFC 2119), Support Vector Machine (SVM) topic clustering, and automatic generation of User Stories and Acceptance Criteria.
-            </p>
           </div>
         </div>
       </div>
@@ -48,18 +46,11 @@ export default function DevelopmentArtifactModule({
           <div className="hidden lg:block w-px bg-slate-200 dark:bg-slate-700"></div>
 
           {/* Right Column: Execution Controls */}
-          <div className="flex-1 flex flex-col justify-center space-y-4">
-            <h2 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider mb-1">
-              AI Pipeline Controls
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Run NLP dependency parsing to filter incomplete requirements and cluster complete sentences into Epics & Features.
-            </p>
-
-            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+          <div className="flex-1 flex flex-col justify-center">
+            <div className="flex flex-col sm:flex-row gap-3">
               <button 
                 onClick={onProcess} 
-                disabled={loading || requirements.length === 0}
+                disabled={loading || safeRequirements.length === 0}
                 className="flex-1 relative group overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-3.5 font-bold text-white text-xs shadow-lg shadow-indigo-600/30 transition-all hover:scale-[1.02] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
               >
                 {loading ? <RefreshCw className="animate-spin" size={18} /> : <Cpu size={18} />}
@@ -68,7 +59,7 @@ export default function DevelopmentArtifactModule({
 
               <button 
                 onClick={onExport}
-                disabled={requirements.length === 0}
+                disabled={safeRequirements.length === 0}
                 className="rounded-2xl bg-slate-100 dark:bg-slate-700/80 border border-slate-200 dark:border-slate-600 px-6 py-3.5 font-bold text-xs text-slate-700 dark:text-slate-200 transition-all hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
               >
                 <Download size={18} />
@@ -89,21 +80,7 @@ export default function DevelopmentArtifactModule({
 
       {/* Main Requirements Interactive Table */}
       <section className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700/80 overflow-hidden">
-        <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700/80 flex flex-wrap justify-between items-center gap-4 bg-slate-50/50 dark:bg-slate-900/30">
-          <div>
-            <h2 className="text-base font-bold text-slate-900 dark:text-white">
-              Parsed Requirements & Generated Artifacts
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Filter by Epics, edit sentences, or review generated Agile User Stories.
-            </p>
-          </div>
-          <span className="bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-xs font-bold py-1 px-3.5 rounded-full border border-indigo-200 dark:border-indigo-800">
-            Total Records: {requirements.length}
-          </span>
-        </div>
-
-        <RequirementsTable requirements={requirements} onUpdate={onFetchRequirements} />
+        <RequirementsTable requirements={safeRequirements} onUpdate={onFetchRequirements} />
       </section>
 
     </div>

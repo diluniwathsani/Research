@@ -6,7 +6,7 @@ export default function FileUpload({ onUploadSuccess }) {
   // State to hold the currently selected Excel file
   const [file, setFile] = useState(null);
   // State for Project Name
-  const [projectName, setProjectName] = useState("Aurora ERP System");
+  const [projectName, setProjectName] = useState("");
   // State to manage the loading status while the file is being sent to the backend
   const [uploading, setUploading] = useState(false);
   // Reference to manually trigger or clear the hidden HTML file input
@@ -30,7 +30,7 @@ export default function FileUpload({ onUploadSuccess }) {
     // FormData is required to safely transmit files via HTTP requests
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('project_name', projectName.trim() || 'Aurora ERP System');
+    formData.append('project_name', projectName.trim() || 'Project Research');
 
     try {
       // POST the file to the backend API
@@ -96,7 +96,7 @@ export default function FileUpload({ onUploadSuccess }) {
               <Tag className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
               <input 
                 type="text"
-                placeholder="e.g. Aurora ERP System or Fusion Portal"
+                placeholder="e.g. Project Research new"
                 className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 pl-10 pr-4 text-sm font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                 value={projectName}
                 onChange={(e) => setProjectName(e.target.value)}

@@ -14,7 +14,60 @@ function generateRequestId() {
     return `CR-${year}-${rand}-${suffix}`;
 }
 
-// Helper: Run AI Sprint Allocation & save assignments for a sprint
+// Helper: Extract domain and required skills dynamically from task title/text
+function extractDomainAndSkills(titleOrText) {
+    const text = (titleOrText || '').toLowerCase();
+    if (/\b(machine learning|nlp|spacy|scikit|svm|deep learning|neural network|tensorflow|pytorch|classifier|ai service|ml model|training dataset)\b/i.test(text) || (/\b(ml|ai)\b/i.test(text) && !text.includes('email') && !text.includes('detail') && !text.includes('main'))) {
+        let skills = ['Python', 'ML'];
+        if (text.includes('nlp') || text.includes('spacy')) skills.push('NLP');
+        if (text.includes('svm') || text.includes('scikit')) skills.push('Scikit-Learn');
+        return { domain: 'ai', required_domain: 'ai', skills, required_skills: skills };
+    }
+    if (/\b(enter|input|form|ui|ux|frontend|react|dashboard|dark mode|css|tailwind|export|pdf|excel|component|layout|view|display|screen|button|render)\b/i.test(text)) {
+        let skills = ['JavaScript', 'React'];
+        if (text.includes('dark mode') || text.includes('css') || text.includes('tailwind')) skills.push('Tailwind');
+        if (text.includes('pdf') || text.includes('excel') || text.includes('export') || text.includes('print')) skills.push('jsPDF');
+        if (text.includes('enter') || text.includes('input') || text.includes('form')) skills.push('HTML/CSS');
+        return { domain: 'frontend', required_domain: 'frontend', skills, required_skills: skills };
+    }
+    if (/\b(test|qa|cypress|selenium|unit test|jest|audit check|verification|verify|validation|validate)\b/i.test(text)) {
+        const skills = ['QA Automation', 'Cypress'];
+        return { domain: 'qa', required_domain: 'qa', skills, required_skills: skills };
+    }
+    if (/\b(devops|docker|kubernetes|aws|cloud|ci\/cd|pipeline|deploy|nginx|dockerfile)\b/i.test(text)) {
+        const skills = ['Docker', 'DevOps'];
+        return { domain: 'devops', required_domain: 'devops', skills, required_skills: skills };
+    }
+    if (/\b(defect|repair|vessel|equipment|overtime|labor|labour|history|audit|version|status|approve|reject|permission|role|user|login|auth|database|sql|postgres|backend|api|server|crud|link|assign|cost|costing)\b/i.test(text)) {
+        let skills = ['JavaScript', 'SQL'];
+        if (text.includes('login') || text.includes('auth') || text.includes('permission') || text.includes('role')) skills.push('OAuth');
+        if (text.includes('database') || text.includes('sql') || text.includes('postgres') || text.includes('history') || text.includes('audit') || text.includes('version')) skills.push('PostgreSQL');
+        if (text.includes('api') || text.includes('backend') || text.includes('defect') || text.includes('repair') || text.includes('approve') || text.includes('reject')) skills.push('Node.js');
+        return { domain: 'backend', required_domain: 'backend', skills, required_skills: skills };
+    }
+    const defaultSkills = ['JavaScript', 'SQL', 'Node.js'];
+    return { domain: 'backend', required_domain: 'backend', skills: defaultSkills, required_skills: defaultSkills };
+}
+
+// Helper: Calculate Skill Match Score percentage
+function calculateSkillMatchScore(developerSkills, requiredSkills) {
+    if (!requiredSkills || requiredSkills.length === 0) return 100;
+    if (!developerSkills || developerSkills.length === 0) return 0;
+    let devSkillArray = [];
+    if (Array.isArray(developerSkills)) {
+        devSkillArray = developerSkills.map(s => String(s).trim().toLowerCase());
+    } else if (typeof developerSkills === 'string') {
+        devSkillArray = developerSkills.split(',').map(s => String(s).trim().toLowerCase());
+    }
+    const requiredLower = requiredSkills.map(s => String(s).trim().toLowerCase());
+    let matched = 0;
+    for (const req of requiredLower) {
+        if (devSkillArray.includes(req)) matched++;
+    }
+    return Math.round((matched / requiredSkills.length) * 100);
+}
+
+// Helper: Run AI Sprint Allocation & save assignments for a sprint using full weighted composite engine
 async function performSprintAllocation(sprintId, targetUserStoryId = null) {
     try {
         const db = getDatabase();
@@ -26,52 +79,163 @@ async function performSprintAllocation(sprintId, targetUserStoryId = null) {
 
         if (!stories || stories.length === 0) return { assignments: [], allocatedDeveloper: null };
 
-        const tasks = stories.map((row) => ({
-            story_id: row.story_id || row.user_story_id,
-            title: row.title || 'Requirement Change',
-            priority: (row.priority || 'MEDIUM').toUpperCase(),
-            estimated_hours: row.story_points ? row.story_points * 6 : 16,
-            story_points: row.story_points || 5,
-            complexity: (row.story_points || 5) > 8 ? 'HIGH' : (row.story_points || 5) > 4 ? 'MEDIUM' : 'LOW',
-            required_domain: row.title?.toLowerCase().includes('database') || row.title?.toLowerCase().includes('sql') || row.title?.toLowerCase().includes('backend') ? 'backend' : (row.title?.toLowerCase().includes('ml') || row.title?.toLowerCase().includes('ai') ? 'ai' : 'frontend'),
-            required_skills: ['JavaScript', 'Python', 'SQL']
-        }));
+        const currentProjectId = stories[0]?.project_id || 'P00001';
+
+        const tasks = stories.map((row) => {
+            const parsed = extractDomainAndSkills(row.title || row.description || '');
+            const sp = Number(row.story_points) || 5;
+            const hrs = sp * 6;
+            let complexity = 'LOW';
+            if (sp >= 8 || hrs >= 12) complexity = 'HIGH';
+            else if (sp >= 5 || hrs >= 8) complexity = 'MEDIUM';
+
+            return {
+                story_id: row.story_id || row.user_story_id,
+                title: row.title || 'Requirement Change',
+                priority: (row.priority || 'MEDIUM').toUpperCase(),
+                estimated_hours: hrs,
+                story_points: sp,
+                predicted_complexity: complexity,
+                required_domain: parsed.required_domain,
+                required_skills: parsed.required_skills
+            };
+        });
 
         const developers = await db.all(`SELECT id, name, role, capacity_hours, primary_domain, languages FROM developers ORDER BY id`);
         if (!developers || developers.length === 0) return { assignments: [], allocatedDeveloper: null };
 
-        const priorityOrder = { HIGH: 0, MEDIUM: 1, LOW: 2 };
-        const sortedTasks = [...tasks].sort((a, b) => (priorityOrder[a.priority] ?? 1) - (priorityOrder[b.priority] ?? 1));
+        // Load cross-project commitments map
+        let commitmentsMap = {};
+        try {
+            const allocRows = await db.all(`
+                SELECT a.developer_id, u.project_id, SUM(a.allocated_hours) as project_hours 
+                FROM allocations a 
+                LEFT JOIN user_stories u ON a.story_id = u.story_id 
+                GROUP BY a.developer_id, u.project_id
+            `);
+            (allocRows || []).forEach(r => {
+                const devId = String(r.developer_id);
+                if (!commitmentsMap[devId]) commitmentsMap[devId] = [];
+                commitmentsMap[devId].push({
+                    project_id: r.project_id || 'P00001',
+                    hours: Number(r.project_hours) || 0
+                });
+            });
+        } catch (e) {}
 
-        let devs = developers.map(dev => ({
-            ...dev,
-            remaining: dev.capacity_hours || 40,
-            primary_domain: dev.primary_domain || 'general',
-            languages: Array.isArray(dev.languages) ? dev.languages : (dev.languages ? dev.languages.split(',').map(s => s.trim()) : [])
-        }));
+        const priorityOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+        const sortedTasks = [...tasks].sort((a, b) =>
+            (priorityOrder[(a.priority || 'MEDIUM').toUpperCase()] ?? 2) - 
+            (priorityOrder[(b.priority || 'MEDIUM').toUpperCase()] ?? 2)
+        );
+
+        let devs = developers.map(dev => {
+            const cap = Number(dev.capacity_hours) || 40;
+            const commitments = commitmentsMap[String(dev.id)] || [];
+            const otherProjectHours = commitments
+                .filter(c => currentProjectId && String(c.project_id) !== String(currentProjectId))
+                .reduce((sum, c) => sum + (Number(c.hours) || 0), 0);
+            const availableCap = Math.max(0, cap - otherProjectHours);
+
+            return {
+                ...dev,
+                capacity_hours: cap,
+                other_project_hours: otherProjectHours,
+                remaining: availableCap,
+                is_fully_allocated_elsewhere: otherProjectHours >= cap,
+                primary_domain: (dev.primary_domain || 'general').toLowerCase(),
+                languages: Array.isArray(dev.languages) ? dev.languages : (dev.languages ? String(dev.languages).split(',').map(s => s.trim()) : [])
+            };
+        });
 
         const assignments = [];
-        for (const task of sortedTasks) {
-            const neededDomain = task.required_domain || 'general';
-            let candidates = devs.filter(dev => (dev.primary_domain === neededDomain || neededDomain === 'general') && dev.remaining >= task.estimated_hours);
-            if (candidates.length === 0) {
-                candidates = devs.filter(dev => dev.remaining >= task.estimated_hours);
-            }
-            if (candidates.length === 0) continue;
 
-            candidates.sort((a, b) => b.remaining - a.remaining);
-            const chosen = candidates[0];
-            chosen.remaining -= task.estimated_hours;
+        for (const task of sortedTasks) {
+            const estHours = Number(task.estimated_hours) || 16;
+            const rawNeededDomain = (task.required_domain || 'general').toLowerCase();
+            const neededDomain = rawNeededDomain.includes('qa') ? 'qa' : rawNeededDomain;
+            const requiredSkills = task.required_skills || [];
+
+            const candidates = devs.map(dev => {
+                const devDomain = dev.primary_domain;
+                const domainOk = devDomain === neededDomain || 
+                                 neededDomain.includes(devDomain) || 
+                                 devDomain.includes(neededDomain) || 
+                                 neededDomain === 'general' || 
+                                 devDomain === 'general';
+                return {
+                    ...dev,
+                    domainOk,
+                    skillScore: calculateSkillMatchScore(dev.languages, requiredSkills)
+                };
+            });
+
+            let availableCandidates = candidates.filter(dev => !dev.is_fully_allocated_elsewhere && dev.remaining > 0);
+            if (availableCandidates.length === 0) availableCandidates = candidates.filter(dev => dev.remaining > 0);
+            if (availableCandidates.length === 0) availableCandidates = candidates.filter(dev => !dev.is_fully_allocated_elsewhere);
+            if (availableCandidates.length === 0) availableCandidates = [...candidates];
+
+            let validCandidates = availableCandidates.filter(dev => dev.domainOk && dev.remaining >= estHours);
+            if (validCandidates.length === 0) validCandidates = availableCandidates.filter(dev => dev.remaining >= estHours);
+            if (validCandidates.length === 0) validCandidates = availableCandidates.filter(dev => dev.domainOk && dev.remaining > 0);
+            if (validCandidates.length === 0) validCandidates = availableCandidates.filter(dev => dev.remaining > 0);
+            if (validCandidates.length === 0) validCandidates = [...availableCandidates];
+
+            const predictedComplexity = (task.predicted_complexity || 'MEDIUM').toUpperCase();
+
+            validCandidates.forEach(dev => {
+                const roleStr = (dev.role || '').toLowerCase();
+                const langCount = Array.isArray(dev.languages) ? dev.languages.length : 0;
+                const isSeniorOrSpecialist = roleStr.includes('senior') || roleStr.includes('lead') || roleStr.includes('principal') || roleStr.includes('architect') || langCount >= 3;
+                const isJunior = roleStr.includes('junior') || roleStr.includes('intern') || roleStr.includes('associate');
+
+                let complexityScore = 70;
+                if (predictedComplexity === 'HIGH') {
+                    complexityScore = isSeniorOrSpecialist ? 100 : (isJunior ? 30 : 60);
+                } else if (predictedComplexity === 'MEDIUM') {
+                    complexityScore = isSeniorOrSpecialist ? 85 : (isJunior ? 70 : 100);
+                } else if (predictedComplexity === 'LOW') {
+                    complexityScore = isJunior ? 100 : (!isSeniorOrSpecialist ? 90 : 70);
+                }
+
+                const domainScore = dev.primary_domain === neededDomain ? 100 : (dev.domainOk ? 75 : 50);
+                const capScore = dev.capacity_hours > 0 ? Math.min(100, (dev.remaining / dev.capacity_hours) * 100) : 50;
+
+                dev.complexityScore = complexityScore;
+                dev.compositeScore = (
+                    (dev.skillScore * 0.35) + 
+                    (complexityScore * 0.30) + 
+                    (domainScore * 0.20) + 
+                    (capScore * 0.15)
+                );
+            });
+
+            validCandidates.sort((a, b) => {
+                if (Math.abs(b.compositeScore - a.compositeScore) > 0.01) return b.compositeScore - a.compositeScore;
+                if (a.remaining !== b.remaining) return b.remaining - a.remaining;
+                return b.skillScore - a.skillScore;
+            });
+
+            const chosen = validCandidates[0];
+            const targetDevInMainList = devs.find(d => d.id === chosen.id);
+            const maxDevCap = targetDevInMainList ? targetDevInMainList.remaining : 40;
+            const allocHours = Math.min(estHours, maxDevCap > 0 ? maxDevCap : estHours);
+
+            if (targetDevInMainList) {
+                targetDevInMainList.remaining = Math.max(0, targetDevInMainList.remaining - allocHours);
+            }
 
             assignments.push({
                 story_id: task.story_id,
                 title: task.title,
                 developer_id: chosen.id,
                 developer_name: chosen.name,
-                allocated_hours: task.estimated_hours,
-                predicted_complexity: task.complexity,
+                allocated_hours: allocHours,
+                predicted_complexity: predictedComplexity,
                 matched_domain: neededDomain,
-                skill_match_score: 95
+                skill_match_score: chosen.skillScore,
+                complexity_suitability_score: Math.round(chosen.complexityScore),
+                composite_allocation_score: Math.round(chosen.compositeScore)
             });
         }
 
@@ -88,7 +252,14 @@ async function performSprintAllocation(sprintId, targetUserStoryId = null) {
                 await db.run(
                     `INSERT INTO resource_allocations (sprint_id, project_id, user_story_id, resource_id, resource_name, role, allocated_hours, allocation_percentage)
                      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-                    [sprintIdStr, 'P00001', a.story_id, `RES-0${a.developer_id}`, a.developer_name, 'Software Engineer', a.allocated_hours, 100]
+                    [sprintIdStr, currentProjectId, a.story_id, `RES-0${a.developer_id}`, a.developer_name, 'Software Engineer', a.allocated_hours, 100]
+                );
+            } catch (e) {}
+
+            try {
+                await db.run(
+                    `UPDATE user_stories SET assigned_to = $1 WHERE story_id = $2 OR user_story_id = $2`,
+                    [a.developer_name, a.story_id]
                 );
             } catch (e) {}
         }
@@ -124,22 +295,19 @@ async function getAllProjects(req, res) {
                 complexity_level, 
                 priority, 
                 status 
-            FROM projects 
+            FROM public.projects 
             WHERE UPPER(status) IN ('ACTIVE', 'IN_PROGRESS', 'PLANNING')
             ORDER BY project_name ASC
         `);
 
         if (!activeProjects || activeProjects.length === 0) {
             try {
-                activeProjects = await db.all(`SELECT * FROM projects ORDER BY project_name ASC`);
+                activeProjects = await db.all(`SELECT * FROM public.projects ORDER BY project_name ASC`);
             } catch (fallbackErr) {}
         }
 
-        if (!activeProjects || activeProjects.length === 0) {
-            activeProjects = [
-                { project_id: 'P00001', project_name: 'Core Banking Modernization', status: 'ACTIVE', project_manager: 'Diluni W.', team_size: 12, progress_percent: 64, risk_level: 'LOW' },
-                { project_id: 'P00002', project_name: 'Customer Portal Redesign', status: 'IN_PROGRESS', project_manager: 'Kamal P.', team_size: 8, progress_percent: 42, risk_level: 'MEDIUM' }
-            ];
+        if (!activeProjects) {
+            activeProjects = [];
         }
 
         return res.json({
@@ -218,8 +386,13 @@ async function getProjectUserStories(req, res) {
             FROM user_stories us
             LEFT JOIN sprints s ON us.sprint_id = s.sprint_id
             WHERE us.project_id = ?
-            ORDER BY us.user_story_id ASC
         `, [projectId]);
+
+        userStories.sort((a, b) => {
+            const idA = parseInt((a.user_story_id || a.story_id || '').replace(/\D/g, '')) || 0;
+            const idB = parseInt((b.user_story_id || b.story_id || '').replace(/\D/g, '')) || 0;
+            return idA - idB;
+        });
 
         res.json({
             success: true,
@@ -479,6 +652,11 @@ async function submitChangeRequest(req, res) {
 
         // 8. Insert into Database & Sync User Story to Sprint
         try {
+            await db.run(`
+                INSERT INTO sprints (sprint_id, project_id, sprint_name, sprint_number, status)
+                VALUES (?, ?, ?, ?, 'ACTIVE')
+                ON CONFLICT (sprint_id) DO NOTHING
+            `, [sprint.sprint_id, project.project_id, sprint.sprint_name || `Sprint ${sprintNumber}`, sprintNumber]);
             await db.run(`
                 INSERT INTO user_stories (story_id, user_story_id, project_id, sprint_id, title, description, story_points, priority, status, assigned_to)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

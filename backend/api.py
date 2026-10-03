@@ -1,5 +1,7 @@
 import os
 import pickle
+import json
+import urllib.request
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
@@ -27,15 +29,19 @@ try:
 except Exception as e:
     print(f"[WARN] Error/warning loading models: {e}")
 
-# In-memory storage for sprint tasks
-sprint_tasks = [
-    {"sprint_number": 1, "story_id": "US001", "title": "Fix critical security vulnerability in login system", "priority": "HIGH", "story_points": 8, "estimated_hours": 64},
-    {"sprint_number": 1, "story_id": "US004", "title": "Payment gateway crashes on checkout", "priority": "HIGH", "story_points": 13, "estimated_hours": 104},
-    {"sprint_number": 1, "story_id": "US008", "title": "Database connection timeout under heavy load", "priority": "HIGH", "story_points": 8, "estimated_hours": 64},
-    {"sprint_number": 2, "story_id": "US002", "title": "Add export to PDF feature for reports", "priority": "LOW", "story_points": 5, "estimated_hours": 40},
-    {"sprint_number": 2, "story_id": "US005", "title": "Add search filter to user management", "priority": "LOW", "story_points": 5, "estimated_hours": 40},
-    {"sprint_number": 2, "story_id": "US010", "title": "Add two factor authentication for admin users", "priority": "HIGH", "story_points": 8, "estimated_hours": 64},
-]
+def fetch_dynamic_sprint_tasks(project_id='P00001'):
+    """Dynamically fetch real sprint allocation tasks from primary Express/PostgreSQL backend."""
+    try:
+        url = f"http://localhost:3000/api/sprint-plan?project_id={project_id}"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Flask-API'})
+        with urllib.request.urlopen(req, timeout=3) as response:
+            if response.status == 200:
+                data = json.loads(response.read().decode('utf-8'))
+                if data and data.get("status") == "success" and data.get("tasks"):
+                    return data.get("tasks")
+    except Exception as err:
+        print("Notice fetching dynamic sprint plan from Express backend:", err)
+    return []
 
 @app.route('/api/replan-full', methods=['POST'])
 def add_story_and_predict():
@@ -43,7 +49,7 @@ def add_story_and_predict():
         data = request.json or {}
         title = data.get('title', '')
         description = data.get('description', '')
-        story_id = data.get('story_id', f"US00{len(sprint_tasks)+1}")
+        project_id = data.get('project_id', 'P00001')
         points = int(data.get('story_points', 3))
         
         full_text = title + " " + description
@@ -54,24 +60,38 @@ def add_story_and_predict():
                 priority_pred = priority_model.predict(text_features)[0]
                 priority_text = "HIGH" if priority_pred == 1 else "LOW"
             except Exception as model_err:
-                print("Model prediction fallback:", model_err)
+                print("Model prediction notice:", model_err)
                 priority_text = "HIGH" if (points >= 8 or any(kw in full_text.lower() for kw in ['security', 'crash', 'critical', 'auth', 'payment', 'timeout'])) else "LOW"
         else:
             priority_text = "HIGH" if (points >= 8 or any(kw in full_text.lower() for kw in ['security', 'crash', 'critical', 'auth', 'payment', 'timeout'])) else "LOW"
         
-        estimated_hours = points * 8
+        estimated_hours = points * 6
+        generated_id = data.get('story_id', f"US-{int(os.urandom(2).hex(), 16)}")
         
         new_task = {
             "sprint_number": 1,
-            "story_id": story_id,
+            "story_id": generated_id,
             "title": title,
             "priority": priority_text,
             "story_points": points,
             "estimated_hours": estimated_hours
         }
         
-        sprint_tasks.insert(0, new_task)
-        
+        # Forward story to Express server to persist dynamically in PostgreSQL DB
+        try:
+            req_data = json.dumps({
+                "story_id": generated_id,
+                "project_id": project_id,
+                "title": title,
+                "description": description,
+                "story_points": points,
+                "priority": priority_text
+            }).encode('utf-8')
+            req = urllib.request.Request("http://localhost:3000/api/user-stories", data=req_data, headers={'Content-Type': 'application/json'})
+            urllib.request.urlopen(req, timeout=3)
+        except Exception as fwd_err:
+            print("Notice forwarding story to Express backend:", fwd_err)
+
         return jsonify({
             "status": "success", 
             "tasks": [new_task]
@@ -81,13 +101,17 @@ def add_story_and_predict():
 
 @app.route('/api/sprint-plan', methods=['GET'])
 def get_sprint_plan():
-    return jsonify({"status": "success", "tasks": sprint_tasks})
+    pid = request.args.get('project_id', 'P00001')
+    tasks = fetch_dynamic_sprint_tasks(pid)
+    return jsonify({"status": "success", "tasks": tasks})
 
 @app.route('/api/stories', methods=['GET'])
 def get_stories():
+    pid = request.args.get('project_id', 'P00001')
+    tasks = fetch_dynamic_sprint_tasks(pid)
     return jsonify({
         "status": "success",
-        "stories": sprint_tasks
+        "stories": tasks
     })
 
 if __name__ == '__main__':

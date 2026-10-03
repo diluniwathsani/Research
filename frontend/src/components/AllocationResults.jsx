@@ -1,6 +1,5 @@
 import React from 'react';
-import { useDrag, useDrop, DndProvider } from 'react-dnd';
-import { HTML5Backend } from 'react-dnd-html5-backend';
+import { useDrag, useDrop } from 'react-dnd';
 
 const ItemTypes = { TASK: 'task' };
 
@@ -28,14 +27,31 @@ const DraggableTask = ({ task }) => {
     collect: (monitor) => ({ isDragging: !!monitor.isDragging() }),
   }));
 
+  const isNew = task.is_new || 
+                task.status === 'ACCEPTED' || 
+                String(task.story_id || '').startsWith('CR-') || 
+                String(task.user_story_id || '').startsWith('CR-') || 
+                String(task.title || '').includes('[CR]');
+
   return (
     <div
       ref={drag}
-      className={`px-3.5 py-3 mb-2.5 rounded-xl border cursor-move transition-all hover:translate-x-1 hover:shadow-md ${complexityStyles(task.predicted_complexity)}`}
+      className={`px-3.5 py-3 mb-2.5 rounded-xl border cursor-move transition-all hover:translate-x-1 hover:shadow-md ${
+        isNew 
+          ? 'bg-purple-500/15 border-purple-500/40 ring-1 ring-purple-500/30' 
+          : complexityStyles(task.predicted_complexity)
+      }`}
       style={{ opacity: isDragging ? 0.5 : 1 }}
     >
       <div className="flex justify-between items-center gap-2 mb-1.5">
-        <strong className="text-sm font-bold text-slate-800 dark:text-slate-100">{task.story_id}</strong>
+        <div className="flex items-center gap-1.5">
+          <strong className="text-sm font-bold text-slate-800 dark:text-slate-100">{task.story_id}</strong>
+          {isNew && (
+            <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-purple-600 text-white shadow-md animate-pulse">
+              ✨ Newly Added
+            </span>
+          )}
+        </div>
         <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-white/80 dark:bg-black/25 text-slate-700 dark:text-slate-200 whitespace-nowrap">
           {task.allocated_hours}h
         </span>
@@ -57,14 +73,18 @@ const DeveloperColumn = ({ developer, tasks, onDrop, theme }) => {
     collect: (monitor) => ({ isOver: !!monitor.isOver() }),
   }));
 
-  const used = tasks.reduce((sum, t) => sum + t.allocated_hours, 0);
-  const capacity = developer.capacity_hours;
-  const remaining = capacity - used;
-  const utilization = capacity > 0 ? (used / capacity) * 100 : 0;
+  const capacity = Number(developer.capacity_hours) || 40;
+  const currentSprintUsed = tasks.reduce((sum, t) => sum + (t.allocated_hours || 0), 0);
+  const otherProjectHours = Number(developer.other_project_hours) || 0;
+  const totalUsedAcrossProjects = currentSprintUsed + otherProjectHours;
+  
+  const remainingAvailable = Math.max(0, capacity - totalUsedAcrossProjects);
+  const utilizationPercent = capacity > 0 ? Math.min(100, Math.round((totalUsedAcrossProjects / capacity) * 100)) : 0;
+  const isFullyAllocatedElseWhere = developer.is_fully_allocated || otherProjectHours >= capacity;
 
   const getUtilizationBar = () => {
-    if (utilization > 100) return 'bg-red-500';
-    if (utilization > 85) return 'bg-amber-500';
+    if (isFullyAllocatedElseWhere || utilizationPercent >= 100) return 'bg-red-500';
+    if (utilizationPercent > 75) return 'bg-amber-500';
     return 'bg-emerald-500';
   };
 
@@ -72,12 +92,16 @@ const DeveloperColumn = ({ developer, tasks, onDrop, theme }) => {
     <div
       ref={drop}
       className={`rounded-2xl bg-white dark:bg-slate-800/60 border transition-colors overflow-hidden ${
-        isOver ? 'border-indigo-400 ring-2 ring-indigo-100 dark:ring-indigo-500/20' : 'border-slate-200 dark:border-slate-700'
+        isOver 
+          ? 'border-indigo-400 ring-2 ring-indigo-100 dark:ring-indigo-500/20' 
+          : isFullyAllocatedElseWhere
+          ? 'border-red-300 dark:border-red-900/60 bg-red-50/20 dark:bg-red-950/10'
+          : 'border-slate-200 dark:border-slate-700'
       }`}
     >
       {/* Header */}
       <div className="p-4">
-        <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center gap-3 mb-3">
           <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-white text-lg shrink-0 ${theme.bg}`}>
             {developer.name?.charAt(0)}
           </div>
@@ -96,14 +120,36 @@ const DeveloperColumn = ({ developer, tasks, onDrop, theme }) => {
           </div>
         </div>
 
-        <div className="flex justify-between gap-4">
+        {/* Cross-Project Capacity Allocation Status Badge */}
+        {isFullyAllocatedElseWhere ? (
+          <div className="mb-3 px-2.5 py-1 rounded-lg bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-[11px] font-bold flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+            <span>🔴 100% Fully Allocated on Other Project</span>
+          </div>
+        ) : otherProjectHours > 0 ? (
+          <div className="mb-3 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-[11px] font-bold flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+            <span>🟡 {Math.round((otherProjectHours/capacity)*100)}% Allocated Elsewhere ({remainingAvailable}h Available)</span>
+          </div>
+        ) : (
+          <div className="mb-3 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span>🟢 100% Available ({capacity}h)</span>
+          </div>
+        )}
+
+        <div className="flex justify-between gap-4 text-xs">
           <div>
-            <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">Used</div>
-            <div className="text-xl font-bold text-slate-800 dark:text-slate-100">{used}h</div>
+            <div className="text-slate-500 dark:text-slate-400 mb-0.5 font-medium">Sprint / Total Used</div>
+            <div className="text-sm font-bold text-slate-800 dark:text-slate-100">
+              {currentSprintUsed}h <span className="text-[10px] text-slate-400">({totalUsedAcrossProjects}h total)</span>
+            </div>
           </div>
           <div className="text-right">
-            <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">Capacity</div>
-            <div className="text-xl font-bold text-slate-500 dark:text-slate-400">{capacity}h</div>
+            <div className="text-slate-500 dark:text-slate-400 mb-0.5 font-medium">Capacity / Avail</div>
+            <div className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
+              {remainingAvailable}h <span className="text-[10px] text-slate-400">/ {capacity}h</span>
+            </div>
           </div>
         </div>
       </div>
@@ -111,10 +157,10 @@ const DeveloperColumn = ({ developer, tasks, onDrop, theme }) => {
       {/* Utilization bar */}
       <div className="px-4 pb-3">
         <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden mb-2">
-          <div className={`h-full rounded-full transition-all ${getUtilizationBar()}`} style={{ width: `${Math.min(utilization, 100)}%` }} />
+          <div className={`h-full rounded-full transition-all ${getUtilizationBar()}`} style={{ width: `${Math.min(utilizationPercent, 100)}%` }} />
         </div>
         <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
-          {utilization.toFixed(0)}% utilized · {remaining}h remaining
+          {utilizationPercent}% utilized across projects · {remainingAvailable}h available
         </div>
       </div>
 
@@ -122,8 +168,8 @@ const DeveloperColumn = ({ developer, tasks, onDrop, theme }) => {
       <div className="px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-700 min-h-[150px] max-h-[380px] overflow-y-auto">
         {tasks.length === 0 ? (
           <div className="text-center py-8 text-slate-300 dark:text-slate-600">
-            <span className="text-2xl block mb-2">📭</span>
-            <p className="text-sm">No tasks assigned</p>
+            <span className="text-2xl block mb-2">{isFullyAllocatedElseWhere ? '⛔' : '📭'}</span>
+            <p className="text-xs font-semibold">{isFullyAllocatedElseWhere ? 'Fully Allocated on Another Project' : 'No tasks assigned'}</p>
           </div>
         ) : (
           <div className="pt-2.5">
@@ -137,10 +183,12 @@ const DeveloperColumn = ({ developer, tasks, onDrop, theme }) => {
   );
 };
 
-const AllocationResults = ({ assignments = [], developers = [], tasks = [], selectedSprint, onRebalance, onSave, onTaskMove, onBack, loading, apiSource }) => {
+const AllocationResults = ({ assignments = [], developers = [], tasks = [], selectedProject, selectedSprint, onRebalance, onSave, onTaskMove, onBack, loading, apiSource }) => {
   const safeAssignments = Array.isArray(assignments) ? assignments : (assignments?.data || []);
   const safeDevelopers = Array.isArray(developers) ? developers : (developers?.data || []);
   const safeTasks = Array.isArray(tasks) ? tasks : (tasks?.data || []);
+  const projName = selectedProject?.project_name || selectedProject?.name || selectedProject?.title || 'Engineering Project';
+  const projId = selectedProject?.project_id || selectedProject?.id || 'P00001';
 
   const grouped = {};
   safeAssignments.forEach(a => {
@@ -149,14 +197,38 @@ const AllocationResults = ({ assignments = [], developers = [], tasks = [], sele
     grouped[key].push(a);
   });
 
-  const totalHours = safeAssignments.reduce((sum, a) => sum + a.allocated_hours, 0);
-  const totalCapacity = safeDevelopers.reduce((sum, d) => sum + d.capacity_hours, 0);
-  const isBalanced = totalHours <= totalCapacity;
-  const utilization = totalCapacity > 0 ? (totalHours / totalCapacity) * 100 : 0;
-
   const handleDrop = (task, fromDevId, toDevId) => {
+    if (String(fromDevId) === String(toDevId)) return;
+    const targetDev = safeDevelopers.find(d => String(d.id) === String(toDevId));
+    if (!targetDev) return;
+
+    const capacity = Number(targetDev.capacity_hours) || 40;
+    const otherProjectHours = Number(targetDev.other_project_hours) || 0;
+    const targetAssignedTasks = grouped[String(toDevId)] || [];
+    const currentSprintUsed = targetAssignedTasks.reduce((sum, t) => sum + (t.allocated_hours || 0), 0);
+    const taskHours = Number(task.allocated_hours) || 8;
+
+    // RULE 1: If developer is 100% fully allocated to another project, block assignment completely!
+    if (targetDev.is_fully_allocated || otherProjectHours >= capacity) {
+      alert(`⛔ Allocation Blocked for ${targetDev.name}!\n\nResource is 100% fully allocated to another project (${otherProjectHours}h / ${capacity}h).\n\nResources fully allocated to one project cannot be assigned tasks in another project.`);
+      return;
+    }
+
+    // RULE 2: If remaining capacity is less than task hours, block over-allocation!
+    const totalAfterDrop = otherProjectHours + currentSprintUsed + taskHours;
+    if (totalAfterDrop > capacity) {
+      const remainingHours = Math.max(0, capacity - (otherProjectHours + currentSprintUsed));
+      alert(`⚠️ Capacity Limit Exceeded for ${targetDev.name}!\n\nDeveloper is allocated ${otherProjectHours}h on another project and ${currentSprintUsed}h in this sprint.\n\nOnly ${remainingHours}h remaining available capacity. Cannot allocate a ${taskHours}h task.`);
+      return;
+    }
+
     onTaskMove(task, fromDevId, toDevId);
   };
+
+  const totalHours = safeAssignments.reduce((sum, a) => sum + (Number(a.allocated_hours) || 0), 0);
+  const totalCapacity = safeDevelopers.reduce((sum, d) => sum + (Number(d.capacity_hours) || 40), 0);
+  const utilization = totalCapacity > 0 ? (totalHours / totalCapacity) * 100 : 0;
+  const isBalanced = utilization <= 100;
 
   if (loading) {
     return (
@@ -168,14 +240,18 @@ const AllocationResults = ({ assignments = [], developers = [], tasks = [], sele
   }
 
   return (
-    <DndProvider backend={HTML5Backend}>
-      <div>
-        {/* Results header */}
+    <div>
+      {/* Results header */}
         <div className="flex justify-between items-center flex-wrap gap-4 mb-6 px-5 py-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
           <div>
-            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Allocation Results</h2>
+            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <span>Allocation Results</span>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                📁 {projName} ({projId})
+              </span>
+            </h2>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Sprint: {selectedSprint?.name || selectedSprint?.sprint_name || 'Selected Sprint'} · {safeTasks.length} tasks allocated to {safeDevelopers.length} developers
+              Project: <span className="font-bold text-slate-700 dark:text-slate-200">{projName}</span> · Sprint: <span className="font-bold text-slate-700 dark:text-slate-200">{selectedSprint?.name || selectedSprint?.sprint_name || 'Selected Sprint'}</span> · {safeTasks.length} tasks allocated to {safeDevelopers.length} developers
             </p>
           </div>
           <button
@@ -261,7 +337,6 @@ const AllocationResults = ({ assignments = [], developers = [], tasks = [], sele
           </div>
         </div>
       </div>
-    </DndProvider>
   );
 };
 

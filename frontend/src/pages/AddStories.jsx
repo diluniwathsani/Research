@@ -105,9 +105,9 @@ export default function AddStories() {
   return (
     <div className="space-y-6 text-slate-100 p-2">
       <div>
-        <h2 className="text-2xl font-extrabold text-white">Add User Stories & Predict</h2>
+        <h2 className="text-2xl font-extrabold text-white">Add User Stories</h2>
         <p className="text-xs text-slate-400 mt-1">
-          Input user story parameters to get AI priority, save to DB, and auto-plan sprints
+          Input user story details, save to database, and calculate sprint allocation
         </p>
       </div>
 
@@ -172,7 +172,7 @@ export default function AddStories() {
               </div>
             ) : (
               <div className="bg-slate-900/60 p-8 rounded-xl border border-slate-700/60 text-center text-slate-400 text-xs">
-                Fill in the story details and submit to see AI priority classification.
+                Fill in the story details and submit to view priority classification.
               </div>
             )}
           </div>

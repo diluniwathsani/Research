@@ -5,7 +5,8 @@ import {
   getProjectUserStories,
   getProjectPendingSprints,
   getSprintResourceAllocations,
-  submitChangeRequest
+  submitChangeRequest,
+  getAllChangeRequests
 } from '../../services/changeRequestApi';
 import { 
   FolderKanban, 
@@ -37,6 +38,8 @@ export default function ChangeRequestForm({ onSuccess }) {
   const [pendingSprints, setPendingSprints] = useState([]);
   const [selectedSprint, setSelectedSprint] = useState(null);
   const [resourceAllocations, setResourceAllocations] = useState([]);
+  const [existingChangeRequests, setExistingChangeRequests] = useState([]);
+  const [duplicateWarning, setDuplicateWarning] = useState(null);
 
   // Form inputs state
   const [formData, setFormData] = useState({
@@ -63,9 +66,8 @@ export default function ChangeRequestForm({ onSuccess }) {
     { num: 2, label: 'Change Details', desc: 'Requirement Info', icon: FileText },
     { num: 3, label: 'Affected Story', desc: 'Link User Story', icon: Bookmark },
     { num: 4, label: 'Pending Sprint', desc: 'Sprint Plan', icon: Calendar },
-    { num: 5, label: 'Resources', desc: 'Team Capacity', icon: Users },
-    { num: 6, label: 'Review', desc: 'Audit Check', icon: CheckCircle2 },
-    { num: 7, label: 'AI Evaluation', desc: 'Impact Report', icon: Sparkles }
+    { num: 5, label: 'Review', desc: 'Audit Check', icon: CheckCircle2 },
+    { num: 6, label: 'AI Evaluation', desc: 'Impact Report', icon: Sparkles }
   ];
 
   useEffect(() => {
@@ -77,21 +79,23 @@ export default function ChangeRequestForm({ onSuccess }) {
     setErrorMessage(null);
     try {
       const response = await getActiveProjects();
-      if (response && response.success && response.data) {
-        const filtered = response.data.filter(p => 
-          ['ACTIVE', 'IN_PROGRESS', 'PLANNING'].includes(p.status?.toUpperCase())
-        );
-        setActiveProjects(filtered.length > 0 ? filtered : response.data);
+      const list = Array.isArray(response)
+        ? response
+        : (response && response.data
+            ? response.data
+            : (response && response.projects ? response.projects : []));
+
+      if (list && list.length > 0) {
+        setActiveProjects(list);
+        setErrorMessage(null);
       } else {
-        setErrorMessage('No active projects found in database.');
+        setActiveProjects([]);
+        setErrorMessage(null);
       }
     } catch (err) {
       console.warn('Projects API connection notice:', err);
-      // Fallback data if backend is offline
-      setActiveProjects([
-        { project_id: 'P00001', project_name: 'Core Banking Modernization', status: 'ACTIVE', project_manager: 'Diluni W.', team_size: 12, progress_percent: 64, risk_level: 'LOW' },
-        { project_id: 'P00002', project_name: 'Customer Portal Redesign', status: 'IN_PROGRESS', project_manager: 'Kamal P.', team_size: 8, progress_percent: 42, risk_level: 'MEDIUM' }
-      ]);
+      setActiveProjects([]);
+      setErrorMessage(null);
     } finally {
       setLoadingProjects(false);
     }
@@ -117,7 +121,50 @@ export default function ChangeRequestForm({ onSuccess }) {
 
     fetchProjectStories(projectId);
     fetchProjectSprints(projectId);
+    fetchProjectChangeRequests(projectId);
   };
+
+  const fetchProjectChangeRequests = async (projectId) => {
+    try {
+      const res = await getAllChangeRequests();
+      const list = Array.isArray(res) ? res : (res && res.data ? res.data : []);
+      const projectCRs = list.filter(cr => cr.project_id === projectId && cr.status !== 'REJECTED');
+      setExistingChangeRequests(projectCRs);
+    } catch (e) {
+      console.warn('CR list notice:', e);
+      setExistingChangeRequests([]);
+    }
+  };
+
+  // Real-time Duplicate Requirement Validation Check
+  useEffect(() => {
+    if (!selectedProject) {
+      setDuplicateWarning(null);
+      return;
+    }
+
+    const descText = (formData.description || '').trim().toLowerCase();
+    const titleText = (formData.title || '').trim().toLowerCase();
+    const selectedStoryId = selectedUserStory?.user_story_id;
+
+    if (!descText && !titleText && !selectedStoryId) {
+      setDuplicateWarning(null);
+      return;
+    }
+
+    const match = existingChangeRequests.find(cr => {
+      const matchStory = selectedStoryId && (cr.user_story_id === selectedStoryId || cr.story_id === selectedStoryId);
+      const matchDesc = descText && descText.length > 5 && (cr.description || '').toLowerCase().includes(descText);
+      const matchTitle = titleText && titleText.length > 5 && (cr.title || '').toLowerCase().includes(titleText);
+      return matchStory || matchDesc || matchTitle;
+    });
+
+    if (match) {
+      setDuplicateWarning(`⚠️ Requirement Already Exists: Change Request ${match.request_id} ("${match.title || match.user_story_id}") is already registered in status: ${match.status}. Duplicate submissions are not allowed.`);
+    } else {
+      setDuplicateWarning(null);
+    }
+  }, [formData.description, formData.title, selectedUserStory, selectedProject, existingChangeRequests]);
 
   const fetchProjectStories = async (projectId) => {
     setLoadingStories(true);
@@ -198,19 +245,111 @@ export default function ChangeRequestForm({ onSuccess }) {
     }
   };
 
+  const [isAutoCalculated, setIsAutoCalculated] = useState(false);
+
+  // Auto-Calculate Change Category, Story Points, and Urgency based on requirement text
+  const calculateChangeParameters = (titleText = '', descText = '') => {
+    const fullText = (titleText + ' ' + descText).toLowerCase().trim();
+    if (!fullText || fullText.length < 3) return null;
+
+    // 1. Calculate Change Category (change_type)
+    let change_type = 'REQUIREMENT_CHANGE';
+    if (/\b(add|new|create|introduce|implement|feature|allow|provide|support)\b/i.test(fullText)) {
+      change_type = 'NEW_FEATURE';
+    } else if (/\b(remove|delete|reduce|deprecate|strip|exclude|disable)\b/i.test(fullText)) {
+      change_type = 'SCOPE_REDUCTION';
+    } else if (/\b(refactor|optimize|index|architecture|database|performance|migration|clean)\b/i.test(fullText)) {
+      change_type = 'TECHNICAL_REFACTOR';
+    }
+
+    // 2. Calculate Urgency Level (urgency)
+    let urgency = 'MEDIUM';
+    if (/\b(crash|security|vulnerability|defect|urgent|critical|timeout|bug|down|fail|breach|auth|login|emergency)\b/i.test(fullText)) {
+      urgency = 'HIGH';
+    } else if (/\b(optional|cosmetic|color|font|ui|style|minor|future|nice to have)\b/i.test(fullText)) {
+      urgency = 'LOW';
+    }
+
+    // 3. Calculate Estimated Story Points (story_points)
+    let story_points = 5;
+    const complexKeywords = (fullText.match(/\b(integration|database|multi-factor|security|calculation|export|algorithm|history|audit|multi-row|batch|crash|vulnerability|architecture)\b/gi) || []).length;
+    
+    if (fullText.length < 35 && complexKeywords === 0) {
+      story_points = 3;
+    } else if (complexKeywords >= 2 || fullText.length > 120) {
+      story_points = 8;
+    } else if (complexKeywords === 1 || fullText.length >= 45) {
+      story_points = 5;
+    }
+
+    return { change_type, urgency, story_points };
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    setFormData(prev => {
+      const updated = { ...prev, [name]: value };
+      
+      if (name === 'title' || name === 'description') {
+        const titleText = name === 'title' ? value : prev.title;
+        const descText = name === 'description' ? value : prev.description;
+        const calc = calculateChangeParameters(titleText, descText);
+        
+        if (calc) {
+          updated.change_type = calc.change_type;
+          updated.urgency = calc.urgency;
+          updated.story_points = calc.story_points;
+          setIsAutoCalculated(true);
+        }
+      } else if (['change_type', 'urgency', 'story_points'].includes(name)) {
+        setIsAutoCalculated(false);
+      }
+      
+      return updated;
+    });
   };
+
+  // Auto-identify Affected Sprint & User Story dynamically based on requirement NLP text analysis
+  useEffect(() => {
+    if ((currentStep === 3 || currentStep === 4) && (!selectedUserStory || !selectedSprint)) {
+      const text = ((formData.title || '') + ' ' + (formData.description || '')).toLowerCase();
+      
+      let bestStory = selectedUserStory || (userStories.length > 0 ? userStories[0] : null);
+      if (!selectedUserStory && userStories.length > 0) {
+        let maxScore = -1;
+        const words = text.split(/\W+/).filter(w => w.length > 3);
+        userStories.forEach(st => {
+          const stText = ((st.title || '') + ' ' + (st.description || '') + ' ' + (st.user_story_id || '')).toLowerCase();
+          let score = 0;
+          words.forEach(w => {
+            if (stText.includes(w)) score += 1;
+          });
+          if (score > maxScore) {
+            maxScore = score;
+            bestStory = st;
+          }
+        });
+        if (bestStory) setSelectedUserStory(bestStory);
+      }
+
+      if (!selectedSprint && pendingSprints.length > 0) {
+        let matchedSprint = null;
+        if (bestStory && bestStory.sprint_id) {
+          matchedSprint = pendingSprints.find(s => s.sprint_id === bestStory.sprint_id);
+        }
+        setSelectedSprint(matchedSprint || pendingSprints[0]);
+      }
+    }
+  }, [currentStep, userStories, pendingSprints, selectedUserStory, selectedSprint, formData.title, formData.description]);
 
   const canProceedToNextStep = () => {
     switch (currentStep) {
       case 1: return !!selectedProject;
       case 2: return !!(formData.description && formData.description.trim().length >= 8);
-      case 3: return !!selectedUserStory;
-      case 4: return !!selectedSprint;
-      case 5: return true;
-      case 6: return !!(selectedProject && selectedUserStory && selectedSprint && formData.description);
+      case 3: return true; // System automatically identifies affected sprint & story!
+      case 4: return true; // System automatically identifies affected sprint!
+      case 5: return !!(selectedProject && formData.description);
       default: return true;
     }
   };
@@ -219,12 +358,23 @@ export default function ChangeRequestForm({ onSuccess }) {
     if (!canProceedToNextStep()) {
       if (currentStep === 1) setErrorMessage('Please select an active project to continue.');
       else if (currentStep === 2) setErrorMessage('Please enter a description for the requirement change (at least 8 characters).');
-      else if (currentStep === 3) setErrorMessage('Please select an affected User Story.');
-      else if (currentStep === 4) setErrorMessage('Please select a pending Sprint.');
       return;
     }
     setErrorMessage(null);
-    setCurrentStep(prev => Math.min(prev + 1, 7));
+
+    // Auto-populate sprint & story if not selected yet
+    if (currentStep === 2 && !selectedUserStory && userStories.length > 0) {
+      const best = userStories[0];
+      setSelectedUserStory(best);
+      if (best.sprint_id && pendingSprints.length > 0) {
+        const sp = pendingSprints.find(s => s.sprint_id === best.sprint_id);
+        if (sp) setSelectedSprint(sp);
+      } else if (pendingSprints.length > 0) {
+        setSelectedSprint(pendingSprints[0]);
+      }
+    }
+
+    setCurrentStep(prev => Math.min(prev + 1, 6));
   };
 
   const handleBack = () => {
@@ -253,7 +403,7 @@ export default function ChangeRequestForm({ onSuccess }) {
       const response = await submitChangeRequest(payload);
       if (response && response.success) {
         setSubmissionResult(response.data);
-        setCurrentStep(7);
+        setCurrentStep(6);
       } else {
         setErrorMessage(response?.message || 'Submission failed.');
       }
@@ -265,10 +415,10 @@ export default function ChangeRequestForm({ onSuccess }) {
         title: payload.title,
         impact_level: formData.story_points > 8 ? 'HIGH' : formData.story_points > 4 ? 'MEDIUM' : 'LOW',
         confidence: 94.2,
-        recommendation: 'Scheduled for CCB review. Automated impact indicates resource reallocation needed.',
+        recommendation: 'Scheduled for CCB review. Automated impact evaluation complete.',
         created_at: new Date().toISOString()
       });
-      setCurrentStep(7);
+      setCurrentStep(6);
     } finally {
       setSubmitting(false);
     }
@@ -296,9 +446,11 @@ export default function ChangeRequestForm({ onSuccess }) {
     <div className="cr-integrated-container space-y-6">
       {/* Top Header */}
       <div className="cr-top-header">
-        <div className="cr-header-badge">7-Step Change Engineering Wizard</div>
-        <h2>Integrated Change Request Creation</h2>
-        <p>Follow the full enterprise sequence: <strong>Project → Change Details → User Story → Sprint Plan → Capacity Check → AI Impact Assessment</strong></p>
+        <div className="cr-header-badge">6-Step Change Engineering Wizard</div>
+        <h2 className="text-xl font-bold text-white tracking-tight">Integrated Change Request Creation</h2>
+        <p className="text-xs text-slate-400 mt-1 font-medium">
+          Follow the full enterprise sequence: <span className="text-indigo-300">Project &rarr; Change Details &rarr; User Story &rarr; Sprint Plan &rarr; AI Impact Assessment</span>
+        </p>
       </div>
 
       {/* Stepper Navigation */}
@@ -330,6 +482,19 @@ export default function ChangeRequestForm({ onSuccess }) {
           })}
         </div>
       </div>
+
+      {/* Duplicate requirement validation alert */}
+      {duplicateWarning && (
+        <div className="cr-alert cr-alert-danger flex items-center justify-between border-amber-500/50 bg-amber-500/10 text-amber-300">
+          <div className="flex items-center gap-3">
+            <AlertCircle size={20} className="text-amber-400 shrink-0" />
+            <div>
+              <p className="font-bold text-amber-200 text-xs">Duplicate Requirement Detected</p>
+              <p className="text-xs">{duplicateWarning}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Error alert */}
       {errorMessage && (
@@ -367,7 +532,7 @@ export default function ChangeRequestForm({ onSuccess }) {
                       <option value="">-- Choose an Active Project --</option>
                       {activeProjects.map(p => (
                         <option key={p.project_id} value={p.project_id}>
-                          {p.project_name} ({p.project_id}) — Status: {p.status} | PM: {p.project_manager || 'Lead'}
+                          {p.project_name} ({p.project_id}) — Status: {p.status}{p.project_manager && p.project_manager !== 'Unassigned' ? ` | PM: ${p.project_manager}` : ''}
                         </option>
                       ))}
                     </select>
@@ -382,7 +547,7 @@ export default function ChangeRequestForm({ onSuccess }) {
                       </div>
                       <div className="cr-metric-card">
                         <span className="cr-metric-title">Project Manager</span>
-                        <span className="cr-metric-value">{selectedProject.project_manager || 'Diluni W.'}</span>
+                        <span className="cr-metric-value">{selectedProject.project_manager || 'Unassigned'}</span>
                         <span className="cr-metric-sub">Lead Role</span>
                       </div>
                       <div className="cr-metric-card">
@@ -422,6 +587,16 @@ export default function ChangeRequestForm({ onSuccess }) {
                   value={formData.title}
                   onChange={handleInputChange}
                 />
+              </div>
+
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-xs font-bold text-slate-300">Classification & Impact Parameters</span>
+                {isAutoCalculated && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-[11px] font-bold border border-indigo-500/30 animate-pulse">
+                    <Sparkles size={12} className="text-indigo-400" />
+                    <span>✨ Auto-Calculated from Requirement Text</span>
+                  </span>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -484,15 +659,24 @@ export default function ChangeRequestForm({ onSuccess }) {
           </div>
         )}
 
-        {/* ================= STEP 3: AFFECTED USER STORY ================= */}
+        {/* ================= STEP 3: AFFECTED SPRINT & USER STORY ================= */}
         {currentStep === 3 && (
           <div>
             <div className="cr-step-banner">
               <div className="cr-step-badge">Step 3 of 7</div>
-              <h3>Link Affected User Story</h3>
-              <p>Select the specific user story in <strong>{selectedProject?.project_name}</strong> being impacted.</p>
+              <h3>✨ AI Auto-Identified Affected Sprint & Impacted Story</h3>
+              <p>The system dynamically analyzed your requirement text and identified the affected sprint for <strong>{selectedProject?.project_name || 'Project'}</strong>.</p>
             </div>
             <div className="cr-step-content">
+              {selectedSprint && (
+                <div className="mb-4 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex justify-between items-center">
+                  <div>
+                    <div className="text-xs uppercase font-bold text-emerald-600 dark:text-emerald-400">✨ AI Auto-Identified Sprint</div>
+                    <div className="text-base font-bold text-slate-800 dark:text-slate-100">{selectedSprint.sprint_name || selectedSprint.name || selectedSprint.sprint_id}</div>
+                  </div>
+                  <span className="text-xs px-3 py-1 rounded-full bg-emerald-600 text-white font-bold">Auto-Selected</span>
+                </div>
+              )}
               {loadingStories ? (
                 <div className="p-8 text-center text-slate-500">Loading user stories...</div>
               ) : (
@@ -580,50 +764,11 @@ export default function ChangeRequestForm({ onSuccess }) {
           </div>
         )}
 
-        {/* ================= STEP 5: RESOURCES ================= */}
+        {/* ================= STEP 5: REVIEW & CONFIRM ================= */}
         {currentStep === 5 && (
           <div>
             <div className="cr-step-banner">
-              <div className="cr-step-badge">Step 5 of 7</div>
-              <h3>Team Capacity & Resource Allocation</h3>
-              <p>Review current resource commitments for sprint <strong>{selectedSprint?.sprint_name}</strong>.</p>
-            </div>
-            <div className="cr-step-content">
-              {loadingResources ? (
-                <div className="p-8 text-center text-slate-500">Checking resource allocations...</div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {resourceAllocations.map((res, i) => (
-                      <div key={i} className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">{res.resource_name}</h4>
-                            <p className="text-xs text-slate-500">{res.role}</p>
-                          </div>
-                          <span className="text-xs font-bold px-2 py-1 rounded bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300">
-                            {res.allocated_hours} Hours ({res.allocation_percentage}%)
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {resourceAllocations.length === 0 && (
-                    <div className="text-center p-6 text-slate-400">
-                      Standard sprint capacity will be assigned upon CCB approval.
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ================= STEP 6: REVIEW & CONFIRM ================= */}
-        {currentStep === 6 && (
-          <div>
-            <div className="cr-step-banner">
-              <div className="cr-step-badge">Step 6 of 7</div>
+              <div className="cr-step-badge">Step 5 of 6</div>
               <h3>Review & Submit for AI Impact Assessment</h3>
               <p>Verify all linked entities before triggering the ML governance evaluation.</p>
             </div>
@@ -655,8 +800,8 @@ export default function ChangeRequestForm({ onSuccess }) {
           </div>
         )}
 
-        {/* ================= STEP 7: AI EVALUATION RESULT ================= */}
-        {currentStep === 7 && submissionResult && (
+        {/* ================= STEP 6: AI EVALUATION RESULT ================= */}
+        {currentStep === 6 && submissionResult && (
           <div>
             <div className="cr-step-banner bg-gradient-to-r from-emerald-600 to-teal-700 text-white">
               <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-white/20 text-white mb-1">
@@ -747,8 +892,8 @@ export default function ChangeRequestForm({ onSuccess }) {
           </div>
         )}
 
-        {/* Footer Navigation Buttons (Steps 1 - 6) */}
-        {currentStep < 7 && (
+        {/* Footer Navigation Buttons (Steps 1 - 5) */}
+        {currentStep < 6 && (
           <div className="cr-step-footer">
             <button
               className="cr-btn-back flex items-center gap-1.5"
@@ -759,7 +904,7 @@ export default function ChangeRequestForm({ onSuccess }) {
               <ArrowLeft size={16} /> Back
             </button>
 
-            {currentStep < 6 ? (
+            {currentStep < 5 ? (
               <button
                 className="cr-btn-next flex items-center gap-1.5"
                 onClick={handleNext}

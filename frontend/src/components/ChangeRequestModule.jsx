@@ -13,7 +13,7 @@ import ChangeRequestDashboard from './change-requests/ChangeRequestDashboard';
 import ChangeRequestForm from './change-requests/ChangeRequestForm';
 import ChangeRequestList from './change-requests/ChangeRequestList';
 
-export default function ChangeRequestModule() {
+export default function ChangeRequestModule({ projects = [], selectedProjectId, onSelectProject }) {
   // Sub-tabs: 'dashboard', 'form', 'list'
   const [subTab, setSubTab] = useState('dashboard');
 
@@ -26,25 +26,11 @@ export default function ChangeRequestModule() {
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-semibold mb-2">
               <GitPullRequest size={14} className="text-indigo-300" />
-              <span>ReqChange AI • Change Management Module</span>
+              <span>Change Request Governance</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold text-white">
-              Change Request & Impact Analysis Engine
+              Change Requests
             </h1>
-            <p className="text-slate-300 text-xs md:text-sm mt-1 max-w-2xl leading-relaxed">
-              Automated impact assessment, sprint reallocation, scope creep detection, and governance workflow for dynamic software requirements.
-            </p>
-          </div>
-
-          {/* Model Status Pill */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 text-xs font-semibold">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span className="text-slate-100">SVM Impact Classifier Active</span>
-            </div>
-            <div className="px-3.5 py-2 rounded-2xl bg-indigo-600/40 border border-indigo-400/30 text-indigo-200 text-xs font-bold">
-              91.5% Accuracy
-            </div>
           </div>
         </div>
 

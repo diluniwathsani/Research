@@ -213,7 +213,22 @@ async function createTables() {
                 FOREIGN KEY (project_id) REFERENCES projects(project_id)
             );
         `);
-        console.log('✅ Sprints table created');
+        // Clean up duplicate project-prefixed sprint entries (e.g., P393882-SPR-01) if standard SPR-01 exists
+        try {
+            await db.exec(`
+                DELETE FROM sprints
+                WHERE sprint_id LIKE '%-SPR-%'
+                  AND EXISTS (
+                    SELECT 1 FROM sprints s2
+                    WHERE s2.project_id = sprints.project_id
+                      AND s2.sprint_number = sprints.sprint_number
+                      AND s2.sprint_id NOT LIKE '%-SPR-%'
+                  );
+            `);
+        } catch (sprintCleanErr) {
+            // Ignore if clean fails
+        }
+        console.log('✅ Sprints table created and deduplicated');
 
         // 3. User Stories Table
         await db.exec(`
@@ -332,6 +347,100 @@ async function createTables() {
         `);
         console.log('✅ Audit Trail table created');
 
+        // 8. Developers Table
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS developers (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                role TEXT NOT NULL,
+                languages TEXT,
+                profile TEXT,
+                capacity_hours INTEGER DEFAULT 40,
+                primary_domain TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+        console.log('✅ Developers table created');
+
+        // 9. Allocations Table
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS allocations (
+                id SERIAL PRIMARY KEY,
+                sprint_id TEXT,
+                story_id TEXT,
+                work_item_id TEXT,
+                developer_id INTEGER,
+                allocated_hours INTEGER,
+                predicted_complexity TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (developer_id) REFERENCES developers(id)
+            );
+        `);
+        console.log('✅ Allocations table created');
+
+        // 10. Work Items Table
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS work_items (
+                work_item_id TEXT PRIMARY KEY,
+                story_id TEXT NOT NULL,
+                parent_story_title TEXT,
+                project_id TEXT NOT NULL DEFAULT 'P00001',
+                title TEXT NOT NULL,
+                description TEXT,
+                domain TEXT NOT NULL,
+                required_skills TEXT[],
+                estimated_hours NUMERIC DEFAULT 8,
+                story_points INT DEFAULT 1,
+                status TEXT DEFAULT 'generated',
+                assigned_developer_id TEXT,
+                assigned_developer_name TEXT,
+                sprint_id TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+        try {
+            await db.exec(`ALTER TABLE work_items ADD COLUMN IF NOT EXISTS story_points INT DEFAULT 1`);
+            await db.exec(`ALTER TABLE work_items ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'generated'`);
+            await db.exec(`ALTER TABLE work_items ADD COLUMN IF NOT EXISTS parent_story_title TEXT`);
+        } catch (wiColErr) {
+            // Column already exists
+        }
+        console.log('✅ Work Items table created');
+
+        // 11. Team Members Table
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS team_members (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                role TEXT NOT NULL,
+                avatar TEXT,
+                color TEXT,
+                capacity_hours INT DEFAULT 40,
+                allocated_hours INT DEFAULT 0,
+                assigned_epics TEXT[],
+                skills TEXT[],
+                status TEXT DEFAULT 'Optimal'
+            );
+        `);
+        console.log('✅ Team Members table created');
+
+        // 12. Sprint Tasks Table
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS sprint_tasks (
+                id TEXT PRIMARY KEY,
+                requirement_sentence TEXT NOT NULL,
+                epic TEXT,
+                user_story TEXT,
+                acceptance_criteria TEXT,
+                column_name TEXT DEFAULT 'Backlog',
+                points INT DEFAULT 3,
+                assignee TEXT
+            );
+        `);
+        console.log('✅ Sprint Tasks table created');
+
         console.log('✅ All PostgreSQL tables created successfully');
 
     } catch (error) {
@@ -345,123 +454,9 @@ async function createTables() {
 // ============================================
 async function seedDataIfEmpty() {
     try {
-        console.log('🌱 Checking if seed data is needed...');
-        
-        const pCount = await db.get("SELECT COUNT(*) as count FROM projects");
-        if (!pCount || parseInt(pCount.count) === 0) {
-            console.log('🌱 Seeding projects...');
-            const projects = [
-                { project_id: 'P00001', project_name: 'Aurora ERP', description: 'Enterprise resource planning and financial tracking system.', project_manager: 'Michael Henry', team_size: 9, progress_percent: 45, budget_usd: 89900, risk_level: 'Medium', complexity_level: 'Medium', priority: 'High', status: 'ACTIVE' },
-                { project_id: 'P00002', project_name: 'Fusion Portal', description: 'AI-driven customer analytics and self-service portal.', project_manager: 'Anthony Harmon', team_size: 13, progress_percent: 20, budget_usd: 484000, risk_level: 'High', complexity_level: 'High', priority: 'High', status: 'ACTIVE' },
-                { project_id: 'P00003', project_name: 'Aurora Mobile', description: 'Cross-platform mobile companion for warehouse operations.', project_manager: 'Teresa Mcfarland', team_size: 17, progress_percent: 60, budget_usd: 136000, risk_level: 'Low', complexity_level: 'Medium', priority: 'Medium', status: 'ACTIVE' },
-                { project_id: 'P00004', project_name: 'Zenith Connect', description: 'Legacy payment gateway integration (Cancelled project).', project_manager: 'Dana Thornton', team_size: 11, progress_percent: 73, budget_usd: 120000, risk_level: 'High', complexity_level: 'Medium', priority: 'Low', status: 'CANCELLED' },
-                { project_id: 'P00005', project_name: 'Nimbus Connect', description: 'Cloud file synchronizer (Completed project).', project_manager: 'Lisa Lopez', team_size: 12, progress_percent: 100, budget_usd: 28000, risk_level: 'Low', complexity_level: 'Low', priority: 'Medium', status: 'COMPLETED' }
-            ];
-
-            for (const p of projects) {
-                await db.run(`
-                    INSERT INTO projects (project_id, project_name, description, project_manager, team_size, progress_percent, budget_usd, risk_level, complexity_level, priority, status)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-                    ON CONFLICT (project_id) DO NOTHING;
-                `, [p.project_id, p.project_name, p.description, p.project_manager, p.team_size, p.progress_percent, p.budget_usd, p.risk_level, p.complexity_level, p.priority, p.status]);
-            }
-            console.log('✅ Projects seeded');
-        }
-
-        const sCount = await db.get("SELECT COUNT(*) as count FROM sprints");
-        if (!sCount || parseInt(sCount.count) === 0) {
-            console.log('🌱 Seeding sprints...');
-            // Ensure default projects exist for foreign key constraint
-            const defaultProjects = [
-                { project_id: 'P00001', project_name: 'Aurora ERP', description: 'Enterprise resource planning and financial tracking system.', project_manager: 'Michael Henry', team_size: 9, progress_percent: 45, budget_usd: 89900, risk_level: 'Medium', complexity_level: 'Medium', priority: 'High', status: 'ACTIVE' },
-                { project_id: 'P00002', project_name: 'Fusion Portal', description: 'AI-driven customer analytics and self-service portal.', project_manager: 'Anthony Harmon', team_size: 13, progress_percent: 20, budget_usd: 484000, risk_level: 'High', complexity_level: 'High', priority: 'High', status: 'ACTIVE' },
-                { project_id: 'P00003', project_name: 'Aurora Mobile', description: 'Cross-platform mobile companion for warehouse operations.', project_manager: 'Teresa Mcfarland', team_size: 17, progress_percent: 60, budget_usd: 136000, risk_level: 'Low', complexity_level: 'Medium', priority: 'Medium', status: 'ACTIVE' }
-            ];
-            for (const dp of defaultProjects) {
-                await db.run(`
-                    INSERT INTO projects (project_id, project_name, description, project_manager, team_size, progress_percent, budget_usd, risk_level, complexity_level, priority, status)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-                    ON CONFLICT (project_id) DO NOTHING;
-                `, [dp.project_id, dp.project_name, dp.description, dp.project_manager, dp.team_size, dp.progress_percent, dp.budget_usd, dp.risk_level, dp.complexity_level, dp.priority, dp.status]);
-            }
-
-            const sprints = [
-                { sprint_id: 'SPR-01', project_id: 'P00001', sprint_name: 'Sprint 1 - Core Auth & Setup', sprint_number: 1, status: 'COMPLETED', start_date: '2026-06-01', end_date: '2026-06-15', capacity_story_points: 35 },
-                { sprint_id: 'SPR-02', project_id: 'P00001', sprint_name: 'Sprint 2 - Financial Ledger Module', sprint_number: 2, status: 'ACTIVE', start_date: '2026-08-10', end_date: '2026-08-25', capacity_story_points: 40 },
-                { sprint_id: 'SPR-03', project_id: 'P00001', sprint_name: 'Sprint 3 - Multi-Currency Reporting', sprint_number: 3, status: 'PENDING', start_date: '2026-08-26', end_date: '2026-09-10', capacity_story_points: 45 },
-                { sprint_id: 'SPR-04', project_id: 'P00002', sprint_name: 'Sprint 1 - AI Pipeline & Ingestion', sprint_number: 1, status: 'ACTIVE', start_date: '2026-08-01', end_date: '2026-08-20', capacity_story_points: 50 },
-                { sprint_id: 'SPR-05', project_id: 'P00002', sprint_name: 'Sprint 2 - Dashboard Widgets & Alerts', sprint_number: 2, status: 'PENDING', start_date: '2026-08-21', end_date: '2026-09-05', capacity_story_points: 45 },
-                { sprint_id: 'SPR-06', project_id: 'P00002', sprint_name: 'Sprint 0 - Feasibility Spike', sprint_number: 0, status: 'CLOSED', start_date: '2026-07-01', end_date: '2026-07-15', capacity_story_points: 20 },
-                { sprint_id: 'SPR-07', project_id: 'P00003', sprint_name: 'Sprint 1 - Barcode Scanner Integration', sprint_number: 1, status: 'COMPLETED', start_date: '2026-07-01', end_date: '2026-07-15', capacity_story_points: 30 },
-                { sprint_id: 'SPR-08', project_id: 'P00003', sprint_name: 'Sprint 2 - Offline Sync Engine', sprint_number: 2, status: 'ACTIVE', start_date: '2026-08-12', end_date: '2026-08-28', capacity_story_points: 42 },
-                { sprint_id: 'SPR-09', project_id: 'P00003', sprint_name: 'Sprint 3 - Bluetooth Thermal Printing', sprint_number: 3, status: 'PENDING', start_date: '2026-08-29', end_date: '2026-09-12', capacity_story_points: 38 }
-            ];
-
-            for (const s of sprints) {
-                await db.run(`
-                    INSERT INTO sprints (sprint_id, project_id, sprint_name, sprint_number, status, start_date, end_date, capacity_story_points)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                    ON CONFLICT (sprint_id) DO NOTHING;
-                `, [s.sprint_id, s.project_id, s.sprint_name, s.sprint_number, s.status, s.start_date, s.end_date, s.capacity_story_points]);
-            }
-            console.log('✅ Sprints seeded');
-        }
-
-        console.log('🌱 Seeding user stories...');
-        
-        const stories = [
-            { story_id: 'US-101', user_story_id: 'US-101', project_id: 'P00001', sprint_id: 'SPR-02', title: 'Automated General Ledger Tax Reconciliation', description: 'As an accountant, I want automated tax calculation on invoices so that quarterly tax filings are reconciled with zero manual data entry.', story_points: 8, priority: 'High', status: 'IN_PROGRESS', assigned_to: 'Sarah Jenkins' },
-            { story_id: 'US-102', user_story_id: 'US-102', project_id: 'P00001', sprint_id: 'SPR-02', title: 'Double-Entry Journal Validation Rules', description: 'As a financial auditor, I want debits and credits validation with balance alerts before posting ledger entries.', story_points: 5, priority: 'High', status: 'IN_PROGRESS', assigned_to: 'David Kim' },
-            { story_id: 'US-103', user_story_id: 'US-103', project_id: 'P00001', sprint_id: 'SPR-03', title: 'Multi-Currency Real-Time Exchange Rate Sync', description: 'As a global finance manager, I want automatic currency rate conversions based on daily ECB and Fed forex feeds.', story_points: 13, priority: 'Medium', status: 'TO_DO', assigned_to: 'Sarah Jenkins' },
-            { story_id: 'US-104', user_story_id: 'US-104', project_id: 'P00001', sprint_id: 'SPR-01', title: 'SSO SAML 2.0 Identity Provider Login', description: 'As an enterprise user, I want single sign-on with Okta and Azure AD.', story_points: 5, priority: 'High', status: 'DONE', assigned_to: 'Elena Rostova' },
-            { story_id: 'US-201', user_story_id: 'US-201', project_id: 'P00002', sprint_id: 'SPR-04', title: 'Predictive Churn Risk Classification Model', description: 'As a customer success lead, I want real-time churn risk indicators on account overview dashboards.', story_points: 13, priority: 'Critical', status: 'IN_PROGRESS', assigned_to: 'Dr. Marcus Vance' },
-            { story_id: 'US-202', user_story_id: 'US-202', project_id: 'P00002', sprint_id: 'SPR-04', title: 'Automated Anomaly Alerting Webhook Trigger', description: 'As a site reliability engineer, I want instant alerts when customer engagement metrics drop below standard thresholds.', story_points: 5, priority: 'Medium', status: 'IN_PROGRESS', assigned_to: 'Alex Rivera' },
-            { story_id: 'US-203', user_story_id: 'US-203', project_id: 'P00002', sprint_id: 'SPR-05', title: 'Interactive Heatmap Visualization of User Engagement', description: 'As a product owner, I want visual engagement heatmaps across portal navigation funnels.', story_points: 8, priority: 'Medium', status: 'TO_DO', assigned_to: 'Priya Sharma' },
-            { story_id: 'US-301', user_story_id: 'US-301', project_id: 'P00003', sprint_id: 'SPR-08', title: 'Offline SQLite Local Cache & Delta Sync', description: 'As a warehouse worker, I want to scan inventory offline in basement zones and sync deltas once Wi-Fi connects.', story_points: 8, priority: 'High', status: 'IN_PROGRESS', assigned_to: 'Carlos Gomez' },
-            { story_id: 'US-302', user_story_id: 'US-302', project_id: 'P00003', sprint_id: 'SPR-09', title: 'ESC/POS Bluetooth Receipt & Dispatch Slip Printer', description: 'As a warehouse operator, I want immediate dispatch slips printed via portable Zebra Bluetooth devices.', story_points: 5, priority: 'Medium', status: 'TO_DO', assigned_to: 'Carlos Gomez' }
-        ];
-
-        for (const st of stories) {
-            await db.run(`
-                INSERT INTO user_stories (story_id, user_story_id, project_id, sprint_id, title, description, story_points, priority, status, assigned_to)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                ON CONFLICT (story_id) DO NOTHING;
-            `, [st.story_id, st.user_story_id, st.project_id, st.sprint_id, st.title, st.description, st.story_points, st.priority, st.status, st.assigned_to]);
-        }
-        console.log('✅ User stories seeded');
-
-        console.log('🌱 Seeding resource allocations...');
-        
-        const allocations = [
-            { sprint_id: 'SPR-02', project_id: 'P00001', user_story_id: 'US-101', resource_id: 'RES-01', resource_name: 'Sarah Jenkins', role: 'Lead Backend Engineer', allocated_hours: 40, allocation_percentage: 100 },
-            { sprint_id: 'SPR-02', project_id: 'P00001', user_story_id: 'US-102', resource_id: 'RES-02', resource_name: 'David Kim', role: 'Senior Database Engineer', allocated_hours: 35, allocation_percentage: 85 },
-            { sprint_id: 'SPR-02', project_id: 'P00001', user_story_id: 'US-101', resource_id: 'RES-03', resource_name: 'Elena Rostova', role: 'QA Automation Lead', allocated_hours: 25, allocation_percentage: 60 },
-            { sprint_id: 'SPR-02', project_id: 'P00001', user_story_id: 'US-102', resource_id: 'RES-04', resource_name: 'Mark Taylor', role: 'Financial Domain Analyst', allocated_hours: 20, allocation_percentage: 50 },
-            { sprint_id: 'SPR-03', project_id: 'P00001', user_story_id: 'US-103', resource_id: 'RES-01', resource_name: 'Sarah Jenkins', role: 'Lead Backend Engineer', allocated_hours: 40, allocation_percentage: 100 },
-            { sprint_id: 'SPR-03', project_id: 'P00001', user_story_id: 'US-103', resource_id: 'RES-05', resource_name: 'James Wilson', role: 'Cloud Integration Specialist', allocated_hours: 30, allocation_percentage: 75 },
-            { sprint_id: 'SPR-04', project_id: 'P00002', user_story_id: 'US-201', resource_id: 'RES-06', resource_name: 'Dr. Marcus Vance', role: 'Principal ML Scientist', allocated_hours: 45, allocation_percentage: 100 },
-            { sprint_id: 'SPR-04', project_id: 'P00002', user_story_id: 'US-202', resource_id: 'RES-07', resource_name: 'Alex Rivera', role: 'Senior Platform Engineer', allocated_hours: 40, allocation_percentage: 100 },
-            { sprint_id: 'SPR-04', project_id: 'P00002', user_story_id: 'US-201', resource_id: 'RES-08', resource_name: 'Priya Sharma', role: 'UI/UX Design Specialist', allocated_hours: 30, allocation_percentage: 75 },
-            { sprint_id: 'SPR-05', project_id: 'P00002', user_story_id: 'US-203', resource_id: 'RES-08', resource_name: 'Priya Sharma', role: 'UI/UX Design Specialist', allocated_hours: 35, allocation_percentage: 85 },
-            { sprint_id: 'SPR-05', project_id: 'P00002', user_story_id: 'US-203', resource_id: 'RES-07', resource_name: 'Alex Rivera', role: 'Senior Platform Engineer', allocated_hours: 20, allocation_percentage: 50 },
-            { sprint_id: 'SPR-08', project_id: 'P00003', user_story_id: 'US-301', resource_id: 'RES-09', resource_name: 'Carlos Gomez', role: 'Lead Mobile Architect', allocated_hours: 40, allocation_percentage: 100 },
-            { sprint_id: 'SPR-08', project_id: 'P00003', user_story_id: 'US-301', resource_id: 'RES-10', resource_name: 'Anita Patel', role: 'Mobile QA Specialist', allocated_hours: 30, allocation_percentage: 75 },
-            { sprint_id: 'SPR-09', project_id: 'P00003', user_story_id: 'US-302', resource_id: 'RES-09', resource_name: 'Carlos Gomez', role: 'Lead Mobile Architect', allocated_hours: 35, allocation_percentage: 85 }
-        ];
-
-        for (const a of allocations) {
-            await db.run(`
-                INSERT INTO resource_allocations (sprint_id, project_id, user_story_id, resource_id, resource_name, role, allocated_hours, allocation_percentage)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            `, [a.sprint_id, a.project_id, a.user_story_id, a.resource_id, a.resource_name, a.role, a.allocated_hours, a.allocation_percentage]);
-        }
-        console.log('✅ Resource allocations seeded');
-
-        console.log('✅ PostgreSQL seed data complete');
-
+        console.log('🌱 Checking PostgreSQL database status...');
     } catch (err) {
-        console.error('❌ Error seeding PostgreSQL data:', err.message);
-        throw err;
+        console.error('❌ Error checking database status:', err.message);
     }
 }
 

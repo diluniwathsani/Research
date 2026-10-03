@@ -61,7 +61,6 @@ export default function ChangeRequestDashboard({ onNavigate }) {
 
   const statsCards = [
     { title: 'Total Requests', value: stats.total || 0, color: '#6366f1', change: '+12% this month' },
-    { title: 'Pending Governance', value: stats.pending || 0, color: '#f59e0b', change: 'Awaiting Review' },
     { title: 'Approved Changes', value: stats.approved || 0, color: '#10b981', change: 'Accepted' },
     { title: 'Rejected Changes', value: stats.rejected || 0, color: '#ef4444', change: 'Declined' }
   ];
@@ -107,12 +106,11 @@ export default function ChangeRequestDashboard({ onNavigate }) {
       <div className="cr-welcome-section">
         <div className="cr-welcome-text">
           <div className="flex items-center gap-2 mb-1">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-white/20 text-white">
-              <Sparkles size={12} /> ReqChange AI System
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-white/10 text-indigo-300 border border-indigo-500/30">
+              <Sparkles size={12} /> Change Request Analytics
             </span>
           </div>
           <h1>Change Request Overview & Details</h1>
-          <p>Live metrics, ML impact distribution, and real-time scope creep risk analytics.</p>
         </div>
         <div className="flex items-center gap-3">
           <button 

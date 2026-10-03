@@ -37,16 +37,16 @@ def predict_impact(input_data):
         complexity_raw  = str(input_data.get('complexity_level') or 'Medium')
         urgency_raw     = str(input_data.get('urgency') or 'MEDIUM')
 
-        # ── Ordinal mappings ────────────────────────────────────────────────
-        priority_map   = {'Low': 1, 'Medium': 2, 'High': 3, 'Critical': 4}
-        risk_map       = {'Low': 1, 'Medium': 2, 'High': 3}
-        complexity_map = {'Low': 1, 'Medium': 2, 'High': 3}
-        urgency_map    = {'LOW': 1, 'MEDIUM': 2, 'HIGH': 3, 'CRITICAL': 4}
+        # ── Ordinal mappings (matching final_metadata.json) ────────────────
+        priority_map   = {'Low': 1, 'Medium': 3, 'High': 5, 'Critical': 7}
+        risk_map       = {'Low': 1, 'Medium': 3, 'High': 5}
+        complexity_map = {'Low': 1, 'Medium': 3, 'High': 5}
+        urgency_map    = {'LOW': 1, 'MEDIUM': 3, 'HIGH': 5, 'CRITICAL': 7}
 
-        priority_score   = priority_map.get(priority_raw, 2)
-        risk_score       = risk_map.get(risk_raw, 2)
-        complexity_score = complexity_map.get(complexity_raw, 2)
-        urgency_score    = urgency_map.get(urgency_raw.upper(), 2)
+        priority_score   = priority_map.get(priority_raw.title(), priority_map.get(priority_raw, 3))
+        risk_score       = risk_map.get(risk_raw.title(), risk_map.get(risk_raw, 3))
+        complexity_score = complexity_map.get(complexity_raw.title(), complexity_map.get(complexity_raw, 3))
+        urgency_score    = urgency_map.get(urgency_raw.upper(), 3)
 
         # ── Feature 1: story_points ─────────────────────────────────────────
         story_points = min(round(estimated_hours / 6), 21)

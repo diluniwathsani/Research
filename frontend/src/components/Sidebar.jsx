@@ -1,27 +1,46 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, FileCode, Users, Calendar, GitPullRequest, Sparkles, ChevronRight, Layers } from 'lucide-react';
+import { LayoutDashboard, FileCode, CheckSquare, Users, Calendar, GitPullRequest, Sparkles, ChevronRight, Layers } from 'lucide-react';
 
-export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount }) {
-  const [member2Stats, setMember2Stats] = useState({ stories: 0, sprints: 0 });
+export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount, selectedProjectId }) {
+  const [member2Stats, setMember2Stats] = useState({ stories: 0, sprints: 0, reqs: 0, epics: 0 });
+
+  const isMatchingProject = (itemProjId, targetProjId) => {
+    if (!targetProjId || !itemProjId) return true;
+    const itemStr = String(itemProjId).toLowerCase().trim();
+    const targetStr = String(targetProjId).toLowerCase().trim();
+    return itemStr === targetStr || 
+           targetStr.includes(itemStr) || 
+           itemStr.includes(targetStr) ||
+           (itemStr.replace(/\D/g, '') !== '' && itemStr.replace(/\D/g, '') === targetStr.replace(/\D/g, ''));
+  };
 
   useEffect(() => {
-    fetch("http://localhost:8080/api/stories")
+    fetch("http://localhost:3000/api/user-stories")
       .then((res) => res.json())
       .then((data) => {
-        const storiesList = data.stories || [];
+        const storiesList = Array.isArray(data) ? data : (data.stories || []);
+        const filteredStories = storiesList.filter(s => isMatchingProject(s.project_id, selectedProjectId));
+        const activeStories = (filteredStories.length > 0 || !selectedProjectId) ? filteredStories : storiesList;
+
+        const epicsSet = new Set(activeStories.map(s => s.epic || s.feature).filter(Boolean));
+        const totalSP = activeStories.reduce((acc, s) => acc + (Number(s.story_points) || 5), 0);
+        const calculatedSprints = Math.max(activeStories.length > 0 ? 1 : 0, Math.ceil(totalSP / 30));
+
         setMember2Stats({
-          stories: storiesList.length,
-          sprints: Math.ceil(storiesList.length / 5),
+          stories: activeStories.length,
+          reqs: activeStories.length,
+          epics: epicsSet.size || (activeStories.length > 0 ? Math.max(1, Math.ceil(activeStories.length / 5)) : (epicCount || 0)),
+          sprints: calculatedSprints,
         });
       })
       .catch((err) => console.error("Sidebar API Error:", err));
-  }, []);
+  }, [reqCount, epicCount, selectedProjectId]);
 
   const menuItems = [
     {
       id: 'artifacts',
       label: 'Development Artifacts',
-      subtitle: 'Requirements, Epics & AC',
+      subtitle: 'Module 1: User Stories & AC',
       icon: FileCode,
       badge: reqCount > 0 ? `${reqCount} Items` : 'Active',
       color: 'from-purple-500 to-indigo-600',
@@ -29,23 +48,31 @@ export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount }
     {
       id: 'dashboard',
       label: 'Executive Overview',
-      subtitle: 'Landing Page & Charts',
+      subtitle: 'Landing Page & Analytics',
       icon: LayoutDashboard,
       badge: null,
       color: 'from-blue-500 to-indigo-600',
     },
     {
+      id: 'workitems',
+      label: 'Work Items',
+      subtitle: 'Module 2: Work Items',
+      icon: CheckSquare,
+      badge: 'Active',
+      color: 'from-blue-600 to-cyan-600',
+    },
+    {
       id: 'resources',
-      label: 'Resource Management',
-      subtitle: 'Reserved for Team Member',
+      label: 'Resource Allocation',
+      subtitle: 'Module 3: Resource Management',
       icon: Users,
-      badge: 'Blank',
-      color: 'from-slate-400 to-slate-500',
+      badge: 'Active',
+      color: 'from-indigo-500 to-purple-600',
     },
     {
       id: 'projects',
-      label: 'Project Management',
-      subtitle: 'AI Sprint Planning',
+      label: 'Sprint Planning',
+      subtitle: 'Module 4: Project Management',
       icon: Calendar,
       badge: member2Stats.stories > 0 ? `${member2Stats.stories} Stories` : 'Active',
       color: 'from-emerald-500 to-teal-600',
@@ -53,7 +80,7 @@ export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount }
     {
       id: 'changerequests',
       label: 'Change Requests',
-      subtitle: 'ReqChange AI & Governance',
+      subtitle: 'Governance & Impact Analysis',
       icon: GitPullRequest,
       badge: 'Active',
       color: 'from-amber-500 to-rose-600',
@@ -131,7 +158,7 @@ export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount }
           <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-indigo-500/10 rounded-full blur-xl"></div>
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider flex items-center gap-1">
-              <Sparkles size={12} /> Global ML Stats
+              <Sparkles size={12} /> Analytics Summary
             </span>
             <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
           </div>
@@ -139,11 +166,11 @@ export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount }
           <div className="grid grid-cols-2 gap-2 my-2 text-center">
             <div className="bg-white/5 p-1.5 rounded-lg border border-white/10">
               <span className="text-[9px] text-slate-400 block uppercase">Reqs</span>
-              <span className="text-sm font-bold text-white">{reqCount}</span>
+              <span className="text-sm font-bold text-white">{member2Stats.reqs || reqCount}</span>
             </div>
             <div className="bg-white/5 p-1.5 rounded-lg border border-white/10">
               <span className="text-[9px] text-slate-400 block uppercase">Epics</span>
-              <span className="text-sm font-bold text-indigo-300">{epicCount}</span>
+              <span className="text-sm font-bold text-indigo-300">{member2Stats.epics || epicCount}</span>
             </div>
             <div className="bg-emerald-900/20 p-1.5 rounded-lg border border-emerald-500/30">
               <span className="text-[9px] text-emerald-400 block uppercase">Stories</span>
@@ -156,20 +183,8 @@ export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount }
           </div>
           
           <p className="text-[9px] text-slate-400 text-center leading-tight mt-1">
-            SVM & spaCy NLP • Random Forest Engine
+            ML Analytics Engine
           </p>
-        </div>
-      </div>
-
-      <div className="p-4 border-t border-slate-200 dark:border-slate-700/80">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-slate-100 dark:bg-slate-700/70 rounded-lg text-slate-500 dark:text-slate-400">
-            <Layers size={16} />
-          </div>
-          <div className="text-xs">
-            <p className="font-semibold text-slate-700 dark:text-slate-300">Research System</p>
-            <p className="text-[10px] text-slate-400">Dialog Axiata Research</p>
-          </div>
         </div>
       </div>
     </aside>

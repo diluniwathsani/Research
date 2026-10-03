@@ -146,159 +146,144 @@ def parse_requirement(req_sentence):
     return nouns, verb, clean
 
 
+import re
+
+def classify_requirement_domain(req_sentence):
+    text = (req_sentence or '').strip()
+    lower = text.lower()
+
+    epic = "General System Operations"
+    feature = "Core Functional Feature"
+
+    # 1. User Access & Role Governance
+    if re.search(r'\b(permission|auth|login|access control|role|password|encrypt|sso|jwt|oauth|restrict|permitted|user account|privilege)\b', lower):
+        epic = "User Access Control & Role Governance"
+        if re.search(r'\b(restrict|permission|role|action|privilege)\b', lower):
+            feature = "Role Permission & Action Restriction"
+        elif re.search(r'\b(login|auth|password|user account|account)\b', lower):
+            feature = "User Access & Authentication Management"
+        else:
+            feature = "Security & Access Governance"
+
+    # 2. Defect & Quality Management
+    elif re.search(r'\b(defect|defects|issue|severity|priority|quality|inspection|repair|repairs|repair request)\b', lower):
+        epic = "Defect & Quality Management"
+        if re.search(r'\b(priority|severity|assign|level)\b', lower):
+            feature = "Repair Priority & Severity Management"
+        elif re.search(r'\b(status|update|change|supervisor)\b', lower):
+            feature = "Defect Status & Repair Tracking"
+        elif re.search(r'\b(create|manage|log|record)\b', lower):
+            feature = "Defect Logging & Record Management"
+        else:
+            feature = "Defect & Repair Management"
+
+    # 3. Labour & Cost Management
+    elif re.search(r'\b(labour|labor|overtime|hourly|rate|cost|salary|timesheet|costing)\b', lower):
+        epic = "Labour & Cost Management"
+        if re.search(r'\b(overtime)\b', lower):
+            feature = "Overtime Rules & Calculation"
+        elif re.search(r'\b(rate|cost|calculate|costing|hourly)\b', lower):
+            feature = "Labour Rate & Cost Calculation"
+        else:
+            feature = "Labour Resource Management"
+
+    # 4. Communication & Notification Management
+    elif re.search(r'\b(notification|notifications|email|template|alert|cc|export|print|job card)\b', lower):
+        epic = "Job Card & Communication Management"
+        if re.search(r'\b(template|soc|approved)\b', lower):
+            feature = "Email Template Approval"
+        elif re.search(r'\b(print|export|job card|pdf|excel)\b', lower):
+            feature = "Job Card Export & Communication"
+        else:
+            feature = "Email Notification Management"
+
+    # 5. System Configuration & Field Management
+    elif re.search(r'\b(rename|configuration|field|setup|field name|specifications|power rating)\b', lower):
+        epic = "System Configuration & Equipment Setup"
+        feature = "Equipment & Field Naming Configuration"
+
+    # 6. Equipment & Vessel Asset Management
+    elif re.search(r'\b(vessel|equipment|material|materials|asset)\b', lower):
+        epic = "Equipment & Vessel Asset Management"
+        if re.search(r'\b(allocated|display|material|equipment)\b', lower):
+            feature = "Equipment & Material Allocation Display"
+        elif re.search(r'\b(select|vessel|create)\b', lower):
+            feature = "Vessel & Equipment Maintenance Log"
+        else:
+            feature = "Asset & Equipment Management"
+
+    # 7. Work Order & Maintenance Management
+    elif re.search(r'\b(work order|work orders|maintenance|servicing|schedule|start date|end date|date/time|workshop|supervisor)\b', lower) or ('work' in lower and 'order' in lower):
+        epic = "Work Order & Maintenance Management"
+        if re.search(r'\b(edit|update|detail|modify|change)\b', lower):
+            feature = "Work Order Data Modification & Updates"
+        elif re.search(r'\b(start date|end date|date/time|schedule|time)\b', lower):
+            feature = "Work Order Schedule & Time Entry"
+        elif re.search(r'\b(approve|approval|sign-off|manager|workshop)\b', lower):
+            feature = "Work Order Approval Workflow"
+        elif re.search(r'\b(status|display|current)\b', lower):
+            feature = "Work Order Status Tracking"
+        else:
+            feature = "Work Order Core Processing"
+
+    # 8. Engineering Audit & Reporting Analytics
+    elif re.search(r'\b(audit|history|version|trail|search|filter|report|reports|activity|query|engineering)\b', lower):
+        epic = "Engineering & Audit Management"
+        if re.search(r'\b(search|filter|query)\b', lower):
+            feature = "Engineering Search & Filter Querying"
+        elif re.search(r'\b(audit|history|version|trail|activity)\b', lower):
+            feature = "Audit Trail & Version History Tracking"
+        elif re.search(r'\b(report|reports|analytics)\b', lower):
+            feature = "Engineering Reporting & Data Analytics"
+        else:
+            feature = "Engineering Activity Tracking"
+
+    return epic, feature
+
 def process_all_requirements(reqs):
     """
-    Process ALL requirements as a batch with intelligent clustering:
-    
-    PHASE 1: Parse every requirement and extract all nouns + primary verb
-    PHASE 2: Count noun frequency across ALL requirements to find domain topics
-    PHASE 3: Use the most frequent nouns as Epic anchors
-    PHASE 4: Assign each requirement to the Epic whose anchor noun it contains
-    PHASE 5: Within each Epic, group by normalized verb → Features
-    PHASE 6: Generate User Stories and Acceptance Criteria
+    Process requirements into relevant and accurate Epics, Features, User Stories, and Acceptance Criteria.
     """
-    from collections import Counter
-    
-    # --- PHASE 1: Parse every requirement ---
-    parsed = []
-    all_nouns = []
-    
+    results = []
     for req in reqs:
         status = check_completeness(req)
-        nouns, verb, clean = parse_requirement(req)
-        parsed.append({
+        clean = (req or '').replace("The system shall", "").replace("the system shall", "").strip()
+        req_lower = clean.lower()
+
+        epic_name, feature_name = classify_requirement_domain(req)
+
+        # Dynamic User Story Generation
+        goal = f"the {feature_name.lower()} is executed correctly"
+        action = clean
+
+        for indicator in ["so that", "in order to", "to ensure", "to allow"]:
+            if indicator in req_lower:
+                parts = clean.split(indicator)
+                action = parts[0].strip()
+                goal = parts[1].strip()
+                break
+
+        clean_action = re.sub(r'^(the system shall allow users to|the system shall|the system must|the platform must|allow users to|users shall be allowed to|engineers shall be allowed to|engineers shall|the supervisor shall|the onshore engineer shall|onshore engineers shall|the workshop manager shall|workshop managers shall|administrators shall|the administrator shall)\s*', '', action, flags=re.IGNORECASE).strip().rstrip('.')
+        goal = goal.strip().rstrip('.')
+        user_story = f"As a System User, I want to {clean_action.lower()} so that {goal}."
+
+        ac = (
+            f"Scenario: Verify {clean_action.lower()}\n"
+            f"1. Given the system is ready for {feature_name.lower()}\n"
+            f"2. When the user initiates: {clean_action.lower()}\n"
+            f"3. Then the system must validate the request against {epic_name.lower()} rules\n"
+            f"4. And the {feature_name.lower()} state should be updated successfully."
+        )
+
+        results.append({
             "requirement": req,
             "status": status,
-            "nouns": nouns,
-            "verb": verb,
-            "clean": clean
+            "epic": epic_name,
+            "feature": feature_name,
+            "user_story": user_story,
+            "acceptance_criteria": ac
         })
-        all_nouns.extend(nouns)
-    
-    # --- PHASE 2: Find the most common nouns (these become Epic themes) ---
-    noun_freq = Counter(all_nouns)
-    
-    # Epic anchors: nouns appearing in 2+ requirements, ordered by frequency
-    epic_anchors = [noun for noun, count in noun_freq.most_common() if count >= 2]
-    
-    # If no noun appears twice, use the top nouns
-    if not epic_anchors:
-        epic_anchors = [noun for noun, _ in noun_freq.most_common(5)]
-    
-    # --- PHASE 3: Assign each requirement to an Epic AND identify sub-topic ---
-    for item in parsed:
-        assigned = None
-        for anchor in epic_anchors:
-            if anchor in item["nouns"]:
-                assigned = anchor
-                break
-        if not assigned:
-            assigned = item["nouns"][0]
-        item["epic_key"] = assigned
-        
-        # Sub-topic: the other nouns BESIDES the epic key (these define the Feature)
-        sub_nouns = [n for n in item["nouns"] if n != assigned]
-        item["sub_nouns"] = sub_nouns
-    
-    # --- PHASE 4: Group into Epics ---
-    epic_groups = {}
-    for item in parsed:
-        key = item["epic_key"]
-        if key not in epic_groups:
-            epic_groups[key] = []
-        epic_groups[key].append(item)
-    
-    results = []
-    
-    for noun_key, items in epic_groups.items():
-        epic_name = f"{noun_key.title()} Management"
-        
-        # --- PHASE 5: Within this Epic, group by sub-topic noun → Feature ---
-        # Count sub-topic nouns to find the dominant sub-themes
-        sub_noun_freq = Counter()
-        for item in items:
-            sub_noun_freq.update(item["sub_nouns"])
-        
-        # Feature anchors: sub-nouns that appear in 2+ requirements in this epic
-        feature_anchors = [n for n, c in sub_noun_freq.most_common() if c >= 2]
-        
-        # Assign each requirement to a Feature based on its sub-topic
-        for item in items:
-            assigned_feature = None
-            for anchor in feature_anchors:
-                if anchor in item["sub_nouns"]:
-                    assigned_feature = anchor
-                    break
-            if not assigned_feature:
-                # Use the first sub-noun, or fall back to the epic noun itself
-                assigned_feature = item["sub_nouns"][0] if item["sub_nouns"] else noun_key
-            item["feature_key"] = assigned_feature
-        
-        # Group by feature key
-        feature_groups = {}
-        for item in items:
-            fk = item["feature_key"]
-            if fk not in feature_groups:
-                feature_groups[fk] = []
-            feature_groups[fk].append(item)
-        
-        # --- PHASE 6: Merge tiny features (1 item) into the largest feature ---
-        if len(feature_groups) > 1:
-            largest_key = max(feature_groups, key=lambda k: len(feature_groups[k]))
-            tiny_keys = [k for k, v in feature_groups.items() if len(v) == 1 and k != largest_key]
-            for tk in tiny_keys:
-                feature_groups[largest_key].extend(feature_groups[tk])
-                del feature_groups[tk]
-        
-        # --- PHASE 7: Generate artifacts for each Feature ---
-        for feat_key, feat_items in feature_groups.items():
-            # Avoid double names like "Information Information"
-            if feat_key == noun_key:
-                feature_name = f"{noun_key.title()} Operations"
-            else:
-                feature_name = f"{feat_key.title()} {noun_key.title()}"
-            
-            for item in feat_items:
-                clean = item["clean"]
-                req_lower = clean.lower()
-                
-                # --- Dynamic User Story Generation ---
-                # Attempt to extract an existing goal from the requirement
-                goal = "the system's functional requirements are satisfied"
-                action = clean
-                
-                # Look for common goal indicators
-                for indicator in ["so that", "in order to", "to ensure", "to allow"]:
-                    if indicator in req_lower:
-                        parts = clean.split(indicator)
-                        action = parts[0].strip()
-                        goal = parts[1].strip()
-                        break
-                
-                # If no goal found, create a specific one based on the feature
-                if goal == "the system's functional requirements are satisfied":
-                    goal = f"the {feature_name.lower()} is processed correctly"
 
-                user_story = f"As a System User, I want to {action.lower()} so that {goal}."
-                
-                # --- Dynamic Acceptance Criteria ---
-                ac = (
-                    f"Scenario: Verify {action.lower()}\n"
-                    f"1. Given the system is ready for {feature_name.lower()}\n"
-                    f"2. When the user initiates: {action.lower()}\n"
-                    f"3. Then the system must validate the request against {epic_name.lower()} rules\n"
-                    f"4. And the {feature_name.lower()} state should be updated successfully."
-                )
-                
-                results.append({
-                    "requirement": item["requirement"],
-                    "status": item["status"],
-                    "epic": epic_name,
-                    "feature": feature_name,
-                    "user_story": user_story,
-                    "acceptance_criteria": ac
-                })
-    
     return results
 
 

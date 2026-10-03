@@ -278,12 +278,4 @@ const AllocationBoard = ({ assignments, developers, onRebalance, onSave, onTaskM
   );
 };
 
-const AllocationBoardWithDnD = (props) => {
-  return (
-    <DndProvider backend={HTML5Backend}>
-      <AllocationBoard {...props} />
-    </DndProvider>
-  );
-};
-
-export default AllocationBoardWithDnD;
+export default AllocationBoard;
