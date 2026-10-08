@@ -115,7 +115,7 @@ export default function DashboardView({
                 <span>Development Artifacts</span>
               </div>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-600 text-white">
-                Member 1
+                Phase 1
               </span>
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-300">
@@ -133,7 +133,7 @@ export default function DashboardView({
                 <span>Project Management & Re-Planning</span>
               </div>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-600 text-white">
-                Member 2 (Your Module)
+                Phase 2
               </span>
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-300">

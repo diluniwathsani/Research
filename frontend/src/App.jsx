@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
@@ -11,7 +11,13 @@ import ResourceManagementModule from './components/ResourceManagementModule';
 import ProjectManagementModule from './components/ProjectManagementModule';
 import ChangeRequestModule from './components/ChangeRequestModule';
 
-function App() {
+// Auth Components
+import { AuthProvider, useAuth } from './context/AuthContext';
+import AuthModal from './components/AuthModal';
+
+function MainLayout() {
+  const { user, isAuthenticated } = useAuth();
+
   // --- STATE MANAGEMENT ---
   const [requirements, setRequirements] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -20,6 +26,7 @@ function App() {
   
   // Navigation tab: 'artifacts', 'dashboard', 'resources', 'projects', 'changerequests'
   const [activeTab, setActiveTab] = useState('artifacts');
+  const [projectInitialTab, setProjectInitialTab] = useState('sprint-plan');
 
   // --- THEME SYNC ---
   useEffect(() => {
@@ -30,26 +37,37 @@ function App() {
     }
   }, [isDark]);
 
-  // --- API HANDLERS ---
-  const fetchRequirements = async () => {
+  // --- API HANDLERS (ISOLATED PER USER EMAIL) ---
+  const fetchRequirements = useCallback(async () => {
+    if (!user?.email) {
+      setRequirements([]);
+      return;
+    }
+
     try {
-      const res = await axios.get('http://localhost:3000/api/requirements');
-      setRequirements(res.data);
+      setError(null);
+      const res = await axios.get(`http://localhost:3000/api/requirements?email=${encodeURIComponent(user.email)}`);
+      setRequirements(res.data || []);
     } catch (err) {
       console.error(err);
-      setError("Failed to fetch requirements from backend.");
+      setError("Failed to fetch user requirements from backend.");
     }
-  };
+  }, [user?.email]);
 
+  // Auto-refresh and isolate data when user account changes or signs in
   useEffect(() => {
-    fetchRequirements();
-  }, []);
+    if (user?.email) {
+      fetchRequirements();
+    } else {
+      setRequirements([]);
+    }
+  }, [user?.email, fetchRequirements]);
 
   const handleProcess = async () => {
     setLoading(true);
     setError(null);
     try {
-      await axios.post('http://localhost:3000/api/process');
+      await axios.post('http://localhost:3000/api/process', { email: user?.email });
       await fetchRequirements();
     } catch (err) {
       console.error(err);
@@ -60,7 +78,8 @@ function App() {
   };
 
   const handleExport = () => {
-    window.location.href = 'http://localhost:3000/api/export';
+    const emailParam = user?.email ? `?email=${encodeURIComponent(user.email)}` : '';
+    window.location.href = `http://localhost:3000/api/export${emailParam}`;
   };
 
   // Count epics for sidebar stat badge
@@ -70,7 +89,7 @@ function App() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 transition-colors duration-200 font-sans antialiased">
       
-      {/* Top Admin Header */}
+      {/* Top Header */}
       <Header 
         isDark={isDark} 
         setIsDark={setIsDark} 
@@ -112,6 +131,7 @@ function App() {
               onFetchRequirements={fetchRequirements}
               onProcess={handleProcess}
               onExport={handleExport}
+              onNavigateToSprintPlan={() => setActiveTab('projects')}
             />
           )}
 
@@ -120,21 +140,35 @@ function App() {
           )}
 
           {activeTab === 'projects' && (
-            <ProjectManagementModule requirements={requirements} />
+            <ProjectManagementModule 
+              requirements={requirements} 
+              initialTab={projectInitialTab}
+              onNavigateToArtifacts={() => setActiveTab('artifacts')}
+              onNavigateToChangeRequests={() => setActiveTab('changerequests')}
+              onNavigateToResources={() => setActiveTab('resources')}
+            />
           )}
 
           {activeTab === 'changerequests' && (
-            <ChangeRequestModule requirements={requirements} />
+            <ChangeRequestModule />
           )}
 
         </main>
       </div>
 
-      {/* Admin Dashboard Footer */}
+      {/* Global Auth Modal */}
+      <AuthModal />
+
+      {/* Footer */}
       <Footer />
     </div>
   );
 }
 
-export default App;
-
+export default function App() {
+  return (
+    <AuthProvider>
+      <MainLayout />
+    </AuthProvider>
+  );
+}

@@ -30,8 +30,10 @@ const pool = new Pool({
                 user_story TEXT,
                 acceptance_criteria TEXT,
                 batch_name TEXT DEFAULT 'Untitled Batch',
-                created_at TEXT
-            )
+                created_at TEXT,
+                user_email TEXT
+            );
+            ALTER TABLE requirements ADD COLUMN IF NOT EXISTS user_email TEXT;
         `);
         client.release();
     } catch (err) {

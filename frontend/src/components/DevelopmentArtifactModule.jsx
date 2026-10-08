@@ -9,7 +9,8 @@ export default function DevelopmentArtifactModule({
   error, 
   onFetchRequirements, 
   onProcess, 
-  onExport 
+  onExport,
+  onNavigateToSprintPlan
 }) {
   return (
     <div className="space-y-6">
@@ -103,7 +104,11 @@ export default function DevelopmentArtifactModule({
           </span>
         </div>
 
-        <RequirementsTable requirements={requirements} onUpdate={onFetchRequirements} />
+        <RequirementsTable 
+          requirements={requirements} 
+          onUpdate={onFetchRequirements} 
+          onNavigateToSprintPlan={onNavigateToSprintPlan}
+        />
       </section>
 
     </div>

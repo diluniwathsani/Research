@@ -1,8 +1,10 @@
 import React, { useState, useRef } from 'react';
 import axios from 'axios';
 import { Upload as UploadIcon, File, Tag } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function FileUpload({ onUploadSuccess }) {
+  const { user } = useAuth();
   // State to hold the currently selected Excel file
   const [file, setFile] = useState(null);
   // State for the custom batch name
@@ -27,7 +29,18 @@ export default function FileUpload({ onUploadSuccess }) {
     // FormData is required to safely transmit files via HTTP requests
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('batch_name', batchName || file.name.split('.')[0]); // Fallback to filename
+    const effectiveBatchName = batchName || file.name.split('.')[0];
+    formData.append('batch_name', effectiveBatchName); // Fallback to filename
+    if (user?.email) {
+      formData.append('user_email', user.email);
+    }
+
+    try {
+      const email = user?.email || localStorage.getItem('user_email') || 'default';
+      localStorage.setItem('active_requirements_batch', effectiveBatchName);
+      localStorage.setItem(`active_requirements_batch_${email}`, effectiveBatchName);
+      localStorage.setItem('active_project_name', effectiveBatchName);
+    } catch (_) {}
 
     try {
       // POST the file to the backend API

@@ -1,22 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { LayoutDashboard, FileCode, Users, Calendar, GitPullRequest, Sparkles, ChevronRight, Layers } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount }) {
-  const [member2Stats, setMember2Stats] = useState({ stories: 0, sprints: 0 });
+  const { user } = useAuth();
+  const [plannedStats, setPlannedStats] = useState({ stories: 0, sprints: 0 });
+
+  const loadPlannedStats = () => {
+    const email = user?.email || localStorage.getItem('user_email');
+    if (!email || reqCount === 0) {
+      setPlannedStats({ stories: 0, sprints: 0 });
+      return;
+    }
+
+    const storedSprints = parseInt(localStorage.getItem(`planned_sprints_${email}`) || '0', 10);
+    const storedStories = parseInt(localStorage.getItem(`planned_stories_${email}`) || '0', 10);
+
+    setPlannedStats({
+      stories: storedStories || 0,
+      sprints: storedSprints || 0,
+    });
+  };
 
   useEffect(() => {
-    fetch("http://localhost:8080/api/stories")
-      .then((res) => res.json())
-      .then((data) => {
-        const storiesList = data.stories || [];
-        setMember2Stats({
-          stories: storiesList.length,
-          sprints: Math.ceil(storiesList.length / 5),
-        });
-      })
-      .catch((err) => console.error("Sidebar API Error:", err));
-  }, []);
+    loadPlannedStats();
 
+    const handleUpdate = () => loadPlannedStats();
+    window.addEventListener('sprints-updated', handleUpdate);
+    return () => window.removeEventListener('sprints-updated', handleUpdate);
+  }, [user?.email, reqCount]);
+
+  const effectiveStories = plannedStats.stories;
+  const effectiveSprints = plannedStats.sprints;
+
+  // Re-ordered in the requested sequence:
+  // 1. Requirement (Development Artifacts) -> 2. Project Management -> 3. Resource Management -> 4. Change Requests -> 5. Executive Overview
+  // Preserving previous developer's original exact labels and texts
   const menuItems = [
     {
       id: 'artifacts',
@@ -27,12 +46,12 @@ export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount }
       color: 'from-purple-500 to-indigo-600',
     },
     {
-      id: 'dashboard',
-      label: 'Executive Overview',
-      subtitle: 'Landing Page & Charts',
-      icon: LayoutDashboard,
-      badge: null,
-      color: 'from-blue-500 to-indigo-600',
+      id: 'projects',
+      label: 'Project Management',
+      subtitle: 'AI Sprint Planning',
+      icon: Calendar,
+      badge: effectiveStories > 0 ? `${effectiveStories} Stories` : 'Blank',
+      color: 'from-emerald-500 to-teal-600',
     },
     {
       id: 'resources',
@@ -43,20 +62,20 @@ export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount }
       color: 'from-slate-400 to-slate-500',
     },
     {
-      id: 'projects',
-      label: 'Project Management',
-      subtitle: 'AI Sprint Planning',
-      icon: Calendar,
-      badge: member2Stats.stories > 0 ? `${member2Stats.stories} Stories` : 'Active',
-      color: 'from-emerald-500 to-teal-600',
-    },
-    {
       id: 'changerequests',
       label: 'Change Requests',
       subtitle: 'Reserved for Team Member',
       icon: GitPullRequest,
       badge: 'Blank',
       color: 'from-slate-400 to-slate-500',
+    },
+    {
+      id: 'dashboard',
+      label: 'Executive Overview',
+      subtitle: 'Landing Page & Charts',
+      icon: LayoutDashboard,
+      badge: null,
+      color: 'from-blue-500 to-indigo-600',
     },
   ];
 
@@ -133,7 +152,7 @@ export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount }
             <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider flex items-center gap-1">
               <Sparkles size={12} /> Global ML Stats
             </span>
-            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span className={`w-2 h-2 rounded-full ${reqCount > 0 ? 'bg-emerald-400' : 'bg-slate-500'}`}></span>
           </div>
           
           <div className="grid grid-cols-2 gap-2 my-2 text-center">
@@ -147,11 +166,11 @@ export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount }
             </div>
             <div className="bg-emerald-900/20 p-1.5 rounded-lg border border-emerald-500/30">
               <span className="text-[9px] text-emerald-400 block uppercase">Stories</span>
-              <span className="text-sm font-bold text-white">{member2Stats.stories}</span>
+              <span className="text-sm font-bold text-white">{effectiveStories}</span>
             </div>
             <div className="bg-emerald-900/20 p-1.5 rounded-lg border border-emerald-500/30">
               <span className="text-[9px] text-emerald-400 block uppercase">Sprints</span>
-              <span className="text-sm font-bold text-emerald-300">{member2Stats.sprints}</span>
+              <span className="text-sm font-bold text-emerald-300">{effectiveSprints}</span>
             </div>
           </div>
           

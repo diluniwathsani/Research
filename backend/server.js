@@ -16,18 +16,19 @@ app.use(express.json());
 const upload = multer({ dest: 'uploads/' });
 
 // --- ENDPOINT: Upload Excel ---
-// Receives an Excel file, parses it, and saves requirements to Neon PostgreSQL database.
+// Receives an Excel file, parses it, and saves requirements associated with the user's email.
 app.post('/api/upload', upload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
     try {
-        const { batch_name } = req.body;
+        const { batch_name, user_email } = req.body;
         const workbook = xlsx.readFile(req.file.path);
         const sheetName = workbook.SheetNames[0];
         const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
         // Use a single timestamp for all requirements in this upload session
         const uploadTime = new Date().toISOString();
+        const activeEmail = (user_email || 'default@research.org').trim().toLowerCase();
 
         const client = await db.connect();
         try {
@@ -42,14 +43,14 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
                           || (Object.keys(row).length > 1 ? row[Object.keys(row)[1]] : row[Object.keys(row)[0]]);
                 if (text) {
                     await client.query(
-                        "INSERT INTO requirements (requirement_sentence, created_at, batch_name) VALUES ($1, $2, $3)",
-                        [text, uploadTime, batch_name || 'Untitled Batch']
+                        "INSERT INTO requirements (requirement_sentence, created_at, batch_name, user_email) VALUES ($1, $2, $3, $4)",
+                        [text, uploadTime, batch_name || 'Untitled Batch', activeEmail]
                     );
                 }
             }
 
             await client.query('COMMIT');
-            res.json({ message: 'File uploaded and parsed successfully' });
+            res.json({ message: 'File uploaded and parsed successfully', user_email: activeEmail });
         } catch (dbErr) {
             await client.query('ROLLBACK');
             console.error('Upload DB error:', dbErr);
@@ -63,9 +64,26 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     }
 });
 
-// Get Requirements
+// Get Requirements (Filtered by user_email if provided)
 app.get('/api/requirements', async (req, res) => {
     try {
+        const { email } = req.query;
+        if (email) {
+            const cleanEmail = email.trim().toLowerCase();
+            // Fetch requirements specific to this user email
+            let result = await db.query(
+                "SELECT * FROM requirements WHERE LOWER(user_email) = $1 ORDER BY id DESC",
+                [cleanEmail]
+            );
+            
+            // If user is a seeded demo account and hasn't uploaded unique data yet, allow fallback to general dataset
+            if (result.rows.length === 0 && (cleanEmail === 'diluni@research.org' || cleanEmail === 'kaveen@research.org' || cleanEmail === 'vihanga@research.org')) {
+                result = await db.query("SELECT * FROM requirements WHERE user_email IS NULL OR LOWER(user_email) = $1 ORDER BY id DESC", [cleanEmail]);
+            }
+
+            return res.json(result.rows);
+        }
+
         const result = await db.query("SELECT * FROM requirements ORDER BY id DESC");
         res.json(result.rows);
     } catch (err) {
@@ -90,7 +108,6 @@ app.put('/api/requirements/:id', async (req, res) => {
 });
 
 // --- ENDPOINT: Rename a Batch ---
-// Updates the batch_name for all requirements that share a specific created_at timestamp.
 app.put('/api/batches/:timestamp', async (req, res) => {
     const { batch_name } = req.body;
     const { timestamp } = req.params;
@@ -108,13 +125,21 @@ app.put('/api/batches/:timestamp', async (req, res) => {
 });
 
 // --- ENDPOINT: Process Requirements (Validation & Generation) ---
-// Triggers the Python AI service to perform NLP analysis and artifact generation.
 app.post('/api/process', async (req, res) => {
     try {
-        const result = await db.query("SELECT id, requirement_sentence FROM requirements");
+        const { email } = req.body;
+        let queryStr = "SELECT id, requirement_sentence FROM requirements";
+        let params = [];
+
+        if (email) {
+            queryStr += " WHERE LOWER(user_email) = $1 OR user_email IS NULL";
+            params.push(email.trim().toLowerCase());
+        }
+
+        const result = await db.query(queryStr, params);
         const rows = result.rows;
 
-        if (rows.length === 0) return res.status(400).json({ error: 'No requirements found' });
+        if (rows.length === 0) return res.status(400).json({ error: 'No requirements found for this user.' });
 
         const sentences = rows.map(r => r.requirement_sentence);
         const scriptPath = path.join(__dirname, 'ai_service.py');
@@ -136,7 +161,6 @@ app.post('/api/process', async (req, res) => {
         pythonProcess.on('close', async (code) => {
             if (code !== 0) {
                 console.error("Python script error:", stderr);
-                // Fallback to simple logic if Python is not available or fails
                 const fallbackResults = rows.map(r => ({
                     id: r.id,
                     status: r.requirement_sentence.length > 20 ? 'Complete' : 'Incomplete: Too short',
@@ -151,12 +175,10 @@ app.post('/api/process', async (req, res) => {
             }
 
             try {
-                // Parse the JSON output from the Python script
                 const results = JSON.parse(stdout);
                 const idLookup = {};
                 rows.forEach(r => { idLookup[r.requirement_sentence] = r.id; });
                 
-                // Map results back to original DB IDs
                 const finalResults = results.map(resultItem => ({
                     ...resultItem,
                     id: idLookup[resultItem.requirement]
@@ -168,7 +190,6 @@ app.post('/api/process', async (req, res) => {
             }
         });
         
-        // Send requirements data to Python via stdin
         pythonProcess.stdin.write(JSON.stringify(sentences));
         pythonProcess.stdin.end();
 
@@ -242,7 +263,16 @@ app.get('/api/export/batch', async (req, res) => {
 // Export all to Excel
 app.get('/api/export', async (req, res) => {
     try {
-        const result = await db.query("SELECT * FROM requirements ORDER BY id ASC");
+        const { email } = req.query;
+        let queryStr = "SELECT * FROM requirements";
+        let params = [];
+        if (email) {
+            queryStr += " WHERE LOWER(user_email) = $1";
+            params.push(email.trim().toLowerCase());
+        }
+        queryStr += " ORDER BY id ASC";
+
+        const result = await db.query(queryStr, params);
         const rows = result.rows;
         
         const worksheet = xlsx.utils.json_to_sheet(rows);
@@ -257,6 +287,149 @@ app.get('/api/export', async (req, res) => {
         console.error(err);
         res.status(500).json({ error: err.message });
     }
+});
+
+// =========================================================================
+// AUTHENTICATION SYSTEM (EMAIL/PASSWORD & GOOGLE OAUTH)
+// =========================================================================
+
+let usersDb = [
+    {
+        id: 'usr_1',
+        name: 'Vihanga Pooliyadda',
+        email: 'vihanga@research.org',
+        password: 'password123',
+        avatar: 'VP',
+        provider: 'local',
+        created_at: new Date().toISOString()
+    },
+    {
+        id: 'usr_2',
+        name: 'Diluni Wathsani',
+        email: 'diluni@research.org',
+        password: 'password123',
+        avatar: 'DW',
+        provider: 'local',
+        created_at: new Date().toISOString()
+    },
+    {
+        id: 'usr_3',
+        name: 'Kaveen Perera',
+        email: 'kaveen@research.org',
+        password: 'password123',
+        avatar: 'KP',
+        provider: 'local',
+        created_at: new Date().toISOString()
+    }
+];
+
+// Helper to generate initials avatar
+const getInitials = (name) => {
+    if (!name) return 'U';
+    const parts = name.trim().split(' ');
+    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    return name.slice(0, 2).toUpperCase();
+};
+
+// 1. Sign In Endpoint
+app.post('/api/auth/signin', (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) {
+        return res.status(400).json({ status: 'error', message: 'Email and password are required' });
+    }
+
+    const user = usersDb.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (!user || user.password !== password) {
+        return res.status(401).json({ status: 'error', message: 'Invalid email or password' });
+    }
+
+    res.json({
+        status: 'success',
+        message: `Welcome back, ${user.name}!`,
+        token: `jwt_token_${user.id}_${Date.now()}`,
+        user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            avatar: user.avatar || getInitials(user.name),
+            provider: user.provider
+        }
+    });
+});
+
+// 2. Sign Up Endpoint
+app.post('/api/auth/signup', (req, res) => {
+    const { name, email, password } = req.body;
+    if (!name || !email || !password) {
+        return res.status(400).json({ status: 'error', message: 'Name, email, and password are required' });
+    }
+
+    const existingUser = usersDb.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (existingUser) {
+        return res.status(400).json({ status: 'error', message: 'An account with this email already exists. Please Sign In.' });
+    }
+
+    const newUser = {
+        id: `usr_${Date.now()}`,
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        password: password,
+        avatar: getInitials(name),
+        provider: 'local',
+        created_at: new Date().toISOString()
+    };
+
+    usersDb.push(newUser);
+
+    res.json({
+        status: 'success',
+        message: 'Account created successfully! Welcome to ReqEngine AI.',
+        token: `jwt_token_${newUser.id}_${Date.now()}`,
+        user: {
+            id: newUser.id,
+            name: newUser.name,
+            email: newUser.email,
+            avatar: newUser.avatar,
+            provider: newUser.provider
+        }
+    });
+});
+
+// 3. Google OAuth / Social Login Endpoint
+app.post('/api/auth/google', (req, res) => {
+    const { google_email, google_name, google_avatar, google_id } = req.body;
+    const email = (google_email || 'user@gmail.com').trim().toLowerCase();
+    const name = (google_name || 'Google User').trim();
+
+    let user = usersDb.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (!user) {
+        // Create new account for Google user
+        user = {
+            id: `usr_google_${Date.now()}`,
+            name: name,
+            email: email,
+            password: `g_oauth_${Date.now()}`,
+            avatar: getInitials(name),
+            photo_url: google_avatar,
+            provider: 'google',
+            created_at: new Date().toISOString()
+        };
+        usersDb.push(user);
+    }
+
+    res.json({
+        status: 'success',
+        message: `Signed in with Google as ${user.name}!`,
+        token: `jwt_google_token_${user.id}_${Date.now()}`,
+        user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            avatar: user.avatar,
+            photo_url: user.photo_url,
+            provider: 'google'
+        }
+    });
 });
 
 const PORT = process.env.PORT || 3000;

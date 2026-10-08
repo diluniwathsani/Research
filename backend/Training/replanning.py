@@ -1,17 +1,24 @@
 import pandas as pd
 import os
+import sys
 import pickle
 import numpy as np
 import json
 from datetime import datetime
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
 
 print("=" * 60)
 print("DYNAMIC RE-PLANNING MODULE")
 print("(Triggered by Member 4 - Change Management)")
 print("=" * 60)
 
-base = os.path.join("C:", os.sep, "Users", "lap.lk",
-                    "Desktop", "Research 4.1")
+training_dir = os.path.dirname(os.path.abspath(__file__))
+models_dir = os.path.join(training_dir, "sprint-models")
+remote_base = os.path.join("C:", os.sep, "Users", "lap.lk", "Desktop", "Research 4.1")
+base = remote_base if os.path.exists(remote_base) else training_dir
+models_base = remote_base if os.path.exists(remote_base) else models_dir
 
 # ============================================
 print("\n[STEP 1] LOADING EXISTING SPRINT PLAN...")
@@ -83,9 +90,9 @@ print("[STEP 3] PROCESSING CHANGE BASED ON TYPE...")
 # ============================================
 
 # Load priority model
-with open(os.path.join(base, "priority_model.pkl"), "rb") as f:
+with open(os.path.join(models_base, "priority_model.pkl"), "rb") as f:
     priority_model = pickle.load(f)
-with open(os.path.join(base, "priority_tfidf.pkl"), "rb") as f:
+with open(os.path.join(models_base, "priority_tfidf.pkl"), "rb") as f:
     tfidf = pickle.load(f)
 
 change_type = change_alert["change_type"]
