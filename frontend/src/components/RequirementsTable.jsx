@@ -122,8 +122,8 @@ export default function RequirementsTable({ requirements, onUpdate, onNavigateTo
     batchNumberMap[key] = `${batchPrefix} ${index + 1}`;
   });
 
-  // 3. Prepare for Display (Newest First for the UI list)
-  const displayKeys = [...chronologicalKeys].reverse();
+  // 3. Prepare for Display (FIFO Order matching original Excel upload sequence)
+  const displayKeys = [...chronologicalKeys];
 
   const toggleSection = (id) => {
     setExpandedSections(prev => ({ ...prev, [id]: !prev[id] }));
@@ -247,20 +247,22 @@ export default function RequirementsTable({ requirements, onUpdate, onNavigateTo
         </div>
       )}
 
-      {/* Configuration Header: Allow changing the Batch Prefix */}
-      <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
-        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
-          Display Label:
-        </label>
-        <input 
-          type="text" 
-          value={batchPrefix}
-          onChange={(e) => setBatchPrefix(e.target.value)}
-          placeholder="e.g. Module, Sprint, Set"
-          className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-bold text-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all w-48"
-        />
-        <span className="text-[10px] text-slate-400 italic font-medium">
-          (Changes all "Requirement Set" labels below)
+      {/* Configuration Header: Allow changing the Batch Prefix & Total Records */}
+      <div className="flex items-center justify-between gap-4 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
+        <div className="flex items-center gap-3">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+            Display Label:
+          </label>
+          <input 
+            type="text" 
+            value={batchPrefix}
+            onChange={(e) => setBatchPrefix(e.target.value)}
+            placeholder="e.g. Module, Sprint, Set"
+            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-bold text-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all w-48"
+          />
+        </div>
+        <span className="bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-xs font-bold py-1 px-3.5 rounded-full border border-indigo-200 dark:border-indigo-800">
+          Total Records: {requirements?.length || 0}
         </span>
       </div>
 
@@ -390,10 +392,21 @@ export default function RequirementsTable({ requirements, onUpdate, onNavigateTo
             {/* FOLDER CONTENT */}
             {isBatchExpanded && (
               <div className="mt-6 space-y-6 pl-8 border-l-4 border-slate-100 dark:border-slate-800 ml-10 animate-in slide-in-from-top-4 duration-500">
-                {Object.entries(domains).map(([domain, reqs]) => {
+                {Object.entries(domains)
+                  .sort((a, b) => {
+                    const minOrderA = Math.min(...a[1].map(r => r.requirement_order !== undefined && r.requirement_order !== null ? Number(r.requirement_order) : (Number(r.id) || 999999)));
+                    const minOrderB = Math.min(...b[1].map(r => r.requirement_order !== undefined && r.requirement_order !== null ? Number(r.requirement_order) : (Number(r.id) || 999999)));
+                    return minOrderA - minOrderB;
+                  })
+                  .map(([domain, reqs]) => {
+                  const sortedReqs = [...reqs].sort((a, b) => {
+                    const orderA = a.requirement_order !== undefined && a.requirement_order !== null ? Number(a.requirement_order) : (Number(a.id) || 999999);
+                    const orderB = b.requirement_order !== undefined && b.requirement_order !== null ? Number(b.requirement_order) : (Number(b.id) || 999999);
+                    return orderA - orderB;
+                  });
                   const sectionId = `${batchKey}-${domain}`;
                   const isExpanded = expandedSections[sectionId] !== false; 
-                  const completeCount = reqs.filter(r => r.completeness_status?.includes('Complete')).length;
+                  const completeCount = sortedReqs.filter(r => r.completeness_status?.includes('Complete')).length;
                   
                   return (
                     <div 
@@ -417,18 +430,18 @@ export default function RequirementsTable({ requirements, onUpdate, onNavigateTo
                             <h3 className="font-extrabold text-slate-800 dark:text-white flex items-center gap-3 text-base tracking-tight uppercase">
                               {domain}
                               <span className="text-[10px] font-black px-2.5 py-1 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-full tracking-normal">
-                                {reqs.length}
+                                {sortedReqs.length}
                               </span>
                             </h3>
-                            <div className="flex items-center gap-4 mt-1.5">
+                              <div className="flex items-center gap-4 mt-1.5">
                               <div className="w-40 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                                 <div 
-                                  className="h-full bg-gradient-to-r from-green-400 to-green-600 transition-all duration-1000 ease-out" 
-                                  style={{ width: `${(completeCount / reqs.length) * 100}%` }}
+                                  className="h-full bg-gradient-to-r from-purple-400 to-indigo-600 transition-all duration-1000 ease-out" 
+                                  style={{ width: '100%' }}
                                 ></div>
                               </div>
                               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                {Math.round((completeCount / reqs.length) * 100)}% COMPLETE
+                                {sortedReqs.length} ARTIFACTS GENERATED
                               </span>
                             </div>
                           </div>
@@ -450,13 +463,13 @@ export default function RequirementsTable({ requirements, onUpdate, onNavigateTo
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/30">
-                              {reqs.map((req, idx) => {
-                                const isIncomplete = req.completeness_status?.includes("Incomplete");
+                              {sortedReqs.map((req, idx) => {
                                 const showOutcomes = expandedOutcomes[req.id] || false;
+                                const displaySeq = req.requirement_order !== undefined && req.requirement_order !== null ? req.requirement_order : (idx + 1);
                                 return (
                                   <React.Fragment key={req.id}>
                                     <tr className={`transition-colors ${showOutcomes ? 'bg-primary/[0.01]' : 'hover:bg-slate-50/50 dark:hover:bg-slate-700/10'}`}>
-                                      <td className="px-6 py-6 font-mono text-slate-300 dark:text-slate-600 text-xs align-top pt-8">{String(idx + 1).padStart(2, '0')}</td>
+                                      <td className="px-6 py-6 font-mono text-slate-300 dark:text-slate-600 text-xs align-top pt-8">{String(displaySeq).padStart(2, '0')}</td>
                                       <td className="px-6 py-6 align-top">
                                         {editingId === req.id ? (
                                           <div className="flex flex-col gap-3">
@@ -472,16 +485,13 @@ export default function RequirementsTable({ requirements, onUpdate, onNavigateTo
                                           </div>
                                         ) : (
                                           <div className="space-y-4">
-                                            <p className={`text-base leading-relaxed font-medium tracking-tight ${isIncomplete ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>
+                                            <p className="text-base leading-relaxed font-medium tracking-tight text-slate-700 dark:text-slate-200">
                                               {req.requirement_sentence}
                                             </p>
                                             <div className="flex items-center gap-4">
-                                              <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-lg text-[9px] font-black border uppercase tracking-widest shadow-sm
-                                                ${isIncomplete ? 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-100 dark:border-red-500/20' : 
-                                                  req.completeness_status?.includes('Complete') ? 'bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 border-green-100 dark:border-green-500/20' : 
-                                                  'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-600'}`}>
-                                                {isIncomplete ? <AlertCircle size={12} className="animate-pulse" /> : (req.completeness_status?.includes('Complete') ? <CheckCircle size={12} /> : null)}
-                                                {req.completeness_status || "Awaiting Analysis"}
+                                              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-lg text-[9px] font-black border uppercase tracking-widest shadow-sm bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-100 dark:border-purple-500/20">
+                                                <CheckCircle size={12} />
+                                                {req.user_story ? 'Agile User Story Artifact Ready' : 'Development Artifact Generated'}
                                               </span>
                                               
                                               {req.epic && (
