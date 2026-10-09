@@ -274,7 +274,7 @@ export default function RequirementsTable({ requirements, onUpdate, onNavigateTo
         const batchData = processedGroups[batchKey];
         const domains = batchData.requirements;
         const batchTotal = Object.values(domains).flat().length;
-        const isBatchExpanded = expandedSections[batchKey] !== false;
+        const isBatchExpanded = Boolean(expandedSections[batchKey]);
         const setTitle = batchNumberMap[batchKey];
 
         return (
