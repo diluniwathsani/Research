@@ -16,20 +16,43 @@ export default function SprintTimelineWizardModal({
 }) {
   if (!isOpen) return null;
 
+  // Local device date formatting helpers (avoids UTC offset day-shift bugs)
+  const formatLocalDate = (d) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const getTodayDate = () => {
+    return formatLocalDate(new Date());
+  };
+
   // Helper to compute next Monday as default
   const getDefaultStartDate = () => {
     const d = new Date();
     const day = d.getDay();
     const diff = (day === 0 ? 1 : (day === 1 ? 7 : 8 - day));
-    const nextMon = new Date(d);
-    nextMon.setDate(d.getDate() + diff);
-    return nextMon.toISOString().split('T')[0];
+    const nextMon = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff);
+    return formatLocalDate(nextMon);
   };
 
   const getFirstOfNextMonth = () => {
     const d = new Date();
     const nextMonth = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-    return nextMonth.toISOString().split('T')[0];
+    return formatLocalDate(nextMonth);
+  };
+
+  const formatDisplayDate = (dateStr) => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    const day = parseInt(parts[2], 10);
+    if (!year || !month || !day) return dateStr;
+    const d = new Date(year, month - 1, day);
+    return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   };
 
   // State for all 7 questions with Suggested Presets, Type Custom, and Multi-Select
@@ -428,7 +451,7 @@ export default function SprintTimelineWizardModal({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
                     { date: getDefaultStartDate(), label: "⚡ Next Monday", desc: "Standard sprint kick-off day for engineering teams", recommended: true },
-                    { date: new Date().toISOString().split('T')[0], label: "📍 Today", desc: "Start counting working days immediately from today" },
+                    { date: getTodayDate(), label: "📍 Today", desc: "Start counting working days immediately from today" },
                     { date: getFirstOfNextMonth(), label: "🌟 1st of Next Month", desc: "Align sprint cycles with monthly accounting milestones" }
                   ].map((preset) => (
                     <div
@@ -465,7 +488,7 @@ export default function SprintTimelineWizardModal({
                     />
                   </div>
                   <div className="text-xs text-indigo-300/90 font-bold bg-indigo-950/40 p-3 rounded-xl border border-indigo-800/40">
-                    📅 Selected Start Date: <span className="text-white font-extrabold">{new Date(q2StartDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                    📅 Selected Start Date: <span className="text-white font-extrabold">{formatDisplayDate(q2StartDate)}</span>
                   </div>
                 </div>
               )}
