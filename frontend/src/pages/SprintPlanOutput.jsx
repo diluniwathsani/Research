@@ -17,7 +17,7 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
   const [sprints, setSprints] = useState([]);
   const [stats, setStats] = useState(null);
   const [benchmark, setBenchmark] = useState(null);
-  const [capacities, setCapacities] = useState([30, 28, 30]);
+  const [capacities, setCapacities] = useState([]);
   const [optimizing, setOptimizing] = useState(false);
   const [dagData, setDagData] = useState(null);
   const [ganttData, setGanttData] = useState(null);
@@ -39,21 +39,29 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
     try {
       const email = localStorage.getItem('user_email') || 'default';
       stored = parseInt(
-        localStorage.getItem(`planned_sprints_${email}`) || 
-        localStorage.getItem('total_sprints_count') || 
         localStorage.getItem('target_sprint_count') || 
+        localStorage.getItem('total_sprints_count') || 
+        localStorage.getItem(`planned_sprints_${email}`) || 
         '0', 
         10
       );
     } catch (_) {}
+
+    const taskSprints = (allTasks || []).map(t => parseInt(t.sprint_number || 1)).filter(n => n > 0);
+    const maxTaskSprint = taskSprints.length > 0 ? Math.max(...taskSprints) : 0;
+
+    if (stored > 0) {
+      return Math.max(stored, maxTaskSprint);
+    }
+
     return Math.max(
+      maxTaskSprint,
       ganttData?.sprints?.length || 0,
-      sprints?.length || 0,
+      sprints?.filter(s => (s.stories && s.stories.length > 0) || s.total_points > 0)?.length || 0,
       capacities?.length || 0,
-      stored,
-      3
+      1
     );
-  }, [ganttData, sprints, capacities]);
+  }, [ganttData, sprints, capacities, allTasks]);
 
   const [projectName, setProjectName] = useState("");
 
@@ -325,16 +333,21 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
     try {
       const email = localStorage.getItem('user_email') || 'default';
       const storedCount = parseInt(
-        localStorage.getItem(`planned_sprints_${email}`) || 
-        localStorage.getItem('total_sprints_count') || 
         localStorage.getItem('target_sprint_count') || 
+        localStorage.getItem('total_sprints_count') || 
+        localStorage.getItem(`planned_sprints_${email}`) || 
         '0', 
         10
       );
+      const taskSprints = taskList.map(t => parseInt(t.sprint_number || 1)).filter(n => n > 0);
+      const maxTaskSprint = taskSprints.length > 0 ? Math.max(...taskSprints) : 0;
       const capCount = (data.capacities && Array.isArray(data.capacities)) ? data.capacities.length : 0;
       const sprintDictKeys = data.sprints ? Object.keys(data.sprints).map(k => parseInt(k)).filter(n => n > 0) : [];
       const maxDictSprint = sprintDictKeys.length > 0 ? Math.max(...sprintDictKeys) : 0;
-      const totalPlanned = Math.max(storedCount, capCount, maxDictSprint, 3);
+      
+      const totalPlanned = storedCount > 0 
+        ? Math.max(storedCount, maxTaskSprint)
+        : Math.max(maxTaskSprint, capCount, maxDictSprint, 1);
 
       for (let s = 1; s <= totalPlanned; s++) {
         if (!groupedSprints[s]) {

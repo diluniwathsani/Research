@@ -17,41 +17,64 @@ export default function SprintBurndownAnalytics({
   const [loading, setLoading] = useState(false);
   const [hoveredPoint, setHoveredPoint] = useState(null);
 
-  // Dynamically determine all available sprint numbers
+  // Dynamically & automatically determine exact available sprint numbers
   const detectedSprintNumbers = useMemo(() => {
-    const numsSet = new Set();
-    if (Array.isArray(sprints) && sprints.length > 0) {
+    // 1. Sprints containing actual tasks
+    const taskSprintNums = new Set(
+      (tasks || [])
+        .map(t => parseInt(t.sprint_number || t.sprint || 0))
+        .filter(n => n > 0)
+    );
+
+    // 2. Sprints with stories or points
+    const sprintsWithStories = new Set();
+    if (Array.isArray(sprints)) {
       sprints.forEach(s => {
         const sNum = parseInt(s.sprint_number || s.id || s.number || 0);
-        if (sNum > 0) numsSet.add(sNum);
+        if (sNum > 0 && ((s.stories && s.stories.length > 0) || s.total_points > 0)) {
+          sprintsWithStories.add(sNum);
+        }
       });
     }
-    if (Array.isArray(tasks) && tasks.length > 0) {
-      tasks.forEach(t => {
-        const sNum = parseInt(t.sprint_number || t.sprint || 0);
-        if (sNum > 0) numsSet.add(sNum);
-      });
-    }
-    if (Array.isArray(capacities) && capacities.length > 0) {
-      capacities.forEach((_, idx) => numsSet.add(idx + 1));
-    }
-    if (totalSprints && Number(totalSprints) > 0) {
-      for (let i = 1; i <= Number(totalSprints); i++) numsSet.add(i);
-    }
+
+    // 3. User configured target sprint count
+    let userSelectedCount = 0;
     try {
       const email = localStorage.getItem('user_email') || 'default';
-      const savedCount = parseInt(
-        localStorage.getItem(`planned_sprints_${email}`) || 
-        localStorage.getItem('total_sprints_count') || 
+      const stored = parseInt(
         localStorage.getItem('target_sprint_count') || 
-        '0'
+        localStorage.getItem('total_sprints_count') || 
+        localStorage.getItem(`planned_sprints_${email}`) || 
+        '0',
+        10
       );
-      if (savedCount > 0) {
-        for (let i = 1; i <= savedCount; i++) numsSet.add(i);
-      }
+      if (stored > 0) userSelectedCount = stored;
     } catch (_) {}
-    if (numsSet.size === 0) return [1, 2, 3];
-    return Array.from(numsSet).sort((a, b) => a - b);
+
+    const maxTaskSprint = taskSprintNums.size > 0 ? Math.max(...Array.from(taskSprintNums)) : 0;
+    const maxStorySprint = sprintsWithStories.size > 0 ? Math.max(...Array.from(sprintsWithStories)) : 0;
+    const effectiveStoriesMax = Math.max(maxTaskSprint, maxStorySprint);
+
+    let finalCount = 0;
+    if (userSelectedCount > 0) {
+      finalCount = Math.max(userSelectedCount, effectiveStoriesMax);
+    } else if (effectiveStoriesMax > 0) {
+      finalCount = effectiveStoriesMax;
+    } else if (totalSprints && Number(totalSprints) > 0) {
+      finalCount = Number(totalSprints);
+    } else if (Array.isArray(capacities) && capacities.length > 0) {
+      finalCount = capacities.length;
+    } else if (Array.isArray(sprints) && sprints.length > 0) {
+      finalCount = sprints.length;
+    } else {
+      finalCount = 2;
+    }
+
+    const result = [];
+    for (let i = 1; i <= Math.max(1, finalCount); i++) {
+      result.push(i);
+    }
+    return result;
   }, [sprints, tasks, capacities, totalSprints]);
 
   useEffect(() => {

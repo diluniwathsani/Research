@@ -10,14 +10,14 @@ import {
 
 export default function SprintKanbanBoard({ 
   tasks = [], 
-  capacities = [30, 28, 30],
+  capacities = [],
   sprints = [],
   totalSprints,
   onCardMoved,
   onRefresh,
   onDecomposeClick
 }) {
-  const [selectedSprint, setSelectedSprint] = useState("1"); // "all", "1", "2", "3", ...
+  const [selectedSprint, setSelectedSprint] = useState("all"); // Default to "all" or "1"
   const [draggedStoryId, setDraggedStoryId] = useState(null);
   const [dragOverColumn, setDragOverColumn] = useState(null);
   const [activeValidationWarning, setActiveValidationWarning] = useState(null);
@@ -25,56 +25,65 @@ export default function SprintKanbanBoard({
   const [isUpdating, setIsUpdating] = useState(false);
   const [expandedSubtaskCards, setExpandedSubtaskCards] = useState({});
 
-  // Dynamically determine all available sprint numbers based on questionnaire, capacities, tasks, and storage
+  // Dynamically & automatically determine exact available sprint numbers
   const detectedSprintNumbers = useMemo(() => {
-    const numsSet = new Set();
+    // 1. Find all sprint numbers that actually contain stories in tasks array
+    const taskSprintNums = new Set(
+      (tasks || [])
+        .map(t => parseInt(t.sprint_number || t.sprint || 0))
+        .filter(n => n > 0)
+    );
 
-    // 1. From passed sprints prop
-    if (Array.isArray(sprints) && sprints.length > 0) {
+    // 2. Find sprint numbers with stories or points in sprints prop
+    const sprintsWithStories = new Set();
+    if (Array.isArray(sprints)) {
       sprints.forEach(s => {
         const sNum = parseInt(s.sprint_number || s.id || s.number || 0);
-        if (sNum > 0) numsSet.add(sNum);
+        if (sNum > 0 && ((s.stories && s.stories.length > 0) || s.total_points > 0)) {
+          sprintsWithStories.add(sNum);
+        }
       });
     }
 
-    // 2. From tasks array
-    if (Array.isArray(tasks) && tasks.length > 0) {
-      tasks.forEach(t => {
-        const sNum = parseInt(t.sprint_number || t.sprint || 0);
-        if (sNum > 0) numsSet.add(sNum);
-      });
-    }
-
-    // 3. From capacities array length
-    if (Array.isArray(capacities) && capacities.length > 0) {
-      capacities.forEach((_, idx) => numsSet.add(idx + 1));
-    }
-
-    // 4. From totalSprints prop
-    if (totalSprints && Number(totalSprints) > 0) {
-      for (let i = 1; i <= Number(totalSprints); i++) numsSet.add(i);
-    }
-
-    // 5. From localStorage (saved when answering questions in Sprint Timeline Wizard)
+    // 3. Check if user configured a specific target sprint count (e.g. 2 sprints in Wizard / customizer)
+    let userSelectedCount = 0;
     try {
       const email = localStorage.getItem('user_email') || 'default';
-      const savedCount = parseInt(
-        localStorage.getItem(`planned_sprints_${email}`) || 
-        localStorage.getItem('total_sprints_count') || 
+      const stored = parseInt(
         localStorage.getItem('target_sprint_count') || 
-        '0'
+        localStorage.getItem('total_sprints_count') || 
+        localStorage.getItem(`planned_sprints_${email}`) || 
+        '0',
+        10
       );
-      if (savedCount > 0) {
-        for (let i = 1; i <= savedCount; i++) numsSet.add(i);
-      }
+      if (stored > 0) userSelectedCount = stored;
     } catch (_) {}
 
-    // Fallback: at least sprints 1, 2, 3 if nothing is detected
-    if (numsSet.size === 0) {
-      return [1, 2, 3];
+    const maxTaskSprint = taskSprintNums.size > 0 ? Math.max(...Array.from(taskSprintNums)) : 0;
+    const maxStorySprint = sprintsWithStories.size > 0 ? Math.max(...Array.from(sprintsWithStories)) : 0;
+    const effectiveStoriesMax = Math.max(maxTaskSprint, maxStorySprint);
+
+    let finalCount = 0;
+    if (userSelectedCount > 0) {
+      // Honor user's explicit selection, but extend if tasks actually spill past it
+      finalCount = Math.max(userSelectedCount, effectiveStoriesMax);
+    } else if (effectiveStoriesMax > 0) {
+      finalCount = effectiveStoriesMax;
+    } else if (totalSprints && Number(totalSprints) > 0) {
+      finalCount = Number(totalSprints);
+    } else if (Array.isArray(capacities) && capacities.length > 0) {
+      finalCount = capacities.length;
+    } else if (Array.isArray(sprints) && sprints.length > 0) {
+      finalCount = sprints.length;
+    } else {
+      finalCount = 2; // Default to 2
     }
 
-    return Array.from(numsSet).sort((a, b) => a - b);
+    const result = [];
+    for (let i = 1; i <= Math.max(1, finalCount); i++) {
+      result.push(i);
+    }
+    return result;
   }, [sprints, tasks, capacities, totalSprints]);
 
   // If currently selected sprint is no longer in detected sprints, adjust safely
