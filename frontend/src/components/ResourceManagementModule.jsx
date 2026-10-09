@@ -4,6 +4,7 @@ import { Users, Code, Info, Calendar, Sparkles, CheckCircle2, ShieldAlert } from
 import ProjectSelection from './ProjectSelection.jsx';
 import TaskPreview from './TaskPreview.jsx';
 import AllocationResults from './AllocationResults.jsx';
+import ManageTeamModal from './ManageTeamModal.jsx';
 
 // API Configuration
 const EXPRESS_API = 'http://localhost:3000/api';
@@ -74,6 +75,7 @@ export default function ResourceManagementModule({
   const [ganttTimeline, setGanttTimeline] = useState(null);
   const [loading, setLoading] = useState(false);
   const [apiSource, setApiSource] = useState('project_engine');
+  const [isManageTeamOpen, setIsManageTeamOpen] = useState(false);
 
   // View Modes: 'backlog' | 'allocation_results'
   const [viewMode, setViewMode] = useState('backlog');
@@ -191,13 +193,18 @@ export default function ResourceManagementModule({
   }, [parentProjects]);
 
   // ================= 3. LOAD DEVELOPERS =================
+  const loadDevelopers = async () => {
+    try {
+      const res = await axios.get(`${EXPRESS_API}/developers`);
+      const list = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+      setDevelopers(list);
+    } catch (err) {
+      console.warn('Error loading developers:', err.message);
+    }
+  };
+
   useEffect(() => {
-    axios.get(`${EXPRESS_API}/developers`)
-      .then(res => {
-        const list = Array.isArray(res.data) ? res.data : (res.data?.data || []);
-        setDevelopers(list);
-      })
-      .catch(err => console.warn('Error loading developers:', err.message));
+    loadDevelopers();
   }, []);
 
   // ================= 4. FETCH SPRINT PLAN OUTPUT DIRECTLY FROM PROJECT MODULE =================
@@ -463,6 +470,19 @@ export default function ResourceManagementModule({
               Consumes Sprint Plans, Story Points, Fibonacci Effort & Cadence Timelines directly from the Project Management Module.
             </p>
           </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsManageTeamOpen(true)}
+              className="px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all border border-indigo-400/40 cursor-pointer"
+            >
+              <Users size={16} />
+              <span>Manage Resources & Skills</span>
+              <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-mono font-extrabold ml-1">
+                {developers.length}
+              </span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -515,6 +535,7 @@ export default function ResourceManagementModule({
             onRunAllocation={runSkillBasedAllocation}
             hasAssignments={assignments.length > 0}
             onViewAssignments={() => setViewMode('allocation_results')}
+            onOpenManageTeam={() => setIsManageTeamOpen(true)}
             loading={loading}
             apiSource={apiSource}
             apiStatus={{ pooliyadda: true, express: true }}
@@ -533,6 +554,7 @@ export default function ResourceManagementModule({
             onSave={handleSaveAllocation}
             onTaskMove={handleTaskMove}
             onBack={() => setViewMode('backlog')}
+            onOpenManageTeam={() => setIsManageTeamOpen(true)}
             loading={loading}
             apiSource={apiSource}
           />
@@ -560,6 +582,14 @@ export default function ResourceManagementModule({
           Powered by Capacity & Skill-Aware Developer Allocation
         </div>
       </div>
+
+      {/* Manage Team & Technical Skills Modal */}
+      <ManageTeamModal
+        isOpen={isManageTeamOpen}
+        onClose={() => setIsManageTeamOpen(false)}
+        developers={developers}
+        onTeamUpdated={loadDevelopers}
+      />
     </div>
   );
 }

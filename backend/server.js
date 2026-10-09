@@ -1200,6 +1200,125 @@ app.get('/api/developers', async (req, res) => {
     }
 });
 
+// POST /api/developers - Add new developer with custom skills
+app.post('/api/developers', async (req, res) => {
+    try {
+        const { name, role, primary_domain, languages, skills, capacity_hours, email } = req.body;
+        if (!name || !name.trim()) {
+            return res.status(400).json({ error: 'Developer name is required' });
+        }
+
+        let langStr = '';
+        if (Array.isArray(languages)) {
+            langStr = languages.map(s => String(s).trim()).filter(Boolean).join(',');
+        } else if (Array.isArray(skills)) {
+            langStr = skills.map(s => String(s).trim()).filter(Boolean).join(',');
+        } else if (typeof languages === 'string') {
+            langStr = languages;
+        } else if (typeof skills === 'string') {
+            langStr = skills;
+        }
+
+        const domain = (primary_domain || 'general').toLowerCase();
+        const capacity = parseInt(capacity_hours, 10) || 40;
+        const devRole = role || 'Full-Stack Developer';
+        const devEmail = email || `${name.toLowerCase().replace(/[^a-z0-9]/g, '')}@example.com`;
+
+        const result = await pool.query(
+            `INSERT INTO developers (name, role, primary_domain, languages, capacity_hours, email, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+             RETURNING *`,
+            [name.trim(), devRole, domain, langStr, capacity, devEmail]
+        );
+
+        const newDev = result.rows[0];
+        res.status(201).json({
+            success: true,
+            developer: {
+                ...newDev,
+                languages: newDev.languages ? newDev.languages.split(',') : []
+            }
+        });
+    } catch (error) {
+        console.error('Error creating developer:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// PUT /api/developers/:id - Edit developer & skills
+app.put('/api/developers/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, role, primary_domain, languages, skills, capacity_hours, email } = req.body;
+
+        let langStr = undefined;
+        if (Array.isArray(languages)) {
+            langStr = languages.map(s => String(s).trim()).filter(Boolean).join(',');
+        } else if (Array.isArray(skills)) {
+            langStr = skills.map(s => String(s).trim()).filter(Boolean).join(',');
+        } else if (typeof languages === 'string') {
+            langStr = languages;
+        } else if (typeof skills === 'string') {
+            langStr = skills;
+        }
+
+        const domain = primary_domain ? primary_domain.toLowerCase() : undefined;
+        const capacity = capacity_hours !== undefined ? (parseInt(capacity_hours, 10) || 40) : undefined;
+
+        const check = await pool.query('SELECT * FROM developers WHERE id = $1', [id]);
+        if (check.rows.length === 0) {
+            return res.status(404).json({ error: 'Developer not found' });
+        }
+        const current = check.rows[0];
+
+        const updatedName = name !== undefined ? name.trim() : current.name;
+        const updatedRole = role !== undefined ? role : current.role;
+        const updatedDomain = domain !== undefined ? domain : current.primary_domain;
+        const updatedLanguages = langStr !== undefined ? langStr : current.languages;
+        const updatedCapacity = capacity !== undefined ? capacity : current.capacity_hours;
+        const updatedEmail = email !== undefined ? email : current.email;
+
+        const result = await pool.query(
+            `UPDATE developers 
+             SET name = $1, role = $2, primary_domain = $3, languages = $4, capacity_hours = $5, email = $6, updated_at = NOW()
+             WHERE id = $7
+             RETURNING *`,
+            [updatedName, updatedRole, updatedDomain, updatedLanguages, updatedCapacity, updatedEmail, id]
+        );
+
+        const updatedDev = result.rows[0];
+        res.json({
+            success: true,
+            developer: {
+                ...updatedDev,
+                languages: updatedDev.languages ? updatedDev.languages.split(',') : []
+            }
+        });
+    } catch (error) {
+        console.error('Error updating developer:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// DELETE /api/developers/:id - Delete developer
+app.delete('/api/developers/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        try {
+            await pool.query('DELETE FROM allocations WHERE developer_id = $1', [id]);
+        } catch (_) {}
+
+        const result = await pool.query('DELETE FROM developers WHERE id = $1 RETURNING *', [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Developer not found' });
+        }
+        res.json({ success: true, message: `Developer ${result.rows[0].name} deleted successfully` });
+    } catch (error) {
+        console.error('Error deleting developer:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ================= SIMPLIFIED ALLOCATION FUNCTION =================
 
 function allocateTasks(tasks, developers, currentProjectId) {

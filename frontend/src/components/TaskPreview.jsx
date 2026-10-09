@@ -7,6 +7,7 @@ export default function TaskPreview({
   onRunAllocation, 
   hasAssignments = false,
   onViewAssignments,
+  onOpenManageTeam,
   loading = false, 
   apiSource, 
   apiStatus 
@@ -47,6 +48,16 @@ export default function TaskPreview({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            {onOpenManageTeam && (
+              <button
+                onClick={onOpenManageTeam}
+                className="px-4 py-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5"
+              >
+                <Users size={15} />
+                <span>Manage Resources & Skills</span>
+              </button>
+            )}
+
             {hasAssignments && (
               <button
                 onClick={onViewAssignments}
