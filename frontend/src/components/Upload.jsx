@@ -40,14 +40,16 @@ export default function FileUpload({ onUploadSuccess }) {
     } catch (_) {}
 
     try {
-      await axios.post('http://localhost:3000/api/upload', formData, {
+      const res = await axios.post('http://localhost:3000/api/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setFile(null);
       setUploadError(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
       
-      onUploadSuccess();
+      if (onUploadSuccess) {
+        onUploadSuccess(res.data);
+      }
     } catch (err) {
       console.error('Upload Error:', err);
       const errMsg = err.response?.data?.error || err.message || 'File upload failed. Please verify backend server is running.';

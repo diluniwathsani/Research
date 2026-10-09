@@ -422,7 +422,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 
     let client = null;
     try {
-        const { batch_name, project_name } = req.body;
+        const { batch_name, project_name, project_id } = req.body;
         
         // Read uploaded Excel sheet using 'xlsx' parser
         const workbook = xlsx.readFile(req.file.path);
@@ -439,27 +439,10 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
         const uploadTime = new Date().toISOString();
         client = await pool.connect();
         const effectiveProjectName = (project_name || batch_name || 'Aurora ERP System').trim();
-        const effectiveProjectId = `P${Date.now().toString().slice(-6)}`;
+        const effectiveProjectId = (project_id && String(project_id).trim()) ? String(project_id).trim() : `P${Date.now().toString().slice(-6)}`;
 
         // Step A: Register new Project in database
         try {
-            await pool.query(`
-                CREATE TABLE IF NOT EXISTS public.projects (
-                    project_id TEXT PRIMARY KEY,
-                    project_name TEXT NOT NULL,
-                    description TEXT,
-                    project_manager TEXT NOT NULL,
-                    team_size INTEGER DEFAULT 8,
-                    progress_percent INTEGER DEFAULT 0,
-                    budget_usd DECIMAL(15,2) DEFAULT 100000,
-                    risk_level TEXT DEFAULT 'Medium',
-                    complexity_level TEXT DEFAULT 'Medium',
-                    priority TEXT DEFAULT 'Medium',
-                    status TEXT NOT NULL DEFAULT 'ACTIVE',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            `);
-            // Step A: Register Project entry into public.projects database table
             await pool.query(
                 `INSERT INTO public.projects (project_id, project_name, description, project_manager, team_size, progress_percent, status)
                  VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -469,19 +452,6 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 
             // Step B: Auto-create default sprint entries in public.sprints table
             try {
-                await pool.query(`
-                    CREATE TABLE IF NOT EXISTS public.sprints (
-                        sprint_id TEXT PRIMARY KEY,
-                        project_id TEXT NOT NULL,
-                        sprint_name TEXT NOT NULL,
-                        sprint_number INTEGER NOT NULL,
-                        status TEXT NOT NULL DEFAULT 'PENDING',
-                        start_date DATE,
-                        end_date DATE,
-                        capacity_story_points INTEGER DEFAULT 40,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                `);
                 await pool.query(`
                     INSERT INTO public.sprints (sprint_id, project_id, sprint_name, sprint_number, status, capacity_story_points)
                     VALUES 
@@ -499,45 +469,6 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
         try {
             // Step C: Begin database transaction for requirement batch ingestion
             await client.query('BEGIN');
-
-            // Step D: Defensive auto-creation check for requirements & user_stories tables
-            await client.query(`
-                CREATE TABLE IF NOT EXISTS public.requirements (
-                    id SERIAL PRIMARY KEY,
-                    requirement_sentence TEXT NOT NULL,
-                    completeness_status TEXT DEFAULT 'Pending',
-                    epic TEXT,
-                    feature TEXT,
-                    user_story TEXT,
-                    acceptance_criteria TEXT,
-                    batch_name TEXT DEFAULT 'Untitled Batch',
-                    project_id TEXT DEFAULT 'P00001',
-                    requirement_order INTEGER DEFAULT 1,
-                    created_at TEXT
-                )
-            `);
-            await client.query(`ALTER TABLE public.requirements ADD COLUMN IF NOT EXISTS project_id TEXT DEFAULT 'P00001'`);
-            await client.query(`ALTER TABLE public.requirements ADD COLUMN IF NOT EXISTS requirement_order INTEGER DEFAULT 1`);
-
-            await client.query(`
-                CREATE TABLE IF NOT EXISTS public.user_stories (
-                    story_id TEXT PRIMARY KEY,
-                    user_story_id TEXT,
-                    project_id TEXT DEFAULT 'P00001',
-                    sprint_id TEXT DEFAULT 'SPR-01',
-                    title TEXT NOT NULL,
-                    description TEXT,
-                    story_points INTEGER DEFAULT 5,
-                    priority TEXT DEFAULT 'Medium',
-                    status TEXT DEFAULT 'IN_PROGRESS',
-                    assigned_to TEXT DEFAULT 'Unassigned',
-                    requirement_order INTEGER DEFAULT 1,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            `);
-            await client.query(`ALTER TABLE public.user_stories ADD COLUMN IF NOT EXISTS project_id TEXT DEFAULT 'P00001'`);
-            await client.query(`ALTER TABLE public.user_stories ADD COLUMN IF NOT EXISTS requirement_order INTEGER DEFAULT 1`);
-            await client.query(`ALTER TABLE public.user_stories ADD COLUMN IF NOT EXISTS assigned_to TEXT DEFAULT 'Unassigned'`);
 
             // Step E: Loop over Excel data rows to extract requirement text and generate artifacts
             const reqBatch = [];
@@ -724,8 +655,6 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 app.get('/api/requirements', async (req, res) => {
     const { project_id } = req.query;
     try {
-        await pool.query("ALTER TABLE public.requirements ADD COLUMN IF NOT EXISTS project_id TEXT DEFAULT 'P00001'");
-        await pool.query("ALTER TABLE public.requirements ADD COLUMN IF NOT EXISTS requirement_order INTEGER DEFAULT 1");
         if (project_id) {
             const result = await pool.query(
                 "SELECT * FROM requirements WHERE project_id = $1 OR project_id = $2 OR $1 = '' ORDER BY requirement_order ASC, id ASC",

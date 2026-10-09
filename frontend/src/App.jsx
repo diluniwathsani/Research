@@ -67,10 +67,11 @@ function MainLayout() {
   }, [isDark]);
 
   // --- API HANDLERS ---
-  const fetchRequirements = async (retryCount = 0) => {
+  const fetchRequirements = async (overrideProjectId = null, retryCount = 0) => {
     try {
-      const url = selectedProjectId 
-        ? `http://localhost:3000/api/requirements?project_id=${encodeURIComponent(selectedProjectId)}`
+      const pid = (typeof overrideProjectId === 'string' && overrideProjectId) ? overrideProjectId : selectedProjectId;
+      const url = pid 
+        ? `http://localhost:3000/api/requirements?project_id=${encodeURIComponent(pid)}`
         : 'http://localhost:3000/api/requirements';
       const res = await axios.get(url);
       const list = Array.isArray(res.data) ? res.data : (res.data && res.data.data ? res.data.data : []);
@@ -82,10 +83,20 @@ function MainLayout() {
       setError("Failed to fetch requirements from backend.");
       if (retryCount < 4) {
         setTimeout(() => {
-          fetchRequirements(retryCount + 1);
+          fetchRequirements(overrideProjectId, retryCount + 1);
         }, 2000);
       }
     }
+  };
+
+  const handleUploadSuccess = (uploadData) => {
+    if (uploadData && uploadData.project_id) {
+      setSelectedProjectId(uploadData.project_id);
+      fetchRequirements(uploadData.project_id);
+    } else {
+      fetchRequirements();
+    }
+    fetchProjects();
   };
 
   useEffect(() => {
@@ -149,7 +160,7 @@ function MainLayout() {
               loading={loading}
               onRunAI={handleProcess}
               onExport={handleExport}
-              onUploadSuccess={fetchRequirements}
+              onUploadSuccess={handleUploadSuccess}
               setActiveTab={setActiveTab}
               projects={projects}
               selectedProjectId={selectedProjectId}
@@ -162,7 +173,7 @@ function MainLayout() {
               requirements={requirements}
               loading={loading}
               error={error}
-              onFetchRequirements={fetchRequirements}
+              onFetchRequirements={handleUploadSuccess}
               onProcess={handleProcess}
               onExport={handleExport}
               projects={projects}
