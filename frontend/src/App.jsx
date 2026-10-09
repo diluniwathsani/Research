@@ -176,13 +176,6 @@ function MainLayout() {
               onFetchRequirements={handleUploadSuccess}
               onProcess={handleProcess}
               onExport={handleExport}
-              projects={projects}
-              selectedProjectId={selectedProjectId}
-              onSelectProject={setSelectedProjectId}
-              onNavigateToSprintPlan={() => {
-                setProjectInitialTab('sprint-plan');
-                setActiveTab('projects');
-              }}
             />
           )}
 
