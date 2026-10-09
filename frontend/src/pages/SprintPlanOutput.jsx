@@ -21,6 +21,14 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
   const [optimizing, setOptimizing] = useState(false);
   const [dagData, setDagData] = useState(null);
   const [ganttData, setGanttData] = useState(null);
+  const [projectName, setProjectName] = useState("");
+  const [activeTab, setActiveTab] = useState("gantt"); // "gantt", "kanban", "plan", "burndown", "cpm", "dag", "benchmark"
+  const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
+  const [customizerNotice, setCustomizerNotice] = useState(null);
+  const [allTasks, setAllTasks] = useState([]);
+  const [isDecomposerOpen, setIsDecomposerOpen] = useState(false);
+  const [selectedStoryToDecompose, setSelectedStoryToDecompose] = useState(null);
+  const [expandedSubtasks, setExpandedSubtasks] = useState({});
 
   // Active roadmap holidays strictly clamped to project start and end dates
   const activeRoadmapHolidays = ganttData ? (
@@ -63,8 +71,6 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
     );
   }, [ganttData, sprints, capacities, allTasks]);
 
-  const [projectName, setProjectName] = useState("");
-
   const activeProjectTitle = useMemo(() => {
     if (projectName && projectName.trim()) return projectName.trim();
     if (ganttData?.project_name && ganttData.project_name !== 'Agile Sprint Project' && ganttData.project_name !== 'Requirements Specification') {
@@ -86,14 +92,6 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
     }
     return "POS_SYSTEM_REQUIREMENTS";
   }, [projectName, ganttData, requirements]);
-
-  const [activeTab, setActiveTab] = useState("gantt"); // "gantt", "kanban", "plan", "burndown", "cpm", "dag", "benchmark"
-  const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
-  const [customizerNotice, setCustomizerNotice] = useState(null);
-  const [allTasks, setAllTasks] = useState([]);
-  const [isDecomposerOpen, setIsDecomposerOpen] = useState(false);
-  const [selectedStoryToDecompose, setSelectedStoryToDecompose] = useState(null);
-  const [expandedSubtasks, setExpandedSubtasks] = useState({});
 
   const handleOpenDecomposer = (story) => {
     setSelectedStoryToDecompose(story);
