@@ -9,7 +9,11 @@ export default function DevelopmentArtifactModule({
   error = null, 
   onFetchRequirements, 
   onProcess, 
-  onExport 
+  onExport,
+  projects = [],
+  selectedProjectId,
+  onSelectProject,
+  onNavigateToSprintPlan
 }) {
   const safeRequirements = Array.isArray(requirements) ? requirements : [];
   return (
@@ -80,7 +84,25 @@ export default function DevelopmentArtifactModule({
 
       {/* Main Requirements Interactive Table */}
       <section className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700/80 overflow-hidden">
-        <RequirementsTable requirements={safeRequirements} onUpdate={onFetchRequirements} />
+        <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700/80 flex flex-wrap justify-between items-center gap-4 bg-slate-50/50 dark:bg-slate-900/30">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
+              Parsed Requirements & Generated Artifacts
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Filter by Epics, edit sentences, or review generated Agile User Stories.
+            </p>
+          </div>
+          <span className="bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-xs font-bold py-1 px-3.5 rounded-full border border-indigo-200 dark:border-indigo-800">
+            Total Records: {safeRequirements.length}
+          </span>
+        </div>
+
+        <RequirementsTable 
+          requirements={safeRequirements} 
+          onUpdate={onFetchRequirements} 
+          onNavigateToSprintPlan={onNavigateToSprintPlan}
+        />
       </section>
 
     </div>

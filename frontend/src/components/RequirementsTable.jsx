@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { AlertCircle, CheckCircle, Edit2, Save, X, ChevronDown, ChevronRight, Layout, Database, Shield, Zap, Calendar, Clock, Layers, Folder, FolderOpen, MoreVertical, Trash2, Download } from 'lucide-react';
+import { AlertCircle, CheckCircle, Edit2, Save, X, ChevronDown, ChevronRight, Layout, Database, Shield, Zap, Calendar, Clock, Layers, Folder, FolderOpen, MoreVertical, Trash2, Download, ArrowRight, Sparkles, Rocket } from 'lucide-react';
+import SprintTimelineWizardModal from './SprintTimelineWizardModal';
+import { useAuth } from '../context/AuthContext';
 
-export default function RequirementsTable({ requirements, onUpdate }) {
+export default function RequirementsTable({ requirements, onUpdate, onNavigateToSprintPlan }) {
+  const { user } = useAuth();
   // --- UI STATE ---
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState("");
@@ -17,6 +20,70 @@ export default function RequirementsTable({ requirements, onUpdate }) {
   // handleExportBatch: Triggers Excel download for a specific set of requirements
   const handleExportBatch = (timestamp, setTitle) => {
     window.location.href = `http://localhost:3000/api/export/batch?timestamp=${encodeURIComponent(timestamp)}`;
+  };
+
+  const [syncAlert, setSyncAlert] = useState(null);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [wizardBatchData, setWizardBatchData] = useState({ title: '', reqs: [] });
+
+  const handleOpenTimelineWizard = (batchTitle, domains) => {
+    const allReqs = Object.values(domains).flat();
+    setWizardBatchData({
+      title: batchTitle,
+      reqs: allReqs
+    });
+    setIsWizardOpen(true);
+  };
+
+  const handleGeneratePlanWithTimeline = async (timelineSettings) => {
+    try {
+      const email = user?.email || localStorage.getItem('user_email') || 'default';
+      const batchTitle = wizardBatchData.title || 'POS_SYSTEM_REQUIREMENTS';
+      
+      // Persist active requirements filename / batch name for Sprint Plan headings
+      localStorage.setItem(`active_requirements_batch_${email}`, batchTitle);
+      localStorage.setItem('active_requirements_batch', batchTitle);
+      localStorage.setItem('active_project_name', batchTitle);
+
+      const res = await axios.post('http://localhost:8082/api/import-requirements', {
+        project_name: batchTitle,
+        batch_title: batchTitle,
+        requirements: wizardBatchData.reqs,
+        timeline_settings: {
+          ...timelineSettings,
+          project_name: batchTitle
+        }
+      });
+      if (res.data.status === 'success') {
+        const finalSprintsCount = res.data.sprints_count || timelineSettings.target_sprint_count || 0;
+        localStorage.setItem(`planned_sprints_${email}`, String(finalSprintsCount));
+        localStorage.setItem('total_sprints_count', String(finalSprintsCount));
+        localStorage.setItem('target_sprint_count', String(finalSprintsCount));
+        localStorage.setItem(`planned_stories_${email}`, String(res.data.imported_count || wizardBatchData.reqs.length || 0));
+        window.dispatchEvent(new Event('sprints-updated'));
+
+        setIsWizardOpen(false);
+        setSyncAlert({
+          type: 'success',
+          msg: `🎉 Successfully planned ${res.data.imported_count} Requirements into ${res.data.sprints_count} Sprints (${res.data.total_points} Story Points) with custom ${timelineSettings.sprint_duration_weeks}-week Cadence & Gantt Schedule!`,
+          sprintsCount: res.data.sprints_count,
+          totalPoints: res.data.total_points
+        });
+
+        if (onNavigateToSprintPlan) {
+          setTimeout(() => {
+            onNavigateToSprintPlan();
+          }, 1500);
+        }
+      }
+    } catch (err) {
+      console.error('Sprint Sync error:', err);
+      setSyncAlert({
+        type: 'error',
+        msg: '❌ Failed to bridge requirements to Sprint Plan. Ensure Flask API (port 8080) is running.'
+      });
+      setTimeout(() => setSyncAlert(null), 7000);
+    }
   };
 
   // --- DATA PROCESSING: GROUPING ---
@@ -55,8 +122,12 @@ export default function RequirementsTable({ requirements, onUpdate }) {
     batchNumberMap[key] = `${batchPrefix} ${index + 1}`;
   });
 
-  // 3. Prepare for Display (FIFO Order matching original Excel upload sequence)
-  const displayKeys = [...chronologicalKeys];
+  // 3. Prepare for Display: Put newest upload at the TOP so newly uploaded Excel shows immediately!
+  const displayKeys = Object.keys(processedGroups).sort((a, b) => {
+    if (a === 'Historical') return 1;
+    if (b === 'Historical') return -1;
+    return new Date(b) - new Date(a);
+  });
 
   const toggleSection = (id) => {
     setExpandedSections(prev => ({ ...prev, [id]: !prev[id] }));
@@ -143,6 +214,43 @@ export default function RequirementsTable({ requirements, onUpdate }) {
 
   return (
     <div className="p-8 space-y-8">
+      {syncAlert && (
+        <div className={`p-4 sm:p-5 rounded-3xl font-bold text-xs border shadow-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-all duration-300 animate-in fade-in ${
+          syncAlert.type === 'error' 
+            ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' 
+            : 'bg-gradient-to-r from-indigo-950/80 via-slate-900 to-purple-950/80 text-white border-indigo-500/50 ring-4 ring-indigo-500/10'
+        }`}>
+          <div className="flex items-center gap-3">
+            <div className={`p-2.5 rounded-2xl ${syncAlert.type === 'error' ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>
+              {syncAlert.type === 'error' ? <AlertCircle size={22} /> : <CheckCircle size={22} />}
+            </div>
+            <div>
+              <p className="font-extrabold text-sm text-white">{syncAlert.msg}</p>
+              {syncAlert.sprintsCount && (
+                <p className="text-xs text-indigo-300/80 mt-0.5 font-semibold">
+                  NLP story points decomposed • ILP knapsack solved • Gantt calendar and CPM float matrix initialized.
+                </p>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            {syncAlert.type === 'success' && onNavigateToSprintPlan && (
+              <button 
+                onClick={onNavigateToSprintPlan}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:opacity-90 text-white rounded-xl font-black text-xs shadow-lg shadow-indigo-600/30 transition-all hover:scale-105 active:scale-95"
+              >
+                <span>View Sprint Plan & Gantt</span>
+                <ArrowRight size={14} />
+              </button>
+            )}
+            <button onClick={() => setSyncAlert(null)} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Configuration Header: Allow changing the Batch Prefix & Total Records */}
       <div className="flex items-center justify-between gap-4 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
         <div className="flex items-center gap-3">
@@ -166,7 +274,7 @@ export default function RequirementsTable({ requirements, onUpdate }) {
         const batchData = processedGroups[batchKey];
         const domains = batchData.requirements;
         const batchTotal = Object.values(domains).flat().length;
-        const isBatchExpanded = expandedSections[batchKey] || false;
+        const isBatchExpanded = expandedSections[batchKey] !== false;
         const setTitle = batchNumberMap[batchKey];
 
         return (
@@ -240,14 +348,33 @@ export default function RequirementsTable({ requirements, onUpdate }) {
                 </div>
               </div>
               
-              <div className="flex items-center gap-4">
-                 <div className="flex items-center gap-3 pr-4 border-r border-slate-200 dark:border-slate-700">
+              <div className="flex items-center gap-3">
+                 <div className="flex items-center gap-2 pr-3 border-r border-slate-200 dark:border-slate-700">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const bTitle = batchData.originalBatchName || setTitle;
+                        const email = user?.email || localStorage.getItem('user_email') || 'default';
+                        try {
+                          localStorage.setItem(`active_requirements_batch_${email}`, bTitle);
+                          localStorage.setItem('active_requirements_batch', bTitle);
+                          localStorage.setItem('active_project_name', bTitle);
+                        } catch (_) {}
+                        handleOpenTimelineWizard(bTitle, domains);
+                      }}
+                      className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl transition-all duration-300 font-black text-[10px] uppercase tracking-wider shadow-md hover:shadow-indigo-500/25 group/sprint hover:scale-105"
+                      title="Configure 6-Question Timeline & Cadence Setup Wizard before AI + ILP Partitioning"
+                    >
+                      <Zap size={14} className="text-amber-300 group-hover/sprint:animate-spin" />
+                      <span>Plan Sprints</span>
+                    </button>
+
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
                         handleExportBatch(batchKey, setTitle);
                       }}
-                      className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-green-600 hover:text-white rounded-xl transition-all duration-300 text-slate-600 dark:text-slate-300 font-black text-[10px] uppercase tracking-widest shadow-sm hover:shadow-lg group/btn"
+                      className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-green-600 hover:text-white rounded-xl transition-all duration-300 text-slate-600 dark:text-slate-300 font-black text-[10px] uppercase tracking-wider shadow-sm hover:shadow-lg group/btn"
                     >
                       <Download size={14} className="group-hover/btn:animate-bounce" />
                       <span>Export Excel</span>
@@ -362,25 +489,63 @@ export default function RequirementsTable({ requirements, onUpdate }) {
                                           </div>
                                         ) : (
                                           <div className="space-y-4">
-                                            <p className="text-base leading-relaxed font-medium tracking-tight text-slate-700 dark:text-slate-200">
-                                              {req.requirement_sentence}
-                                            </p>
-                                            <div className="flex items-center gap-4">
-                                              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-lg text-[9px] font-black border uppercase tracking-widest shadow-sm bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-100 dark:border-purple-500/20">
+                                            <div>
+                                              <p className="text-base leading-relaxed font-semibold tracking-tight text-slate-800 dark:text-slate-100">
+                                                {req.requirement_sentence}
+                                              </p>
+                                            </div>
+
+                                            {/* Prominently Decomposed Agile User Story Card */}
+                                            <div className="p-4 bg-gradient-to-r from-indigo-50/80 via-purple-50/40 to-slate-50/70 dark:bg-slate-900/60 rounded-2xl border border-indigo-100/90 dark:border-indigo-900/40 shadow-sm space-y-2.5">
+                                              <div className="flex flex-wrap items-center gap-2">
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-black text-[9px] uppercase tracking-wider shadow-sm">
+                                                  <Sparkles size={11} className="text-amber-300" />
+                                                  Agile User Story
+                                                </span>
+                                                {req.epic && (
+                                                  <span className="px-2.5 py-0.5 bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 rounded-md font-bold text-[9px] border border-purple-200 dark:border-purple-800">
+                                                    Epic: {req.epic}
+                                                  </span>
+                                                )}
+                                                {req.feature && (
+                                                  <span className="px-2.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-md font-bold text-[9px] border border-slate-200 dark:border-slate-700">
+                                                    Feature: {req.feature}
+                                                  </span>
+                                                )}
+                                                <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                                  <CheckCircle size={10} />
+                                                  Decomposed
+                                                </span>
+                                              </div>
+
+                                              <p className="text-sm font-semibold text-slate-800 dark:text-indigo-200 italic leading-relaxed pl-3 border-l-2 border-indigo-500">
+                                                "{req.user_story || (req.requirement_sentence ? `As a System User, I want to ${req.requirement_sentence.replace(/^(the system shall|users shall|must|shall)\s*/i, '').trim()} so that the business outcome is achieved.` : 'As a System User, I want to execute this operation.')}"
+                                              </p>
+
+                                              {req.acceptance_criteria && (
+                                                <div className="text-[11px] text-slate-600 dark:text-slate-400 border-t border-indigo-100/60 dark:border-indigo-900/30 pt-2 font-mono whitespace-pre-line leading-relaxed">
+                                                  <span className="font-bold font-sans text-slate-700 dark:text-slate-300 block mb-0.5 uppercase text-[9px] tracking-wider">Acceptance Criteria (Gherkin):</span>
+                                                  {req.acceptance_criteria}
+                                                </div>
+                                              )}
+                                            </div>
+
+                                            <div className="flex items-center gap-3">
+                                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[9px] font-black border uppercase tracking-widest shadow-sm bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-100 dark:border-purple-500/20">
                                                 <CheckCircle size={12} />
-                                                {req.user_story ? 'Agile User Story Artifact Ready' : 'Development Artifact Generated'}
+                                                Development Artifact Generated
                                               </span>
                                               
                                               {req.epic && (
                                                 <button 
                                                   onClick={() => toggleOutcome(req.id)}
-                                                  className={`flex items-center gap-2 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all duration-300 border
+                                                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all duration-300 border
                                                     ${showOutcomes 
                                                       ? 'bg-secondary text-white border-secondary shadow-lg shadow-secondary/10' 
                                                       : 'bg-white dark:bg-slate-800 text-secondary border-secondary/30 hover:bg-secondary hover:text-white hover:shadow-md'}`}
                                                 >
                                                   <Layers size={12} />
-                                                  {showOutcomes ? 'HIDE ARTIFACTS' : 'VIEW ARTIFACTS'}
+                                                  {showOutcomes ? 'HIDE DETAILS' : 'VIEW FULL SPEC'}
                                                 </button>
                                               )}
                                             </div>
@@ -449,6 +614,15 @@ export default function RequirementsTable({ requirements, onUpdate }) {
           </div>
         );
       })}
+
+      {/* TIMELINE & CADENCE 6-QUESTION SETUP WIZARD MODAL */}
+      <SprintTimelineWizardModal
+        isOpen={isWizardOpen}
+        onClose={() => setIsWizardOpen(false)}
+        batchTitle={wizardBatchData.title}
+        requirementsCount={wizardBatchData.reqs.length}
+        onGeneratePlan={handleGeneratePlanWithTimeline}
+      />
     </div>
   );
 }

@@ -34,13 +34,14 @@ function MainLayout() {
   const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState('P00001');
 
-  const fetchProjects = async () => {
+  const fetchProjects = async (targetProjectId = null) => {
     try {
       const res = await axios.get('http://localhost:3000/api/projects');
       const list = Array.isArray(res.data) ? res.data : (res.data && res.data.data ? res.data.data : []);
       if (list.length > 0) {
         setProjects(list);
         setSelectedProjectId(prevId => {
+          if (targetProjectId) return targetProjectId;
           const exists = list.some(p => p.project_id === prevId || p.id === prevId);
           if (!prevId || !exists) {
             return list[0].project_id || list[0].id || prevId;
@@ -75,9 +76,14 @@ function MainLayout() {
         : 'http://localhost:3000/api/requirements';
       const res = await axios.get(url);
       const list = Array.isArray(res.data) ? res.data : (res.data && res.data.data ? res.data.data : []);
-      setRequirements(list);
+      if (list.length > 0) {
+        setRequirements(list);
+      } else {
+        const fallbackRes = await axios.get('http://localhost:3000/api/requirements');
+        const fallbackList = Array.isArray(fallbackRes.data) ? fallbackRes.data : [];
+        setRequirements(fallbackList);
+      }
       setError(null);
-      fetchProjects();
     } catch (err) {
       console.error('Fetch requirements error:', err);
       setError("Failed to fetch requirements from backend.");
@@ -89,14 +95,15 @@ function MainLayout() {
     }
   };
 
-  const handleUploadSuccess = (uploadData) => {
+  const handleUploadSuccess = async (uploadData) => {
     if (uploadData && uploadData.project_id) {
       setSelectedProjectId(uploadData.project_id);
-      fetchRequirements(uploadData.project_id);
+      await fetchProjects(uploadData.project_id);
+      await fetchRequirements(uploadData.project_id);
     } else {
-      fetchRequirements();
+      await fetchProjects();
+      await fetchRequirements();
     }
-    fetchProjects();
   };
 
   useEffect(() => {
@@ -176,6 +183,13 @@ function MainLayout() {
               onFetchRequirements={handleUploadSuccess}
               onProcess={handleProcess}
               onExport={handleExport}
+              projects={projects}
+              selectedProjectId={selectedProjectId}
+              onSelectProject={setSelectedProjectId}
+              onNavigateToSprintPlan={() => {
+                setProjectInitialTab('sprint-plan');
+                setActiveTab('projects');
+              }}
             />
           )}
 
