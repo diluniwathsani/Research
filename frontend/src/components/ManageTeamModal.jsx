@@ -237,13 +237,6 @@ export default function ManageTeamModal({
 
           <div className="flex items-center gap-2">
             <button
-              onClick={handleStartAdd}
-              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-indigo-600/30 transition-all"
-            >
-              <UserPlus size={14} />
-              <span>Add Resource</span>
-            </button>
-            <button
               onClick={onClose}
               className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
             >
