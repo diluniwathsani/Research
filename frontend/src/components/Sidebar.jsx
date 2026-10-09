@@ -1,56 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { 
-  FileCode, Calendar, Users, GitPullRequest, LayoutDashboard,
-  CheckCircle2, Sparkles, FolderGit2
+  FileCode, Calendar, Users, GitPullRequest, LayoutDashboard 
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount, selectedProjectId }) {
+export default function Sidebar({ activeTab, setActiveTab }) {
   const { user } = useAuth();
-  const [stats, setStats] = useState({ stories: 0, sprints: 0, reqs: 0, epics: 0 });
-
-  const isMatchingProject = (itemProjId, targetProjId) => {
-    if (!targetProjId || !itemProjId) return true;
-    const itemStr = String(itemProjId).toLowerCase().trim();
-    const targetStr = String(targetProjId).toLowerCase().trim();
-    return itemStr === targetStr || 
-           targetStr.includes(itemStr) || 
-           itemStr.includes(targetStr) ||
-           (itemStr.replace(/\D/g, '') !== '' && itemStr.replace(/\D/g, '') === targetStr.replace(/\D/g, ''));
-  };
-
-  useEffect(() => {
-    fetch("http://localhost:3000/api/user-stories")
-      .then((res) => res.json())
-      .then((data) => {
-        const storiesList = Array.isArray(data) ? data : (data.stories || []);
-        const filteredStories = storiesList.filter(s => isMatchingProject(s.project_id, selectedProjectId));
-        const activeStories = (filteredStories.length > 0 || !selectedProjectId) ? filteredStories : storiesList;
-
-        const epicsSet = new Set(activeStories.map(s => s.epic || s.feature).filter(Boolean));
-        const totalSP = activeStories.reduce((acc, s) => acc + (Number(s.story_points) || 5), 0);
-        const calculatedSprints = Math.max(activeStories.length > 0 ? 1 : 0, Math.ceil(totalSP / 30));
-
-        setStats({
-          stories: activeStories.length,
-          reqs: activeStories.length,
-          epics: epicsSet.size || (activeStories.length > 0 ? Math.max(1, Math.ceil(activeStories.length / 5)) : (epicCount || 0)),
-          sprints: calculatedSprints,
-        });
-      })
-      .catch((err) => {
-        // Fallback to local storage if API not available
-        const email = user?.email || 'default';
-        const storedSprints = parseInt(localStorage.getItem(`planned_sprints_${email}`) || '0', 10);
-        const storedStories = parseInt(localStorage.getItem(`planned_stories_${email}`) || '0', 10);
-        setStats({
-          stories: storedStories || 0,
-          sprints: storedSprints || 0,
-          reqs: reqCount || 0,
-          epics: epicCount || 0
-        });
-      });
-  }, [reqCount, epicCount, selectedProjectId, user?.email]);
 
   const menuItems = [
     {
@@ -58,7 +13,7 @@ export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount, 
       label: 'Development Artifacts',
       subtitle: 'Requirements & User Stories',
       icon: FileCode,
-      badge: reqCount > 0 ? `${reqCount} Items` : 'Active',
+      badge: 'Active',
       color: 'from-purple-500 to-indigo-600',
     },
     {
@@ -66,7 +21,7 @@ export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount, 
       label: 'Project Management',
       subtitle: 'AI Sprint Planning & DAG',
       icon: Calendar,
-      badge: stats.stories > 0 ? `${stats.stories} Stories` : 'Active',
+      badge: 'Active',
       color: 'from-emerald-500 to-teal-600',
     },
     {
@@ -154,24 +109,6 @@ export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount, 
               );
             })}
           </nav>
-        </div>
-
-        {/* Live Agile Sync Card */}
-        <div className="p-3.5 rounded-2xl bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-slate-100 dark:to-slate-800 border border-indigo-500/20 space-y-2">
-          <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-xs">
-            <Sparkles size={14} />
-            <span>Research Metrics</span>
-          </div>
-          <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600 dark:text-slate-300">
-            <div>
-              <span className="text-slate-400 block text-[10px]">Stories</span>
-              <strong className="text-sm font-black text-slate-800 dark:text-slate-100">{stats.stories}</strong>
-            </div>
-            <div>
-              <span className="text-slate-400 block text-[10px]">Sprints</span>
-              <strong className="text-sm font-black text-indigo-600 dark:text-indigo-400">{stats.sprints}</strong>
-            </div>
-          </div>
         </div>
       </div>
 
