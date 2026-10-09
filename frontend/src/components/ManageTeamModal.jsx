@@ -33,7 +33,7 @@ export default function ManageTeamModal({
   onTeamUpdated 
 }) {
   const [editingDev, setEditingDev] = useState(null);
-  const [isAddingNew, setIsAddingNew] = useState(false);
+  const [isAddingNew, setIsAddingNew] = useState(true);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
@@ -369,22 +369,22 @@ export default function ManageTeamModal({
           <div className="lg:col-span-5 space-y-4">
             <div className="bg-slate-950/90 border border-slate-800 p-5 rounded-2xl space-y-4">
               <h4 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
-                {isAddingNew ? <UserPlus size={15} className="text-emerald-400" /> : <Edit2 size={15} className="text-indigo-400" />}
-                <span>{isAddingNew ? "Add New Resource" : (editingDev ? `Edit ${editingDev.name}` : "Resource Details")}</span>
+                {editingDev ? <Edit2 size={15} className="text-indigo-400" /> : <UserPlus size={15} className="text-emerald-400" />}
+                <span>{editingDev ? `Edit ${editingDev.name}` : "Add New Resource"}</span>
               </h4>
 
               {(!isAddingNew && !editingDev) ? (
                 <div className="p-8 text-center text-slate-400 text-xs space-y-3">
                   <Users size={36} className="mx-auto text-slate-600" />
                   <p>
-                    Select an engineer on the left to edit their skillset and capacity, or click <strong>Add Resource</strong> to create a new team member.
+                    Select an engineer on the left to edit their skillset and capacity, or click <strong>Add New Resource</strong> to create a new team member.
                   </p>
                   <button
                     onClick={handleStartAdd}
                     className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold inline-flex items-center gap-2 shadow"
                   >
                     <UserPlus size={14} />
-                    <span>Create New Developer</span>
+                    <span>Add New Resource</span>
                   </button>
                 </div>
               ) : (
@@ -536,7 +536,7 @@ export default function ManageTeamModal({
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setIsAddingNew(false); setEditingDev(null); }}
+                      onClick={() => handleStartAdd()}
                       className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition-all"
                     >
                       Cancel
