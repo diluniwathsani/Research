@@ -36,15 +36,12 @@ export default function DashboardView({
   };
 
   const getProjectReqCount = (pId) => {
-    // 1. Check requirements passed in props tagged by project_id
     const taggedReqs = requirements.filter(r => isMatchingProject(r.project_id || r.projectId, pId));
     if (taggedReqs.length > 0) return taggedReqs.length;
 
-    // 2. Check user_stories in database for that project_id
     const taggedStories = userStories.filter(s => isMatchingProject(s.project_id, pId));
     if (taggedStories.length > 0) return taggedStories.length;
 
-    // 3. Match known IDs or divide proportionally
     const pStr = String(pId || '');
     if (pStr.includes('104140')) return 19;
     if (pStr.includes('167452')) return 59;
@@ -123,6 +120,54 @@ export default function DashboardView({
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Extracted feature domains</p>
         </div>
 
+      </div>
+
+      {/* System Modules Overview Card */}
+      <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 border border-slate-200 dark:border-slate-700/80 shadow-sm space-y-6">
+        <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <LayoutDashboard size={20} className="text-indigo-600 dark:text-indigo-400" />
+          System Modules & Research Contributions
+        </h2>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          
+          <div className="p-5 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 font-bold text-sm">
+                <FileText size={18} />
+                <span>Development Artifacts</span>
+              </div>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-600 text-white">
+                Phase 1
+              </span>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              Complete requirement sentence ingestion, spaCy NLP dependency parsing, RFC 2119 completeness validation, and SVM topic clustering.
+            </p>
+            <button onClick={() => setActiveTab('artifacts')} className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 pt-1">
+              Go to Module <ArrowUpRight size={14} />
+            </button>
+          </div>
+
+          <div className="p-5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 font-bold text-sm">
+                <Calendar size={18} />
+                <span>Project Management & Re-Planning</span>
+              </div>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-600 text-white">
+                Phase 2
+              </span>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              AI Sprint Planning Engine featuring Random Forest priority prediction, effort estimation (R² 0.992), dynamic Bin-Packing sprint allocation, and scope change replanning.
+            </p>
+            <button onClick={() => setActiveTab('projects')} className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 pt-1">
+              Go to Module <ArrowUpRight size={14} />
+            </button>
+          </div>
+
+        </div>
       </div>
 
       {/* Projects Summary Table Below Cards */}

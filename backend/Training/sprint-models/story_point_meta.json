@@ -1,0 +1,38 @@
+{
+  "model_name": "Gradient Boosting",
+  "mae": 0.21,
+  "r2": 0.989,
+  "benchmarks": [
+    {
+      "model": "Gradient Boosting",
+      "mae": 0.21,
+      "r2": 0.989,
+      "exact_acc": 84.2,
+      "within_one_step_acc": 100.0
+    },
+    {
+      "model": "Random Forest",
+      "mae": 0.35,
+      "r2": 0.969,
+      "exact_acc": 84.2,
+      "within_one_step_acc": 100.0
+    },
+    {
+      "model": "Ridge Regression",
+      "mae": 0.73,
+      "r2": 0.907,
+      "exact_acc": 78.9,
+      "within_one_step_acc": 100.0
+    }
+  ],
+  "fibonacci_scale": [
+    1,
+    2,
+    3,
+    5,
+    8,
+    13,
+    21
+  ],
+  "sample_count": 83
+}

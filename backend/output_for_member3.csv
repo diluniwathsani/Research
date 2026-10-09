@@ -1,0 +1,32 @@
+story_id,title,sprint_number,story_points,estimated_hours,priority_tier,assigned_developer,developer_id,required_skills,status,subtasks_count
+US004,The system shall allow authorized administrators to hide reviews that ,1,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US014,"The system shall allow authorized administrators to create, update, de",1,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US015,"The system shall send email notifications when an order is placed, shi",1,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US017,The system shall allow customers to view the current status and delive,1,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US023,The system shall allow customers to add an available product to the sh,1,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US027,The system shall authenticate customers using their registered email a,1,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US030,The system shall allow a new customer to create an account using a uni,1,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US001,The system shall allow customers to submit support requests and view t,2,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US007,The system shall provide at least 99.5 percent monthly availability ex,2,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US018,The system shall display a payment confirmation and generate a unique ,2,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US022,"The system shall allow customers to increase, decrease, or remove prod",2,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US026,"The system shall allow customers to search products by product name, c",2,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US028,The system shall allow customers to reset a forgotten password using a,2,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US021,The system shall allow customers to enter and save a delivery address ,2,5,40,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US005,The system shall allow customers to submit a rating and written review,3,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US008,The system shall support at least 1000 concurrent authenticated users ,3,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US010,The system shall encrypt customer passwords and sensitive payment-rela,3,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US011,The system shall automatically terminate an inactive customer session ,3,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US016,The system shall allow authenticated customers to view their previous ,3,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US025,"The system shall allow customers to filter products by price range, ca",3,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US029,The system shall send a verification link to the customer's registered,3,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US024,"The system shall display product images, description, price, stock ava",4,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US002,The system shall validate an entered discount code and apply the eligi,4,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US009,The system shall return product search results within two seconds for ,4,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US012,"The system shall allow authorized administrators to view, update, and ",4,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US013,The system shall allow authorized administrators to update product sto,4,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US019,The system shall allow customers to pay for an order using a supported,4,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US003,The system shall allow administrators to create promotional discount c,5,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US006,The system shall provide administrators with a dashboard showing daily,5,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US020,"The system shall display item prices, quantities, delivery charges, di",5,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US031,Test Biometric Pay,5,5,40,CRITICAL,Kasun Perera,DEV01,Fullstack,To Do,2

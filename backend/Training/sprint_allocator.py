@@ -1,13 +1,19 @@
 import pandas as pd
 import os
+import sys
 import pickle
 import numpy as np
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
 
 print("=" * 60)
 print("SPRINT ALLOCATOR")
 print("=" * 60)
 
-base = os.path.join("C:", os.sep, "Users", "lap.lk", "Desktop", "Research 4.1")
+default_base = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sprint-models")
+remote_base = os.path.join("C:", os.sep, "Users", "lap.lk", "Desktop", "Research 4.1")
+base = remote_base if os.path.exists(remote_base) else default_base
 
 # ============================================
 print("\n[STEP 1] LOADING SAVED MODELS...")
@@ -225,7 +231,7 @@ for sprint_num, stories in sprints.items():
         })
 
 df_output = pd.DataFrame(output_rows)
-output_path = os.path.join(base, "sprint_plan_output.csv")
+output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sprint_plan_output.csv")
 df_output.to_csv(output_path, index=False)
 
 print(f"\nSprint plan saved as: sprint_plan_output.csv ✅")
