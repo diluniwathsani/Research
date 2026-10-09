@@ -5,8 +5,20 @@ import SprintPlanOutput from '../pages/SprintPlanOutput';
 import Replanning from '../pages/Replanning';
 import Performance from '../pages/Performance';
 
-export default function ProjectManagementModule() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+export default function ProjectManagementModule({ 
+  requirements = [], 
+  initialTab = 'sprint-plan', 
+  onNavigateToArtifacts, 
+  onNavigateToChangeRequests,
+  onNavigateToResources
+}) {
+  const [activeTab, setActiveTab] = useState(initialTab || 'sprint-plan');
+
+  React.useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard' },
@@ -35,10 +47,22 @@ export default function ProjectManagementModule() {
       </div>
 
       <div className="w-full bg-slate-800/40 border border-slate-700/60 rounded-2xl p-6 shadow-xl min-h-[500px]">
-        {activeTab === 'dashboard' && <SprintDashboard />}
-        {activeTab === 'add-stories' && <AddStories />}
-        {activeTab === 'sprint-plan' && <SprintPlanOutput />}
-        {activeTab === 'replanning' && <Replanning />}
+        {activeTab === 'dashboard' && <SprintDashboard requirements={requirements} />}
+        {activeTab === 'add-stories' && <AddStories onStoryAdded={() => setActiveTab('sprint-plan')} />}
+        {activeTab === 'sprint-plan' && (
+          <SprintPlanOutput 
+            requirements={requirements} 
+            onNavigateToAddStories={() => setActiveTab('add-stories')}
+            onNavigateToArtifacts={onNavigateToArtifacts}
+            onNavigateToResources={onNavigateToResources}
+          />
+        )}
+        {activeTab === 'replanning' && (
+          <Replanning 
+            requirements={requirements} 
+            onNavigateToChangeRequests={onNavigateToChangeRequests} 
+          />
+        )}
         {activeTab === 'performance' && <Performance />}
       </div>
     </div>

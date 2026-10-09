@@ -1,0 +1,11 @@
+sprint_number,story_id,title,priority,priority_confidence,story_points
+1,US003,Update color scheme on dashboard page,HIGH,60.0,2
+1,US006,Fix broken email notifications,HIGH,76.0,3
+1,US002,Add export to PDF feature for reports,HIGH,54.0,5
+1,US001,Fix critical security vulnerability in login system,HIGH,61.0,8
+1,US010,Add two factor authentication for admin users,HIGH,55.0,8
+2,US004,Payment gateway crashes on checkout,HIGH,72.0,13
+2,US009,Update help documentation links,LOW,74.0,1
+2,US007,Add dark mode toggle to settings,LOW,59.0,3
+2,US005,Add search filter to user management,LOW,58.0,5
+2,US008,Database connection timeout under heavy load,LOW,58.0,8

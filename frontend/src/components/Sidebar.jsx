@@ -1,30 +1,89 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, FileCode, Users, Calendar, GitPullRequest, Sparkles, ChevronRight, Layers } from 'lucide-react';
+import { 
+  FileCode, Calendar, Users, GitPullRequest, LayoutDashboard,
+  CheckCircle2, Sparkles, FolderGit2
+} from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
-export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount }) {
-  const [member2Stats, setMember2Stats] = useState({ stories: 0, sprints: 0 });
+export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount, selectedProjectId }) {
+  const { user } = useAuth();
+  const [stats, setStats] = useState({ stories: 0, sprints: 0, reqs: 0, epics: 0 });
+
+  const isMatchingProject = (itemProjId, targetProjId) => {
+    if (!targetProjId || !itemProjId) return true;
+    const itemStr = String(itemProjId).toLowerCase().trim();
+    const targetStr = String(targetProjId).toLowerCase().trim();
+    return itemStr === targetStr || 
+           targetStr.includes(itemStr) || 
+           itemStr.includes(targetStr) ||
+           (itemStr.replace(/\D/g, '') !== '' && itemStr.replace(/\D/g, '') === targetStr.replace(/\D/g, ''));
+  };
 
   useEffect(() => {
-    fetch("http://localhost:8080/api/stories")
+    fetch("http://localhost:3000/api/user-stories")
       .then((res) => res.json())
       .then((data) => {
-        const storiesList = data.stories || [];
-        setMember2Stats({
-          stories: storiesList.length,
-          sprints: Math.ceil(storiesList.length / 5),
+        const storiesList = Array.isArray(data) ? data : (data.stories || []);
+        const filteredStories = storiesList.filter(s => isMatchingProject(s.project_id, selectedProjectId));
+        const activeStories = (filteredStories.length > 0 || !selectedProjectId) ? filteredStories : storiesList;
+
+        const epicsSet = new Set(activeStories.map(s => s.epic || s.feature).filter(Boolean));
+        const totalSP = activeStories.reduce((acc, s) => acc + (Number(s.story_points) || 5), 0);
+        const calculatedSprints = Math.max(activeStories.length > 0 ? 1 : 0, Math.ceil(totalSP / 30));
+
+        setStats({
+          stories: activeStories.length,
+          reqs: activeStories.length,
+          epics: epicsSet.size || (activeStories.length > 0 ? Math.max(1, Math.ceil(activeStories.length / 5)) : (epicCount || 0)),
+          sprints: calculatedSprints,
         });
       })
-      .catch((err) => console.error("Sidebar API Error:", err));
-  }, []);
+      .catch((err) => {
+        // Fallback to local storage if API not available
+        const email = user?.email || 'default';
+        const storedSprints = parseInt(localStorage.getItem(`planned_sprints_${email}`) || '0', 10);
+        const storedStories = parseInt(localStorage.getItem(`planned_stories_${email}`) || '0', 10);
+        setStats({
+          stories: storedStories || 0,
+          sprints: storedSprints || 0,
+          reqs: reqCount || 0,
+          epics: epicCount || 0
+        });
+      });
+  }, [reqCount, epicCount, selectedProjectId, user?.email]);
 
   const menuItems = [
     {
       id: 'artifacts',
       label: 'Development Artifacts',
-      subtitle: 'Requirements, Epics & AC',
+      subtitle: 'Requirements & User Stories',
       icon: FileCode,
       badge: reqCount > 0 ? `${reqCount} Items` : 'Active',
       color: 'from-purple-500 to-indigo-600',
+    },
+    {
+      id: 'projects',
+      label: 'Project Management',
+      subtitle: 'AI Sprint Planning & DAG',
+      icon: Calendar,
+      badge: stats.stories > 0 ? `${stats.stories} Stories` : 'Active',
+      color: 'from-emerald-500 to-teal-600',
+    },
+    {
+      id: 'resources',
+      label: 'Resource Management',
+      subtitle: 'Capacity & Staff Allocation',
+      icon: Users,
+      badge: 'Active',
+      color: 'from-indigo-500 to-purple-600',
+    },
+    {
+      id: 'changerequests',
+      label: 'Change Requests',
+      subtitle: 'Impact & Scope Governance',
+      icon: GitPullRequest,
+      badge: 'Active',
+      color: 'from-amber-500 to-rose-600',
     },
     {
       id: 'dashboard',
@@ -33,30 +92,6 @@ export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount }
       icon: LayoutDashboard,
       badge: null,
       color: 'from-blue-500 to-indigo-600',
-    },
-    {
-      id: 'resources',
-      label: 'Resource Management',
-      subtitle: 'Reserved for Team Member',
-      icon: Users,
-      badge: 'Blank',
-      color: 'from-slate-400 to-slate-500',
-    },
-    {
-      id: 'projects',
-      label: 'Project Management',
-      subtitle: 'AI Sprint Planning',
-      icon: Calendar,
-      badge: member2Stats.stories > 0 ? `${member2Stats.stories} Stories` : 'Active',
-      color: 'from-emerald-500 to-teal-600',
-    },
-    {
-      id: 'changerequests',
-      label: 'Change Requests',
-      subtitle: 'Reserved for Team Member',
-      icon: GitPullRequest,
-      badge: 'Blank',
-      color: 'from-slate-400 to-slate-500',
     },
   ];
 
@@ -114,12 +149,6 @@ export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount }
                         {item.badge}
                       </span>
                     )}
-                    <ChevronRight
-                      size={14}
-                      className={`transition-transform duration-200 ${
-                        isActive ? 'text-indigo-600 dark:text-indigo-400 translate-x-0.5' : 'text-slate-400 opacity-0 group-hover:opacity-100'
-                      }`}
-                    />
                   </div>
                 </button>
               );
@@ -127,48 +156,34 @@ export default function Sidebar({ activeTab, setActiveTab, reqCount, epicCount }
           </nav>
         </div>
 
-        <div className="p-3.5 rounded-2xl bg-gradient-to-br from-slate-900 to-indigo-950 text-white shadow-md border border-indigo-900/50 relative overflow-hidden">
-          <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-indigo-500/10 rounded-full blur-xl"></div>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider flex items-center gap-1">
-              <Sparkles size={12} /> Global ML Stats
-            </span>
-            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+        {/* Live Agile Sync Card */}
+        <div className="p-3.5 rounded-2xl bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-slate-100 dark:to-slate-800 border border-indigo-500/20 space-y-2">
+          <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-xs">
+            <Sparkles size={14} />
+            <span>Research Metrics</span>
           </div>
-          
-          <div className="grid grid-cols-2 gap-2 my-2 text-center">
-            <div className="bg-white/5 p-1.5 rounded-lg border border-white/10">
-              <span className="text-[9px] text-slate-400 block uppercase">Reqs</span>
-              <span className="text-sm font-bold text-white">{reqCount}</span>
+          <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600 dark:text-slate-300">
+            <div>
+              <span className="text-slate-400 block text-[10px]">Stories</span>
+              <strong className="text-sm font-black text-slate-800 dark:text-slate-100">{stats.stories}</strong>
             </div>
-            <div className="bg-white/5 p-1.5 rounded-lg border border-white/10">
-              <span className="text-[9px] text-slate-400 block uppercase">Epics</span>
-              <span className="text-sm font-bold text-indigo-300">{epicCount}</span>
-            </div>
-            <div className="bg-emerald-900/20 p-1.5 rounded-lg border border-emerald-500/30">
-              <span className="text-[9px] text-emerald-400 block uppercase">Stories</span>
-              <span className="text-sm font-bold text-white">{member2Stats.stories}</span>
-            </div>
-            <div className="bg-emerald-900/20 p-1.5 rounded-lg border border-emerald-500/30">
-              <span className="text-[9px] text-emerald-400 block uppercase">Sprints</span>
-              <span className="text-sm font-bold text-emerald-300">{member2Stats.sprints}</span>
+            <div>
+              <span className="text-slate-400 block text-[10px]">Sprints</span>
+              <strong className="text-sm font-black text-indigo-600 dark:text-indigo-400">{stats.sprints}</strong>
             </div>
           </div>
-          
-          <p className="text-[9px] text-slate-400 text-center leading-tight mt-1">
-            SVM & spaCy NLP • Random Forest Engine
-          </p>
         </div>
       </div>
 
+      {/* Footer Profile Preview */}
       <div className="p-4 border-t border-slate-200 dark:border-slate-700/80">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-slate-100 dark:bg-slate-700/70 rounded-lg text-slate-500 dark:text-slate-400">
-            <Layers size={16} />
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-xs">
+            {user?.name?.[0] || 'U'}
           </div>
-          <div className="text-xs">
-            <p className="font-semibold text-slate-700 dark:text-slate-300">Research System</p>
-            <p className="text-[10px] text-slate-400">Dialog Axiata Research</p>
+          <div className="truncate text-xs">
+            <span className="font-bold text-slate-800 dark:text-slate-200 block truncate">{user?.name || 'Local User'}</span>
+            <span className="text-[10px] text-slate-400 block truncate">{user?.email || 'Active Session'}</span>
           </div>
         </div>
       </div>

@@ -1,0 +1,52 @@
+{
+  "target_metric": "Priority Prediction Accuracy",
+  "proposed_model": "Enhanced Hybrid (Proposed)",
+  "accuracy": 87.4,
+  "baseline_accuracy": 67.58,
+  "f1_score": 0.874,
+  "improvement_boost": "+19.82%",
+  "confusion_matrix": [
+    {
+      "actual": "Actual LOW",
+      "predLow": 7862,
+      "predHigh": 1085
+    },
+    {
+      "actual": "Actual HIGH",
+      "predLow": 999,
+      "predHigh": 6598
+    }
+  ],
+  "benchmark_models": [
+    {
+      "model": "Enhanced Hybrid (Proposed)",
+      "accuracy": 87.4,
+      "f1": 0.874,
+      "rank": "\ud83c\udfc6 Proposed"
+    },
+    {
+      "model": "Random Forest Baseline",
+      "accuracy": 67.58,
+      "f1": 0.673,
+      "rank": "\ud83e\udd47 1st Base"
+    },
+    {
+      "model": "Logistic Regression",
+      "accuracy": 66.77,
+      "f1": 0.666,
+      "rank": "\ud83e\udd48 2nd Base"
+    },
+    {
+      "model": "Linear SVM",
+      "accuracy": 66.51,
+      "f1": 0.664,
+      "rank": "\ud83e\udd49 3rd Base"
+    },
+    {
+      "model": "Naive Bayes",
+      "accuracy": 65.35,
+      "f1": 0.65,
+      "rank": "4th Base"
+    }
+  ]
+}

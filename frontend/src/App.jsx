@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import Footer from './components/Footer';
@@ -11,7 +13,13 @@ import ResourceManagementModule from './components/ResourceManagementModule';
 import ProjectManagementModule from './components/ProjectManagementModule';
 import ChangeRequestModule from './components/ChangeRequestModule';
 
-function App() {
+// Auth Components
+import { AuthProvider, useAuth } from './context/AuthContext';
+import AuthModal from './components/AuthModal';
+
+function MainLayout() {
+  const { user, isAuthenticated } = useAuth();
+
   // --- STATE MANAGEMENT ---
   const [requirements, setRequirements] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -20,6 +28,34 @@ function App() {
   
   // Navigation tab: 'artifacts', 'dashboard', 'resources', 'projects', 'changerequests'
   const [activeTab, setActiveTab] = useState('artifacts');
+  const [projectInitialTab, setProjectInitialTab] = useState('sprint-plan');
+
+  // Global Project Selection State
+  const [projects, setProjects] = useState([]);
+  const [selectedProjectId, setSelectedProjectId] = useState('P00001');
+
+  const fetchProjects = async () => {
+    try {
+      const res = await axios.get('http://localhost:3000/api/projects');
+      const list = Array.isArray(res.data) ? res.data : (res.data && res.data.data ? res.data.data : []);
+      if (list.length > 0) {
+        setProjects(list);
+        setSelectedProjectId(prevId => {
+          const exists = list.some(p => p.project_id === prevId || p.id === prevId);
+          if (!prevId || !exists) {
+            return list[0].project_id || list[0].id || prevId;
+          }
+          return prevId;
+        });
+      }
+    } catch (err) {
+      console.warn('Projects fetch error:', err.message);
+    }
+  };
+
+  useEffect(() => {
+    fetchProjects();
+  }, []);
 
   // --- THEME SYNC ---
   useEffect(() => {
@@ -31,52 +67,65 @@ function App() {
   }, [isDark]);
 
   // --- API HANDLERS ---
-  const fetchRequirements = async () => {
+  const fetchRequirements = async (retryCount = 0) => {
     try {
-      const res = await axios.get('http://localhost:3000/api/requirements');
-      setRequirements(res.data);
+      const url = selectedProjectId 
+        ? `http://localhost:3000/api/requirements?project_id=${encodeURIComponent(selectedProjectId)}`
+        : 'http://localhost:3000/api/requirements';
+      const res = await axios.get(url);
+      const list = Array.isArray(res.data) ? res.data : (res.data && res.data.data ? res.data.data : []);
+      setRequirements(list);
+      setError(null);
+      fetchProjects();
     } catch (err) {
-      console.error(err);
+      console.error('Fetch requirements error:', err);
       setError("Failed to fetch requirements from backend.");
+      if (retryCount < 4) {
+        setTimeout(() => {
+          fetchRequirements(retryCount + 1);
+        }, 2000);
+      }
     }
   };
 
   useEffect(() => {
     fetchRequirements();
-  }, []);
+  }, [selectedProjectId]);
 
   const handleProcess = async () => {
     setLoading(true);
     setError(null);
     try {
-      await axios.post('http://localhost:3000/api/process');
+      await axios.post('http://localhost:3000/api/process', { email: user?.email });
       await fetchRequirements();
+      setLoading(false);
     } catch (err) {
-      console.error(err);
-      setError("Failed to process requirements via AI pipeline.");
-    } finally {
+      console.error('Process error:', err);
+      setError("Failed to process requirements via pipeline.");
       setLoading(false);
     }
   };
 
   const handleExport = () => {
-    window.location.href = 'http://localhost:3000/api/export';
+    const emailParam = user?.email ? `?email=${encodeURIComponent(user.email)}` : '';
+    window.location.href = `http://localhost:3000/api/export${emailParam}`;
   };
 
-  // Count epics for sidebar stat badge
-  const epicSet = new Set(requirements.map(r => r.epic).filter(Boolean));
-  const epicCount = epicSet.size;
+  const epicCount = new Set(requirements.map((r) => r.epic).filter(Boolean)).size;
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 transition-colors duration-200 font-sans antialiased">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans transition-colors duration-200 text-slate-900 dark:text-slate-100">
       
-      {/* Top Admin Header */}
+      {/* Top Header */}
       <Header 
         isDark={isDark} 
         setIsDark={setIsDark} 
         activeTab={activeTab} 
         reqCount={requirements.length}
         onRefresh={fetchRequirements} 
+        projects={projects}
+        selectedProjectId={selectedProjectId}
+        onSelectProject={setSelectedProjectId}
       />
 
       {/* Main Body with Sidebar + View Container */}
@@ -88,6 +137,7 @@ function App() {
           setActiveTab={setActiveTab} 
           reqCount={requirements.length}
           epicCount={epicCount}
+          selectedProjectId={selectedProjectId}
         />
 
         {/* Content View Area */}
@@ -101,6 +151,9 @@ function App() {
               onExport={handleExport}
               onUploadSuccess={fetchRequirements}
               setActiveTab={setActiveTab}
+              projects={projects}
+              selectedProjectId={selectedProjectId}
+              onSelectProject={setSelectedProjectId}
             />
           )}
 
@@ -112,29 +165,65 @@ function App() {
               onFetchRequirements={fetchRequirements}
               onProcess={handleProcess}
               onExport={handleExport}
+              projects={projects}
+              selectedProjectId={selectedProjectId}
+              onSelectProject={setSelectedProjectId}
+              onNavigateToSprintPlan={() => {
+                setProjectInitialTab('sprint-plan');
+                setActiveTab('projects');
+              }}
+            />
+          )}
+
+          {activeTab === 'projects' && (
+            <ProjectManagementModule 
+              requirements={requirements} 
+              initialTab={projectInitialTab}
+              projects={projects}
+              selectedProjectId={selectedProjectId}
+              onSelectProject={setSelectedProjectId}
+              onNavigateToArtifacts={() => setActiveTab('artifacts')}
+              onNavigateToChangeRequests={() => setActiveTab('changerequests')}
+              onNavigateToResources={() => setActiveTab('resources')}
             />
           )}
 
           {activeTab === 'resources' && (
-            <ResourceManagementModule requirements={requirements} />
-          )}
-
-          {activeTab === 'projects' && (
-            <ProjectManagementModule requirements={requirements} />
+            <ResourceManagementModule 
+              requirements={requirements} 
+              projects={projects}
+              selectedProjectId={selectedProjectId}
+              onSelectProject={setSelectedProjectId}
+            />
           )}
 
           {activeTab === 'changerequests' && (
-            <ChangeRequestModule requirements={requirements} />
+            <ChangeRequestModule 
+              requirements={requirements} 
+              projects={projects}
+              selectedProjectId={selectedProjectId}
+              onSelectProject={setSelectedProjectId}
+            />
           )}
 
         </main>
       </div>
 
-      {/* Admin Dashboard Footer */}
+      {/* Auth Modal */}
+      <AuthModal />
+
+      {/* Footer */}
       <Footer />
     </div>
   );
 }
 
-export default App;
-
+export default function App() {
+  return (
+    <DndProvider backend={HTML5Backend}>
+      <AuthProvider>
+        <MainLayout />
+      </AuthProvider>
+    </DndProvider>
+  );
+}

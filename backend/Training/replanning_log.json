@@ -1,0 +1,404 @@
+{
+  "timestamp": "2026-10-08 21:20:22",
+  "change_event": {
+    "change_type": "NEW_STORY_ADDED",
+    "story_id": "US050",
+    "title": "Add staff login",
+    "description": "",
+    "priority": "LOW",
+    "priority_tier": "LOW",
+    "priority_score": 25,
+    "confidence": 75.0,
+    "story_points": 3,
+    "dependencies": [],
+    "badge_color": "emerald",
+    "reason": "Low priority: minor cosmetic, stylistic, or non-urgent enhancement.",
+    "new_priority_tier": "CRITICAL"
+  },
+  "impact_summary": {
+    "timestamp": "2026-10-08 21:20:22",
+    "change_type": "NEW_STORY_ADDED",
+    "affected_story_id": "US050",
+    "risk_level": "HIGH",
+    "blast_radius_score": 91,
+    "displaced_count": 45,
+    "promoted_count": 1,
+    "displaced_stories": [
+      {
+        "story_id": "US014",
+        "title": "The system shall provide a real-time dashboard of sales KPIs.",
+        "story_points": 3,
+        "from_sprint": 1,
+        "to_sprint": 2,
+        "shift": "Shifted Sprint 1 \u2794 Sprint 2"
+      },
+      {
+        "story_id": "US015",
+        "title": "The system shall export reports to Excel, CSV and PDF.",
+        "story_points": 3,
+        "from_sprint": 1,
+        "to_sprint": 2,
+        "shift": "Shifted Sprint 1 \u2794 Sprint 2"
+      },
+      {
+        "story_id": "US008",
+        "title": "The system shall support barcode scanners, receipt printers, cash draw",
+        "story_points": 8,
+        "from_sprint": 1,
+        "to_sprint": 2,
+        "shift": "Shifted Sprint 1 \u2794 Sprint 2"
+      },
+      {
+        "story_id": "US002",
+        "title": "The system shall complete a standard checkout transaction in under 2 s",
+        "story_points": 8,
+        "from_sprint": 1,
+        "to_sprint": 2,
+        "shift": "Shifted Sprint 1 \u2794 Sprint 2"
+      },
+      {
+        "story_id": "US046",
+        "title": "The system shall allow a transaction to be put on hold and recalled la",
+        "story_points": 5,
+        "from_sprint": 1,
+        "to_sprint": 2,
+        "shift": "Shifted Sprint 1 \u2794 Sprint 2"
+      },
+      {
+        "story_id": "US034",
+        "title": "The system shall send receipts to customers by email or SMS.",
+        "story_points": 3,
+        "from_sprint": 1,
+        "to_sprint": 2,
+        "shift": "Shifted Sprint 1 \u2794 Sprint 2"
+      },
+      {
+        "story_id": "US039",
+        "title": "The system shall issue and redeem gift cards and vouchers.",
+        "story_points": 3,
+        "from_sprint": 1,
+        "to_sprint": 3,
+        "shift": "Shifted Sprint 1 \u2794 Sprint 3"
+      },
+      {
+        "story_id": "US044",
+        "title": "The system shall process returns and refunds linked to the original sa",
+        "story_points": 8,
+        "from_sprint": 2,
+        "to_sprint": 3,
+        "shift": "Shifted Sprint 2 \u2794 Sprint 3"
+      },
+      {
+        "story_id": "US033",
+        "title": "The system shall allow configurable receipt templates (logo, footer, t",
+        "story_points": 5,
+        "from_sprint": 2,
+        "to_sprint": 3,
+        "shift": "Shifted Sprint 2 \u2794 Sprint 3"
+      },
+      {
+        "story_id": "US005",
+        "title": "The system shall expose secure REST APIs and webhooks for third-party ",
+        "story_points": 5,
+        "from_sprint": 2,
+        "to_sprint": 3,
+        "shift": "Shifted Sprint 2 \u2794 Sprint 3"
+      },
+      {
+        "story_id": "US021",
+        "title": "The system shall store customer profiles with contact details and cons",
+        "story_points": 5,
+        "from_sprint": 2,
+        "to_sprint": 3,
+        "shift": "Shifted Sprint 2 \u2794 Sprint 3"
+      },
+      {
+        "story_id": "US026",
+        "title": "The system shall manage supplier records and purchase orders.",
+        "story_points": 3,
+        "from_sprint": 2,
+        "to_sprint": 3,
+        "shift": "Shifted Sprint 2 \u2794 Sprint 3"
+      },
+      {
+        "story_id": "US024",
+        "title": "The system shall support product categories and bundled items.",
+        "story_points": 5,
+        "from_sprint": 2,
+        "to_sprint": 4,
+        "shift": "Shifted Sprint 2 \u2794 Sprint 4"
+      },
+      {
+        "story_id": "US049",
+        "title": "The system shall allow cashiers to search products by name, SKU or cat",
+        "story_points": 5,
+        "from_sprint": 2,
+        "to_sprint": 4,
+        "shift": "Shifted Sprint 2 \u2794 Sprint 4"
+      },
+      {
+        "story_id": "US009",
+        "title": "The system shall require manager approval for restricted actions.",
+        "story_points": 5,
+        "from_sprint": 2,
+        "to_sprint": 4,
+        "shift": "Shifted Sprint 2 \u2794 Sprint 4"
+      },
+      {
+        "story_id": "US029",
+        "title": "The system shall support stock transfers between outlets or warehouses",
+        "story_points": 5,
+        "from_sprint": 2,
+        "to_sprint": 4,
+        "shift": "Shifted Sprint 2 \u2794 Sprint 4"
+      },
+      {
+        "story_id": "US031",
+        "title": "The system shall alert users when stock falls below a configurable reo",
+        "story_points": 5,
+        "from_sprint": 2,
+        "to_sprint": 4,
+        "shift": "Shifted Sprint 2 \u2794 Sprint 4"
+      },
+      {
+        "story_id": "US048",
+        "title": "The system shall allow cashiers to change quantity or remove items bef",
+        "story_points": 5,
+        "from_sprint": 2,
+        "to_sprint": 4,
+        "shift": "Shifted Sprint 2 \u2794 Sprint 4"
+      },
+      {
+        "story_id": "US050",
+        "title": "Add staff login",
+        "story_points": 3,
+        "from_sprint": 3,
+        "to_sprint": 5,
+        "shift": "Shifted Sprint 3 \u2794 Sprint 5"
+      },
+      {
+        "story_id": "US035",
+        "title": "The system shall print receipts on thermal printers.",
+        "story_points": 2,
+        "from_sprint": 2,
+        "to_sprint": 5,
+        "shift": "Shifted Sprint 2 \u2794 Sprint 5"
+      },
+      {
+        "story_id": "US006",
+        "title": "The system shall synchronise products, prices and stock with an online",
+        "story_points": 5,
+        "from_sprint": 3,
+        "to_sprint": 5,
+        "shift": "Shifted Sprint 3 \u2794 Sprint 5"
+      },
+      {
+        "story_id": "US013",
+        "title": "The system shall restrict functions based on configurable user roles.",
+        "story_points": 5,
+        "from_sprint": 3,
+        "to_sprint": 5,
+        "shift": "Shifted Sprint 3 \u2794 Sprint 5"
+      },
+      {
+        "story_id": "US038",
+        "title": "The system shall support partial payments and deposits against an orde",
+        "story_points": 5,
+        "from_sprint": 3,
+        "to_sprint": 5,
+        "shift": "Shifted Sprint 3 \u2794 Sprint 5"
+      },
+      {
+        "story_id": "US050",
+        "title": "The system shall add products to the cart by scanning a barcode or QR ",
+        "story_points": 5,
+        "from_sprint": 3,
+        "to_sprint": 5,
+        "shift": "Shifted Sprint 3 \u2794 Sprint 5"
+      },
+      {
+        "story_id": "US022",
+        "title": "The system shall support different price lists by outlet or customer g",
+        "story_points": 5,
+        "from_sprint": 3,
+        "to_sprint": 5,
+        "shift": "Shifted Sprint 3 \u2794 Sprint 5"
+      },
+      {
+        "story_id": "US010",
+        "title": "The system shall support opening and closing shifts with cash drawer r",
+        "story_points": 5,
+        "from_sprint": 3,
+        "to_sprint": 6,
+        "shift": "Shifted Sprint 3 \u2794 Sprint 6"
+      },
+      {
+        "story_id": "US017",
+        "title": "The system shall report sales by product, category, cashier, outlet an",
+        "story_points": 5,
+        "from_sprint": 3,
+        "to_sprint": 6,
+        "shift": "Shifted Sprint 3 \u2794 Sprint 6"
+      },
+      {
+        "story_id": "US032",
+        "title": "The system shall deduct stock automatically on each sale and restore i",
+        "story_points": 5,
+        "from_sprint": 3,
+        "to_sprint": 6,
+        "shift": "Shifted Sprint 3 \u2794 Sprint 6"
+      },
+      {
+        "story_id": "US028",
+        "title": "The system shall support stock counts and adjustments with reason code",
+        "story_points": 5,
+        "from_sprint": 3,
+        "to_sprint": 6,
+        "shift": "Shifted Sprint 3 \u2794 Sprint 6"
+      },
+      {
+        "story_id": "US020",
+        "title": "The system shall award and redeem loyalty points based on configurable",
+        "story_points": 5,
+        "from_sprint": 4,
+        "to_sprint": 6,
+        "shift": "Shifted Sprint 4 \u2794 Sprint 6"
+      },
+      {
+        "story_id": "US040",
+        "title": "The system shall calculate change due and track cash in/out of the dra",
+        "story_points": 5,
+        "from_sprint": 4,
+        "to_sprint": 6,
+        "shift": "Shifted Sprint 4 \u2794 Sprint 6"
+      },
+      {
+        "story_id": "US003",
+        "title": "The system shall continue to process sales when internet connectivity ",
+        "story_points": 8,
+        "from_sprint": 3,
+        "to_sprint": 7,
+        "shift": "Shifted Sprint 3 \u2794 Sprint 7"
+      },
+      {
+        "story_id": "US001",
+        "title": "The system shall encrypt sensitive data, follow PCI DSS guidelines and",
+        "story_points": 8,
+        "from_sprint": 3,
+        "to_sprint": 7,
+        "shift": "Shifted Sprint 3 \u2794 Sprint 7"
+      },
+      {
+        "story_id": "US004",
+        "title": "The system shall synchronise data across multiple outlets via a centra",
+        "story_points": 8,
+        "from_sprint": 4,
+        "to_sprint": 7,
+        "shift": "Shifted Sprint 4 \u2794 Sprint 7"
+      },
+      {
+        "story_id": "US027",
+        "title": "The system shall track batch numbers and expiry dates for applicable p",
+        "story_points": 5,
+        "from_sprint": 4,
+        "to_sprint": 7,
+        "shift": "Shifted Sprint 4 \u2794 Sprint 7"
+      },
+      {
+        "story_id": "US047",
+        "title": "The system shall support line-item and order-level discounts (percenta",
+        "story_points": 8,
+        "from_sprint": 4,
+        "to_sprint": 8,
+        "shift": "Shifted Sprint 4 \u2794 Sprint 8"
+      },
+      {
+        "story_id": "US018",
+        "title": "The system shall generate X and Z reports summarising sales, payments ",
+        "story_points": 8,
+        "from_sprint": 4,
+        "to_sprint": 8,
+        "shift": "Shifted Sprint 4 \u2794 Sprint 8"
+      },
+      {
+        "story_id": "US037",
+        "title": "The system shall accept payments in multiple currencies using configur",
+        "story_points": 8,
+        "from_sprint": 4,
+        "to_sprint": 8,
+        "shift": "Shifted Sprint 4 \u2794 Sprint 8"
+      },
+      {
+        "story_id": "US045",
+        "title": "The system shall allow an order to be split by item or amount across m",
+        "story_points": 5,
+        "from_sprint": 4,
+        "to_sprint": 8,
+        "shift": "Shifted Sprint 4 \u2794 Sprint 8"
+      },
+      {
+        "story_id": "US023",
+        "title": "The system shall support configurable promotions (BOGO, percentage off",
+        "story_points": 8,
+        "from_sprint": 4,
+        "to_sprint": 9,
+        "shift": "Shifted Sprint 4 \u2794 Sprint 9"
+      },
+      {
+        "story_id": "US011",
+        "title": "The system shall log sensitive actions (voids, refunds, discounts, pri",
+        "story_points": 8,
+        "from_sprint": 5,
+        "to_sprint": 9,
+        "shift": "Shifted Sprint 5 \u2794 Sprint 9"
+      },
+      {
+        "story_id": "US036",
+        "title": "The system shall calculate VAT/sales tax using configurable rates, inc",
+        "story_points": 8,
+        "from_sprint": 5,
+        "to_sprint": 9,
+        "shift": "Shifted Sprint 5 \u2794 Sprint 9"
+      },
+      {
+        "story_id": "US016",
+        "title": "The system shall report stock on hand, stock movement and inventory va",
+        "story_points": 5,
+        "from_sprint": 5,
+        "to_sprint": 9,
+        "shift": "Shifted Sprint 5 \u2794 Sprint 9"
+      },
+      {
+        "story_id": "US030",
+        "title": "The system shall record incoming stock against purchase orders (GRN).",
+        "story_points": 5,
+        "from_sprint": 5,
+        "to_sprint": 10,
+        "shift": "Shifted Sprint 5 \u2794 Sprint 10"
+      },
+      {
+        "story_id": "US025",
+        "title": "The system shall maintain products with SKU, barcode, cost, price and ",
+        "story_points": 8,
+        "from_sprint": 5,
+        "to_sprint": 10,
+        "shift": "Shifted Sprint 5 \u2794 Sprint 10"
+      }
+    ],
+    "promoted_stories": [
+      {
+        "story_id": "US019",
+        "title": "The system shall display a customer's purchase history.",
+        "story_points": 2,
+        "from_sprint": 2,
+        "to_sprint": 1,
+        "shift": "Promoted Sprint 2 \u2794 Sprint 1"
+      }
+    ],
+    "sprints_before": 5,
+    "sprints_after": 10,
+    "points_before": 276,
+    "points_after": 279,
+    "reallocation_reason": "Low priority: minor cosmetic, stylistic, or non-urgent enhancement."
+  }
+}
