@@ -84,16 +84,66 @@ export default function ResourceManagementModule({
   const unifiedProjects = useMemo(() => {
     const list = [];
     const seenNames = new Set();
+    const seenIds = new Set();
 
-    // A. Projects derived from Requirements Module batches
+    const cleanTitle = (raw) => {
+      const str = (raw || '').trim();
+      if (!str || str.toLowerCase() === 'untitled' || str.toLowerCase() === 'untitled batch') {
+        return '';
+      }
+      return str;
+    };
+
+    // 1. Database Projects (Primary source of truth)
+    const dbProjects = parentProjects.length > 0 ? parentProjects : localProjects;
+    dbProjects.forEach((p, idx) => {
+      const pName = cleanTitle(p.project_name || p.name);
+      const pId = String(p.project_id || p.id || `P0000${idx + 1}`);
+      if (pName && !seenNames.has(pName)) {
+        seenNames.add(pName);
+        seenIds.add(pId);
+        list.push({
+          ...p,
+          id: pId,
+          project_id: pId,
+          project_name: pName,
+          name: pName,
+          source: 'database'
+        });
+      }
+    });
+
+    // 2. Active Project Management project name
+    try {
+      const email = localStorage.getItem('user_email') || 'default';
+      const activeSaved = cleanTitle(
+        localStorage.getItem(`active_requirements_batch_${email}`) || 
+        localStorage.getItem('active_requirements_batch') || 
+        localStorage.getItem('active_project_name')
+      );
+      if (activeSaved && !seenNames.has(activeSaved)) {
+        seenNames.add(activeSaved);
+        list.push({
+          id: 'PM-ACTIVE',
+          project_id: 'PM-ACTIVE',
+          project_name: activeSaved,
+          name: activeSaved,
+          description: 'Active project from Project Management & Sprint Planning Module',
+          source: 'project_module'
+        });
+      }
+    } catch (_) {}
+
+    // 3. Batches derived from Requirements Module
     if (Array.isArray(requirements) && requirements.length > 0) {
       requirements.forEach((r, idx) => {
-        const title = (r.batch_title || r.batch_name || r.file_name || '').trim();
+        const title = cleanTitle(r.batch_title || r.batch_name || r.file_name);
         if (title && !seenNames.has(title)) {
           seenNames.add(title);
+          const uniqueBatchId = `BATCH-${idx + 1}`;
           list.push({
-            id: r.project_id || `REQ-${idx + 1}`,
-            project_id: r.project_id || `REQ-${idx + 1}`,
+            id: uniqueBatchId,
+            project_id: r.project_id || uniqueBatchId,
             project_name: title,
             name: title,
             description: `Requirements specification batch (${r.completeness_status || 'Active'})`,
@@ -103,69 +153,49 @@ export default function ResourceManagementModule({
       });
     }
 
-    // B. Active Project Management project name
-    try {
-      const email = localStorage.getItem('user_email') || 'default';
-      const activeSaved = localStorage.getItem(`active_requirements_batch_${email}`) || 
-                          localStorage.getItem('active_requirements_batch') || 
-                          localStorage.getItem('active_project_name');
-      if (activeSaved && activeSaved.trim() && !seenNames.has(activeSaved.trim())) {
-        const cleanName = activeSaved.trim();
-        seenNames.add(cleanName);
-        list.push({
-          id: 'PM-ACTIVE',
-          project_id: 'PM-ACTIVE',
-          project_name: cleanName,
-          name: cleanName,
-          description: 'Active project from Project Management & Sprint Planning Module',
-          source: 'project_module'
-        });
-      }
-    } catch (_) {}
-
-    // C. Database projects
-    const dbProjects = parentProjects.length > 0 ? parentProjects : localProjects;
-    dbProjects.forEach(p => {
-      const pName = (p.project_name || p.name || p.project_id || '').trim();
-      if (pName && !seenNames.has(pName)) {
-        seenNames.add(pName);
-        list.push({
-          ...p,
-          id: p.project_id || p.id,
-          project_id: p.project_id || p.id,
-          project_name: pName,
-          name: pName,
-          source: 'database'
-        });
-      }
-    });
-
-    // Fallback if empty
+    // 4. Default Fallback if empty
     if (list.length === 0) {
       list.push({
         id: 'P00001',
         project_id: 'P00001',
-        project_name: 'POS_SYSTEM_REQUIREMENTS',
-        name: 'POS_SYSTEM_REQUIREMENTS',
-        description: 'Default Project Management Agile Requirements Suite'
+        project_name: 'Enterprise Core Platform',
+        name: 'Enterprise Core Platform',
+        description: 'Enterprise Core Platform Agile Suite'
       });
     }
 
     return list;
   }, [requirements, parentProjects, localProjects]);
 
+  // Clean stale untitled batch in localStorage
+  useEffect(() => {
+    try {
+      const email = localStorage.getItem('user_email') || 'default';
+      ['active_requirements_batch', `active_requirements_batch_${email}`, 'active_project_name'].forEach(k => {
+        const val = localStorage.getItem(k);
+        if (val && (val.toLowerCase() === 'untitled' || val.toLowerCase() === 'untitled batch')) {
+          localStorage.removeItem(k);
+        }
+      });
+    } catch (_) {}
+  }, []);
+
   // Sync selectedProject with unifiedProjects
   useEffect(() => {
     if (unifiedProjects.length > 0) {
       setSelectedProject(prev => {
-        if (prev && unifiedProjects.some(p => String(p.id || p.project_id) === String(prev.id || prev.project_id))) {
-          return prev;
+        if (prev) {
+          const matchPrev = unifiedProjects.find(
+            p => String(p.id) === String(prev.id) || 
+                 (p.project_name && prev.project_name && p.project_name.toLowerCase() === prev.project_name.toLowerCase())
+          );
+          if (matchPrev) return matchPrev;
         }
         if (parentSelectedProjectId) {
-          const match = unifiedProjects.find(
-            p => String(p.project_id) === String(parentSelectedProjectId) || String(p.id) === String(parentSelectedProjectId)
+          const matchParent = unifiedProjects.find(
+            p => String(p.id) === String(parentSelectedProjectId) || String(p.project_id) === String(parentSelectedProjectId)
           );
-          if (match) return match;
+          if (matchParent) return matchParent;
         }
         return unifiedProjects[0];
       });
@@ -173,8 +203,9 @@ export default function ResourceManagementModule({
   }, [unifiedProjects, parentSelectedProjectId]);
 
   const handleSelectProject = (proj) => {
+    if (!proj) return;
     setSelectedProject(proj);
-    const pid = proj ? (proj.project_id || proj.id) : '';
+    const pid = proj.project_id || proj.id;
     if (onSelectProject && pid) {
       onSelectProject(pid);
     }

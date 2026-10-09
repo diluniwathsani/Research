@@ -3,26 +3,34 @@ import React from 'react';
 export default function ProjectSelection({ projects = [], selectedProject, onSelect }) {
   const projectList = Array.isArray(projects) ? projects : (projects?.data || []);
 
+  const currentValue = selectedProject ? String(selectedProject.id || selectedProject.project_id || '') : '';
+
   return (
     <div className="relative">
       <select
-        className="w-full appearance-none px-4 py-2.5 pr-10 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/60 text-slate-700 dark:text-slate-200 text-sm font-medium shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none hover:border-slate-400 dark:hover:border-slate-500"
-        value={selectedProject ? (selectedProject.id || selectedProject.project_id) : ''}
+        className="w-full appearance-none px-4 py-2.5 pr-10 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/60 text-slate-700 dark:text-slate-200 text-sm font-medium shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none hover:border-slate-400 dark:hover:border-slate-500 cursor-pointer"
+        value={currentValue}
         onChange={(e) => {
           const val = e.target.value;
           const project = projectList.find(
             p => String(p.id) === String(val) || String(p.project_id) === String(val)
           );
-          onSelect(project);
+          if (project && onSelect) {
+            onSelect(project);
+          }
         }}
       >
         <option value="">Choose a project...</option>
 
-        {projectList.map(p => (
-          <option key={p.id || p.project_id} value={p.id || p.project_id}>
-            {p.name || p.project_name}
-          </option>
-        ))}
+        {projectList.map((p, idx) => {
+          const optionValue = String(p.id || p.project_id || `proj-${idx}`);
+          const displayName = p.project_name || p.name || 'Agile Project';
+          return (
+            <option key={optionValue} value={optionValue}>
+              {displayName}
+            </option>
+          );
+        })}
       </select>
 
       {/* Custom chevron */}
