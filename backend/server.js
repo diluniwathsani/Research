@@ -689,14 +689,22 @@ app.put('/api/requirements/:id', async (req, res) => {
 
 // Rename a Batch
 app.put('/api/batches/:timestamp', async (req, res) => {
-    const { batch_name } = req.body;
+    const { batch_name, project_id } = req.body;
     const { timestamp } = req.params;
 
     try {
-        const result = await pool.query(
-            "UPDATE requirements SET batch_name = $1 WHERE created_at = $2",
-            [batch_name, timestamp]
-        );
+        let result;
+        if (project_id) {
+            result = await pool.query(
+                "UPDATE requirements SET batch_name = $1 WHERE project_id = $2 OR created_at = $3",
+                [batch_name, project_id, timestamp]
+            );
+        } else {
+            result = await pool.query(
+                "UPDATE requirements SET batch_name = $1 WHERE created_at = $2",
+                [batch_name, timestamp]
+            );
+        }
         res.json({ message: 'Batch renamed successfully', count: result.rowCount });
     } catch (err) {
         console.error(err);
@@ -872,20 +880,25 @@ async function updateDatabase(results, res) {
 
 // Export batch to Excel
 app.get('/api/export/batch', async (req, res) => {
-    let { timestamp } = req.query;
+    let { timestamp, project_id } = req.query;
 
     try {
-        if (!timestamp) {
+        let result;
+        if (project_id) {
+            result = await pool.query("SELECT * FROM requirements WHERE project_id = $1 ORDER BY requirement_order ASC, id ASC", [project_id]);
+        } else if (timestamp) {
+            result = await pool.query("SELECT * FROM requirements WHERE created_at = $1 ORDER BY requirement_order ASC, id ASC", [timestamp]);
+        } else {
             const latestRes = await pool.query("SELECT created_at FROM requirements ORDER BY id DESC LIMIT 1");
             if (latestRes.rows.length > 0) {
                 timestamp = latestRes.rows[0].created_at;
+                result = await pool.query("SELECT * FROM requirements WHERE created_at = $1 ORDER BY requirement_order ASC, id ASC", [timestamp]);
             } else {
                 return res.status(200).json({ success: true, count: 0, data: [], message: 'No requirements found to export' });
             }
         }
 
-        const result = await pool.query("SELECT * FROM requirements WHERE created_at = $1 ORDER BY requirement_order ASC, id ASC", [timestamp]);
-        const rows = result.rows;
+        const rows = result ? result.rows : [];
         if (rows.length === 0) return res.status(200).json({ success: true, count: 0, data: [], message: 'No requirements found for this batch' });
 
         const worksheet = xlsx.utils.json_to_sheet(rows);

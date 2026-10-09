@@ -18,8 +18,9 @@ export default function RequirementsTable({ requirements, onUpdate, onNavigateTo
   const [batchNameValue, setBatchNameValue] = useState("");
 
   // handleExportBatch: Triggers Excel download for a specific set of requirements
-  const handleExportBatch = (timestamp, setTitle) => {
-    window.location.href = `http://localhost:3000/api/export/batch?timestamp=${encodeURIComponent(timestamp)}`;
+  const handleExportBatch = (timestamp, setTitle, projectId) => {
+    const projParam = projectId ? `&project_id=${encodeURIComponent(projectId)}` : '';
+    window.location.href = `http://localhost:3000/api/export/batch?timestamp=${encodeURIComponent(timestamp)}${projParam}`;
   };
 
   const [syncAlert, setSyncAlert] = useState(null);
@@ -87,19 +88,33 @@ export default function RequirementsTable({ requirements, onUpdate, onNavigateTo
   };
 
   // --- DATA PROCESSING: GROUPING ---
-  // 1. Group requirements by Batch (using created_at timestamp)
+  // 1. Group requirements by Batch / Project
   const processedGroups = (requirements || []).reduce((acc, req) => {
     const uploadTime = req.created_at || 'Historical';
     const batchName = req.batch_name && req.batch_name !== 'Untitled Batch' ? req.batch_name : "";
-    const batchKey = `${uploadTime}`; 
+    // Differentiate batches accurately by project_id and batch_name/timestamp
+    const batchKey = (req.project_id && req.project_id !== 'P00001')
+      ? req.project_id
+      : (batchName ? `${req.project_id || 'P00001'}__${batchName}` : uploadTime);
     const domain = req.epic || "Pending Classification";
     
     if (!acc[batchKey]) {
       acc[batchKey] = {
         requirements: {},
         originalBatchName: batchName,
-        timestamp: uploadTime
+        timestamp: uploadTime,
+        projectId: req.project_id || null
       };
+    }
+
+    // Keep the most recent timestamp for this batch to ensure correct descending sort
+    if (uploadTime !== 'Historical' && uploadTime) {
+      if (acc[batchKey].timestamp === 'Historical' || !acc[batchKey].timestamp || uploadTime > acc[batchKey].timestamp) {
+        acc[batchKey].timestamp = uploadTime;
+      }
+    }
+    if (batchName && !acc[batchKey].originalBatchName) {
+      acc[batchKey].originalBatchName = batchName;
     }
     
     // Nested group by Epic/Domain
@@ -111,9 +126,11 @@ export default function RequirementsTable({ requirements, onUpdate, onNavigateTo
   // --- DATA PROCESSING: SORTING ---
   // 2. Determine Chronological Numbers (Oldest First for numbering)
   const chronologicalKeys = Object.keys(processedGroups).sort((a, b) => {
-    if (a === 'Historical') return -1;
-    if (b === 'Historical') return 1;
-    return new Date(a) - new Date(b);
+    const timeA = processedGroups[a].timestamp;
+    const timeB = processedGroups[b].timestamp;
+    if (timeA === 'Historical' || !timeA) return -1;
+    if (timeB === 'Historical' || !timeB) return 1;
+    return new Date(timeA) - new Date(timeB);
   });
 
   // Create a mapping for display titles (e.g. "Requirement Set 1")
@@ -124,9 +141,11 @@ export default function RequirementsTable({ requirements, onUpdate, onNavigateTo
 
   // 3. Prepare for Display: Put newest upload at the TOP so newly uploaded Excel shows immediately!
   const displayKeys = Object.keys(processedGroups).sort((a, b) => {
-    if (a === 'Historical') return 1;
-    if (b === 'Historical') return -1;
-    return new Date(b) - new Date(a);
+    const timeA = processedGroups[a].timestamp;
+    const timeB = processedGroups[b].timestamp;
+    if (timeA === 'Historical' || !timeA) return 1;
+    if (timeB === 'Historical' || !timeB) return -1;
+    return new Date(timeB) - new Date(timeA);
   });
 
   const toggleSection = (id) => {
@@ -166,10 +185,13 @@ export default function RequirementsTable({ requirements, onUpdate, onNavigateTo
     setBatchNameValue(currentName);
   };
 
-  const saveBatchRename = async (timestamp) => {
+  const saveBatchRename = async (key) => {
     try {
-      await axios.put(`http://localhost:3000/api/batches/${encodeURIComponent(timestamp)}`, {
-        batch_name: batchNameValue
+      const batchData = processedGroups[key];
+      const targetTime = batchData?.timestamp || key;
+      await axios.put(`http://localhost:3000/api/batches/${encodeURIComponent(targetTime)}`, {
+        batch_name: batchNameValue,
+        project_id: batchData?.projectId
       });
       setEditingBatchTimestamp(null);
       onUpdate();
@@ -338,7 +360,7 @@ export default function RequirementsTable({ requirements, onUpdate, onNavigateTo
                   </div>
                   <div className="flex items-center gap-4 mt-3 text-slate-400 font-bold">
                     <span className="flex items-center gap-1.5 text-xs">
-                      <Calendar size={14} className="text-primary/60" /> {formatDate(batchKey)}
+                      <Calendar size={14} className="text-primary/60" /> {formatDate(batchData.timestamp)}
                     </span>
                     <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
                     <span className="flex items-center gap-1.5 text-xs">
@@ -372,7 +394,7 @@ export default function RequirementsTable({ requirements, onUpdate, onNavigateTo
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleExportBatch(batchKey, setTitle);
+                        handleExportBatch(batchData.timestamp || batchKey, setTitle, batchData.projectId);
                       }}
                       className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-green-600 hover:text-white rounded-xl transition-all duration-300 text-slate-600 dark:text-slate-300 font-black text-[10px] uppercase tracking-wider shadow-sm hover:shadow-lg group/btn"
                     >

@@ -68,28 +68,18 @@ function MainLayout() {
   }, [isDark]);
 
   // --- API HANDLERS ---
-  const fetchRequirements = async (overrideProjectId = null, retryCount = 0) => {
+  const fetchRequirements = async (retryCount = 0) => {
     try {
-      const pid = (typeof overrideProjectId === 'string' && overrideProjectId) ? overrideProjectId : selectedProjectId;
-      const url = pid 
-        ? `http://localhost:3000/api/requirements?project_id=${encodeURIComponent(pid)}`
-        : 'http://localhost:3000/api/requirements';
-      const res = await axios.get(url);
+      const res = await axios.get('http://localhost:3000/api/requirements');
       const list = Array.isArray(res.data) ? res.data : (res.data && res.data.data ? res.data.data : []);
-      if (list.length > 0) {
-        setRequirements(list);
-      } else {
-        const fallbackRes = await axios.get('http://localhost:3000/api/requirements');
-        const fallbackList = Array.isArray(fallbackRes.data) ? fallbackRes.data : [];
-        setRequirements(fallbackList);
-      }
+      setRequirements(list);
       setError(null);
     } catch (err) {
       console.error('Fetch requirements error:', err);
       setError("Failed to fetch requirements from backend.");
       if (retryCount < 4) {
         setTimeout(() => {
-          fetchRequirements(overrideProjectId, retryCount + 1);
+          fetchRequirements(retryCount + 1);
         }, 2000);
       }
     }
@@ -99,16 +89,15 @@ function MainLayout() {
     if (uploadData && uploadData.project_id) {
       setSelectedProjectId(uploadData.project_id);
       await fetchProjects(uploadData.project_id);
-      await fetchRequirements(uploadData.project_id);
     } else {
       await fetchProjects();
-      await fetchRequirements();
     }
+    await fetchRequirements();
   };
 
   useEffect(() => {
     fetchRequirements();
-  }, [selectedProjectId]);
+  }, []);
 
   const handleProcess = async () => {
     setLoading(true);
