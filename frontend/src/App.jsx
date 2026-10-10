@@ -29,6 +29,7 @@ function MainLayout() {
   // Navigation tab: 'artifacts', 'dashboard', 'resources', 'projects', 'changerequests'
   const [activeTab, setActiveTab] = useState('artifacts');
   const [projectInitialTab, setProjectInitialTab] = useState('sprint-plan');
+  const [projectRefreshKey, setProjectRefreshKey] = useState(Date.now());
 
   // Global Project Selection State
   const [projects, setProjects] = useState([]);
@@ -177,6 +178,7 @@ function MainLayout() {
               onSelectProject={setSelectedProjectId}
               onNavigateToSprintPlan={() => {
                 setProjectInitialTab('sprint-plan');
+                setProjectRefreshKey(Date.now());
                 setActiveTab('projects');
               }}
             />
@@ -184,6 +186,7 @@ function MainLayout() {
 
           {activeTab === 'projects' && (
             <ProjectManagementModule 
+              key={projectRefreshKey}
               requirements={requirements} 
               initialTab={projectInitialTab}
               projects={projects}

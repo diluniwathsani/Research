@@ -1012,6 +1012,7 @@ def import_requirements_to_sprint():
         for idx, req in enumerate(req_list, 1):
             text = req.get('requirement_sentence') or req.get('description') or req.get('title') or ''
             epic = req.get('epic') or 'General Module'
+            feature = req.get('feature') or ''
             raw_title = req.get('user_story') or (f"{feature}: {text[:60]}" if feature else text[:70])
             title = clean_story_title_text(raw_title)
             desc = text

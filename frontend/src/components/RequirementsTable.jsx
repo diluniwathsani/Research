@@ -72,16 +72,17 @@ export default function RequirementsTable({ requirements, onUpdate, onNavigateTo
         });
 
         if (onNavigateToSprintPlan) {
-          setTimeout(() => {
-            onNavigateToSprintPlan();
-          }, 1500);
+          onNavigateToSprintPlan();
         }
+      } else {
+        throw new Error(res.data.message || 'Import to sprint plan failed');
       }
     } catch (err) {
       console.error('Sprint Sync error:', err);
+      setIsWizardOpen(false);
       setSyncAlert({
         type: 'error',
-        msg: '❌ Failed to bridge requirements to Sprint Plan. Ensure Flask API (port 8080) is running.'
+        msg: `❌ Failed to bridge requirements to Sprint Plan: ${err.response?.data?.message || err.message || 'Ensure Flask API (port 8082) is running.'}`
       });
       setTimeout(() => setSyncAlert(null), 7000);
     }
