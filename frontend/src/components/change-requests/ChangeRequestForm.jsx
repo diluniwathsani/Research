@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import './changeRequests.css';
 
-export default function ChangeRequestForm({ onSuccess }) {
+export default function ChangeRequestForm({ onSuccess, onNavigateToReplanning }) {
   const [currentStep, setCurrentStep] = useState(1);
 
   // API Data States
@@ -874,7 +874,7 @@ export default function ChangeRequestForm({ onSuccess }) {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+              <div className="flex flex-wrap justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
                 <button
                   className="cr-btn-back"
                   onClick={handleStartNew}
@@ -887,6 +887,15 @@ export default function ChangeRequestForm({ onSuccess }) {
                 >
                   View in Request Registry →
                 </button>
+                {onNavigateToReplanning && (
+                  <button
+                    className="cr-btn-next flex items-center gap-1.5 bg-gradient-to-r from-amber-600 via-orange-600 to-indigo-600 hover:from-amber-500 hover:to-indigo-500 text-white font-extrabold border-0 shadow-lg shadow-orange-500/20"
+                    onClick={onNavigateToReplanning}
+                  >
+                    <Sparkles size={15} className="text-amber-200" />
+                    <span>Go to Project Sprint Replanning →</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>

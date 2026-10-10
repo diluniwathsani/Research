@@ -1,0 +1,15 @@
+story_id,title,sprint_number,story_points,estimated_hours,priority_tier,assigned_developer,developer_id,required_skills,status,subtasks_count
+US001,To create and manage IT Services Company | Requirements baseline and implementation tracker so that the core functional feature is executed correctly.,1,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US002,To create and manage Register overview so that the core functional feature is executed correctly.,1,3,24,LOW,Unassigned Lead,DEV01,Fullstack,To Do,0
+US003,To create and manage Total requirements so that the core functional feature is executed correctly.,1,3,24,LOW,Unassigned Lead,DEV01,Fullstack,To Do,0
+US006,To create and manage Approved / in progress / implemented so that the core functional feature is executed correctly.,1,5,40,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,2
+US008,To create and manage 1. Review the requirements with process owners and confirm applicability so that the core functional feature is executed correctly.,1,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US009,To 3. Update Owner and Status for accountability and delivery tracking so that the core functional feature is executed correctly.,1,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US010,"To create and manage 4. Define company-specific acceptance tests, targets, legal/tax needs, and integrations so that the core functional feature is executed correctly.",1,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US004,To create and manage Must-have requirements so that the core functional feature is executed correctly.,2,5,40,LOW,Unassigned Lead,DEV01,Fullstack,To Do,0
+US005,To create and manage Proposed status so that the core functional feature is executed correctly.,2,3,24,LOW,Unassigned Lead,DEV01,Fullstack,To Do,0
+US007,To how to use this workbook so that the core functional feature is executed correctly.,2,3,24,LOW,Unassigned Lead,DEV01,Fullstack,To Do,0
+US011,"To 5. Use the unique Requirement ID to trace each requirement through design, testing, and sign-off so that the core functional feature is executed correctly.",2,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US012,"To create and manage 6. Add, remove, or split requirements as needed; preserve IDs once referenced by test cases so that the core functional feature is executed correctly.",2,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US013,To create and manage Document status so that the core functional feature is executed correctly.,2,3,24,LOW,Unassigned Lead,DEV01,Fullstack,To Do,0
+US014,"To create and manage 2. Change Priority using the dropdown: Must, Should, Could, or Won’t have now so that the repair priority & severity management is executed correctly.",2,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3

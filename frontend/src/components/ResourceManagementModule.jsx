@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { Users, Code, Info, Sparkles, Layers } from 'lucide-react';
+import { Users, Code, Info, Calendar, Sparkles, CheckCircle2, ShieldAlert } from 'lucide-react';
 import ProjectSelection from './ProjectSelection.jsx';
 import TaskPreview from './TaskPreview.jsx';
-import WorkItemDecompositionReview from './WorkItemDecompositionReview.jsx';
 import AllocationResults from './AllocationResults.jsx';
+import ManageTeamModal from './ManageTeamModal.jsx';
 
 // API Configuration
 const EXPRESS_API = 'http://localhost:3000/api';
+const PROJECT_ENGINE_API = 'http://localhost:8082/api';
 
 // Keyword Method: Identifies Domain and Required Skills dynamically from task title
 function extractDomainAndSkills(titleOrText) {
@@ -21,7 +22,7 @@ function extractDomainAndSkills(titleOrText) {
     return { domain: 'ai', required_domain: 'ai', skills, required_skills: skills };
   }
 
-  // 2. Explicit Frontend UI / UX / Form / Entry Keywords (Evaluates UI input actions like "enter details")
+  // 2. Explicit Frontend UI / UX / Form / Entry Keywords
   if (/\b(enter|input|form|ui|ux|frontend|react|dashboard|dark mode|css|tailwind|export|pdf|excel|component|layout|view|display|screen|button|render)\b/i.test(text)) {
     let skills = ['JavaScript', 'React'];
     if (text.includes('dark mode') || text.includes('css') || text.includes('tailwind')) skills.push('Tailwind');
@@ -57,387 +58,391 @@ function extractDomainAndSkills(titleOrText) {
 }
 
 export default function ResourceManagementModule({ 
+  requirements = [],
   projects: parentProjects = [], 
   selectedProjectId: parentSelectedProjectId = '', 
   onSelectProject 
 }) {
   // ================= STATE =================
   const [localProjects, setLocalProjects] = useState([]);
-  const projects = parentProjects.length > 0 ? parentProjects : localProjects;
   const [selectedProject, setSelectedProject] = useState(null);
   const [sprints, setSprints] = useState([]);
   const [selectedSprint, setSelectedSprint] = useState(null);
-  const [tasks, setTasks] = useState([]);
+  const [allSprintPlanTasks, setAllSprintPlanTasks] = useState([]);
+  const [sprintTasks, setSprintTasks] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [developers, setDevelopers] = useState([]);
+  const [ganttTimeline, setGanttTimeline] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [apiSource, setApiSource] = useState('express');
+  const [apiSource, setApiSource] = useState('project_engine');
+  const [isManageTeamOpen, setIsManageTeamOpen] = useState(false);
 
-  // Decomposition & Workflow State
-  // View Modes: 'backlog' | 'decomposition_review' | 'allocation_results'
+  // View Modes: 'backlog' | 'allocation_results'
   const [viewMode, setViewMode] = useState('backlog');
-  const [workItems, setWorkItems] = useState([]);
-  const [ruleAnalysis, setRuleAnalysis] = useState(null);
 
-  // Sync parentSelectedProjectId to selectedProject
-  useEffect(() => {
-    if (projects.length > 0) {
-      const match = projects.find(
-        p => String(p.project_id) === String(parentSelectedProjectId) || String(p.id) === String(parentSelectedProjectId)
+  // ================= 1. DYNAMIC PROJECTS LIST FROM REQUIREMENTS & PROJECT MODULE =================
+  const unifiedProjects = useMemo(() => {
+    const list = [];
+    const seenNames = new Set();
+    const seenIds = new Set();
+
+    const cleanTitle = (raw) => {
+      const str = (raw || '').trim();
+      if (!str || str.toLowerCase() === 'untitled' || str.toLowerCase() === 'untitled batch') {
+        return '';
+      }
+      return str;
+    };
+
+    // 1. Database Projects (Primary source of truth)
+    const dbProjects = parentProjects.length > 0 ? parentProjects : localProjects;
+    dbProjects.forEach((p, idx) => {
+      const pName = cleanTitle(p.project_name || p.name);
+      const pId = String(p.project_id || p.id || `P0000${idx + 1}`);
+      if (pName && !seenNames.has(pName)) {
+        seenNames.add(pName);
+        seenIds.add(pId);
+        list.push({
+          ...p,
+          id: pId,
+          project_id: pId,
+          project_name: pName,
+          name: pName,
+          source: 'database'
+        });
+      }
+    });
+
+    // 2. Active Project Management project name
+    try {
+      const email = localStorage.getItem('user_email') || 'default';
+      const activeSaved = cleanTitle(
+        localStorage.getItem(`active_requirements_batch_${email}`) || 
+        localStorage.getItem('active_requirements_batch') || 
+        localStorage.getItem('active_project_name')
       );
-      setSelectedProject(prev => match || prev || projects[0]);
+      if (activeSaved && !seenNames.has(activeSaved)) {
+        seenNames.add(activeSaved);
+        list.push({
+          id: 'PM-ACTIVE',
+          project_id: 'PM-ACTIVE',
+          project_name: activeSaved,
+          name: activeSaved,
+          description: 'Active project from Project Management & Sprint Planning Module',
+          source: 'project_module'
+        });
+      }
+    } catch (_) {}
+
+    // 3. Batches derived from Requirements Module
+    if (Array.isArray(requirements) && requirements.length > 0) {
+      requirements.forEach((r, idx) => {
+        const title = cleanTitle(r.batch_title || r.batch_name || r.file_name);
+        if (title && !seenNames.has(title)) {
+          seenNames.add(title);
+          const uniqueBatchId = `BATCH-${idx + 1}`;
+          list.push({
+            id: uniqueBatchId,
+            project_id: r.project_id || uniqueBatchId,
+            project_name: title,
+            name: title,
+            description: `Requirements specification batch (${r.completeness_status || 'Active'})`,
+            source: 'requirements_module'
+          });
+        }
+      });
     }
-  }, [projects, parentSelectedProjectId]);
+
+    // 4. Default Fallback if empty
+    if (list.length === 0) {
+      list.push({
+        id: 'P00001',
+        project_id: 'P00001',
+        project_name: 'Enterprise Core Platform',
+        name: 'Enterprise Core Platform',
+        description: 'Enterprise Core Platform Agile Suite'
+      });
+    }
+
+    return list;
+  }, [requirements, parentProjects, localProjects]);
+
+  // Clean stale untitled batch in localStorage
+  useEffect(() => {
+    try {
+      const email = localStorage.getItem('user_email') || 'default';
+      ['active_requirements_batch', `active_requirements_batch_${email}`, 'active_project_name'].forEach(k => {
+        const val = localStorage.getItem(k);
+        if (val && (val.toLowerCase() === 'untitled' || val.toLowerCase() === 'untitled batch')) {
+          localStorage.removeItem(k);
+        }
+      });
+    } catch (_) {}
+  }, []);
+
+  // Sync selectedProject with unifiedProjects
+  useEffect(() => {
+    if (unifiedProjects.length > 0) {
+      setSelectedProject(prev => {
+        if (prev) {
+          const matchPrev = unifiedProjects.find(
+            p => String(p.id) === String(prev.id) || 
+                 (p.project_name && prev.project_name && p.project_name.toLowerCase() === prev.project_name.toLowerCase())
+          );
+          if (matchPrev) return matchPrev;
+        }
+        if (parentSelectedProjectId) {
+          const matchParent = unifiedProjects.find(
+            p => String(p.id) === String(parentSelectedProjectId) || String(p.project_id) === String(parentSelectedProjectId)
+          );
+          if (matchParent) return matchParent;
+        }
+        return unifiedProjects[0];
+      });
+    }
+  }, [unifiedProjects, parentSelectedProjectId]);
 
   const handleSelectProject = (proj) => {
+    if (!proj) return;
     setSelectedProject(proj);
-    const pid = proj ? (proj.project_id || proj.id) : '';
+    const pid = proj.project_id || proj.id;
     if (onSelectProject && pid) {
       onSelectProject(pid);
     }
   };
 
-  // ================= LOAD PROJECTS FALLBACK =================
+  // ================= 2. LOAD DB PROJECTS AS FALLBACK =================
   useEffect(() => {
     if (parentProjects.length === 0) {
       axios.get(`${EXPRESS_API}/projects`)
         .then(res => {
           const list = Array.isArray(res.data) ? res.data : (res.data?.projects || res.data?.data || []);
           setLocalProjects(list);
-          setSelectedProject(prev => prev || (list.length > 0 ? list[0] : null));
         })
-        .catch(err => console.error('Error loading projects:', err));
+        .catch(err => console.warn('Notice loading local projects:', err.message));
     }
   }, [parentProjects]);
 
-  // ================= LOAD DEVELOPERS =================
-  useEffect(() => {
-    const projId = selectedProject ? (selectedProject.id || selectedProject.project_id) : '';
-    const url = projId ? `${EXPRESS_API}/developers?project_id=${projId}` : `${EXPRESS_API}/developers`;
-    axios.get(url)
-      .then(res => {
-        const list = Array.isArray(res.data) ? res.data : (res.data?.data || []);
-        setDevelopers(list);
-      })
-      .catch(err => console.error('Error loading developers:', err));
-  }, [selectedProject]);
-
-  // ================= LOAD SPRINTS FOR SELECTED PROJECT =================
-  useEffect(() => {
-    if (!selectedProject) {
-      setSprints([]);
-      setSelectedSprint(null);
-      return;
+  // ================= 3. LOAD DEVELOPERS =================
+  const loadDevelopers = async () => {
+    try {
+      const res = await axios.get(`${EXPRESS_API}/developers`);
+      const list = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+      setDevelopers(list);
+    } catch (err) {
+      console.warn('Error loading developers:', err.message);
     }
-    const projId = selectedProject.id || selectedProject.project_id;
+  };
 
-    const fetchSprints = async () => {
-      try {
-        let list = [];
-        try {
-          const spRes = await axios.get(`${EXPRESS_API}/projects/${projId}/sprints`);
-          list = Array.isArray(spRes.data) ? spRes.data : (spRes.data?.data || []);
-        } catch (e) {}
+  useEffect(() => {
+    loadDevelopers();
+  }, []);
 
-        if (!list || list.length === 0) {
-          let planRes = await axios.get(`${EXPRESS_API}/sprint-plan?project_id=${projId}`);
-          let tasksFromPlan = planRes.data?.tasks || [];
-          const sprintMap = {};
-          tasksFromPlan.forEach(t => {
-            const sNum = t.sprint_number || 1;
-            if (!sprintMap[sNum]) {
-              const sprintId = t.sprint_id || `SPR-${sNum < 10 ? '0' + sNum : sNum}`;
-              sprintMap[sNum] = {
-                id: sprintId,
-                sprint_id: sprintId,
-                name: `Sprint ${sNum}`,
-                sprint_name: `Sprint ${sNum}`,
-                sprint_number: sNum
-              };
-            }
-          });
-          list = Object.values(sprintMap).sort((a, b) => a.sprint_number - b.sprint_number);
-        }
-
-        if (!list || list.length === 0) {
-          list = [
-            { id: 'SPR-01', sprint_id: 'SPR-01', name: 'Sprint 1 - Core Development', sprint_name: 'Sprint 1', sprint_number: 1 },
-            { id: 'SPR-02', sprint_id: 'SPR-02', name: 'Sprint 2 - Integration & Testing', sprint_name: 'Sprint 2', sprint_number: 2 }
-          ];
-        }
-
-        setSprints(list);
-        setSelectedSprint(prev => {
-          if (prev && list.some(s => String(s.sprint_id || s.id) === String(prev.sprint_id || prev.id))) {
-            return prev;
-          }
-          return list[0] || null;
-        });
-      } catch (err) {
-        console.warn('Notice loading sprints:', err.message);
-      }
-    };
-
-    fetchSprints();
-  }, [selectedProject]);
-
-  // ================= LOAD ALL PROJECT USER STORIES FOR RESOURCE ALLOCATION =================
+  // ================= 4. FETCH SPRINT PLAN OUTPUT DIRECTLY FROM PROJECT MODULE =================
   useEffect(() => {
     if (!selectedProject) return;
-    const projId = selectedProject.id || selectedProject.project_id;
     setLoading(true);
 
-    const fetchProjectStories = async () => {
+    const loadProjectModulePlan = async () => {
       try {
-        const res = await axios.get(`${EXPRESS_API}/user-stories?project_id=${projId}`);
-        const rawStories = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+        // A. Fetch Sprint Plan output from Project Module Flask Engine (Port 8082)
+        const planRes = await axios.get(`${PROJECT_ENGINE_API}/sprint-plan`).catch(() => null);
+        let ganttRes = await axios.get(`${PROJECT_ENGINE_API}/timeline/gantt`).catch(() => null);
 
-        let loadedTasks = [];
-        if (rawStories.length > 0) {
-          loadedTasks = rawStories.map((t, idx) => {
-            const taskTitle = t.title || t.user_story || 'User Story Requirement';
-            const domainAndSkills = extractDomainAndSkills(taskTitle);
-            return {
-              id: t.story_id || t.user_story_id || `US00${idx + 1}`,
-              story_id: t.story_id || t.user_story_id || `US00${idx + 1}`,
-              title: taskTitle,
-              priority: (t.priority || 'MEDIUM').toUpperCase(),
-              hours: (Number(t.story_points) || 5) * 6,
-              estimated_hours: (Number(t.story_points) || 5) * 6,
-              points: Number(t.story_points) || 5,
-              story_points: Number(t.story_points) || 5,
-              domain: domainAndSkills.domain,
-              required_domain: domainAndSkills.required_domain,
-              skills: domainAndSkills.skills,
-              required_skills: domainAndSkills.required_skills,
-              is_resource_allocated: t.is_resource_allocated || false,
-              assigned_to: t.assigned_to || 'Unassigned'
-            };
-          });
+        let planTasks = planRes?.data?.tasks || [];
+        let planSprints = ganttRes?.data?.sprints || [];
+        setGanttTimeline(ganttRes?.data || null);
+
+        // Fallback to Express backend if port 8082 had no active plan
+        if (planTasks.length === 0) {
+          try {
+            const expPlan = await axios.get(`${EXPRESS_API}/sprint-plan`);
+            planTasks = expPlan.data?.tasks || [];
+          } catch (_) {}
         }
 
-        setTasks(loadedTasks);
-        setApiSource('express');
-
-        // Fetch existing work items for these project user stories
-        try {
-          const wiRes = await axios.get(`${EXPRESS_API}/work-items?project_id=${projId}`);
-          const fetchedWIs = Array.isArray(wiRes.data) ? wiRes.data : (wiRes.data?.data || []);
-          setWorkItems(fetchedWIs);
-        } catch (wiErr) {
-          console.warn('Notice fetching work items:', wiErr.message);
+        // If still empty, load user stories from Requirements DB
+        if (planTasks.length === 0) {
+          try {
+            const storiesRes = await axios.get(`${EXPRESS_API}/user-stories`);
+            const rawStories = Array.isArray(storiesRes.data) ? storiesRes.data : (storiesRes.data?.data || []);
+            planTasks = rawStories.map((s, idx) => ({
+              story_id: s.story_id || `US00${idx + 1}`,
+              title: s.title || s.user_story || s.requirement_sentence || 'User Story',
+              sprint_number: idx < 6 ? 1 : 2,
+              story_points: Number(s.story_points) || 5,
+              estimated_hours: (Number(s.story_points) || 5) * 8,
+              priority: (s.priority || 'MEDIUM').toUpperCase(),
+              priority_tier: (s.priority || 'MEDIUM').toUpperCase()
+            }));
+          } catch (_) {}
         }
+
+        // Normalize each task with domain, required skills, and duration
+        const normalizedTasks = planTasks.map((t, idx) => {
+          const title = t.title || t.user_story || 'User Story';
+          const detected = extractDomainAndSkills(title);
+          const points = Number(t.story_points) || Number(t.points) || 5;
+          const hours = Number(t.estimated_hours) || Number(t.hours) || (points * 8);
+
+          return {
+            ...t,
+            id: t.story_id || t.id || `US${idx + 1}`,
+            story_id: t.story_id || t.id || `US${idx + 1}`,
+            title: title,
+            sprint_number: parseInt(t.sprint_number || 1, 10),
+            story_points: points,
+            estimated_hours: hours,
+            priority: (t.priority || t.priority_tier || 'MEDIUM').toUpperCase(),
+            priority_tier: (t.priority_tier || t.priority || 'MEDIUM').toUpperCase(),
+            domain: detected.domain,
+            required_domain: detected.required_domain,
+            skills: t.skills || detected.skills,
+            required_skills: t.skills || detected.skills
+          };
+        });
+
+        setAllSprintPlanTasks(normalizedTasks);
+
+        // Dynamically compute exact sprint list from project plan
+        const sprintNumbersSet = new Set(normalizedTasks.map(t => t.sprint_number).filter(n => n > 0));
+        if (sprintNumbersSet.size === 0) sprintNumbersSet.add(1);
+
+        const sprintList = Array.from(sprintNumbersSet).sort((a, b) => a - b).map(sNum => {
+          const matchingGantt = planSprints.find(gs => gs.sprint_number === sNum);
+          return {
+            id: `SPR-0${sNum}`,
+            sprint_id: `SPR-0${sNum}`,
+            sprint_number: sNum,
+            name: `Sprint ${sNum}`,
+            sprint_name: matchingGantt?.start_date && matchingGantt?.end_date 
+              ? `Sprint ${sNum} (${matchingGantt.start_date} → ${matchingGantt.end_date})`
+              : `Sprint ${sNum}`,
+            start_date: matchingGantt?.start_date || null,
+            end_date: matchingGantt?.end_date || null,
+            working_days: matchingGantt?.working_days || 10,
+            story_points: matchingGantt?.story_points || 30
+          };
+        });
+
+        setSprints(sprintList);
+        setSelectedSprint(prev => {
+          if (prev && sprintList.some(s => s.sprint_number === prev.sprint_number)) {
+            return sprintList.find(s => s.sprint_number === prev.sprint_number);
+          }
+          return sprintList[0] || null;
+        });
+
+        setApiSource('project_engine');
       } catch (err) {
-        console.error('Error loading project stories:', err);
-        setTasks([]);
+        console.error('Error fetching Sprint Plan from Project Module:', err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchProjectStories();
+    loadProjectModulePlan();
     setAssignments([]);
     setViewMode('backlog');
   }, [selectedProject]);
 
-  // ================= 1 & 2. HYBRID USER STORY DECOMPOSITION =================
-  const handleDecomposeStories = async (targetTask) => {
-    const isSingleTask = targetTask && typeof targetTask === 'object' && Boolean(targetTask.story_id || targetTask.id) && !targetTask.preventDefault;
-    const storiesToDecompose = isSingleTask ? [targetTask] : tasks;
-    if (storiesToDecompose.length === 0) {
-      alert('No user stories found in this sprint to decompose.');
+  // ================= 5. FILTER TASKS FOR CURRENT SPRINT =================
+  useEffect(() => {
+    if (!selectedSprint) {
+      setSprintTasks(allSprintPlanTasks);
       return;
     }
+    const currentSprintNum = selectedSprint.sprint_number || 1;
+    const filtered = allSprintPlanTasks.filter(t => t.sprint_number === currentSprintNum);
+    setSprintTasks(filtered.length > 0 ? filtered : allSprintPlanTasks);
+  }, [selectedSprint, allSprintPlanTasks]);
+
+  // ================= 6. SKILL-BASED RESOURCE ALLOCATION TRIGGER =================
+  const runSkillBasedAllocation = async () => {
+    if (sprintTasks.length === 0) {
+      alert('No user stories found in this sprint to allocate.');
+      return;
+    }
+
     setLoading(true);
     try {
-      const pid = selectedProject ? (selectedProject.id || selectedProject.project_id) : 'P00001';
-      const response = await axios.post(`${EXPRESS_API}/user-stories/decompose-batch`, {
-        stories: storiesToDecompose,
-        project_id: pid
+      // 1. Try Express automated skill & capacity allocation endpoint
+      let allocResult = null;
+      try {
+        const resp = await axios.post(`${EXPRESS_API}/allocate`, {
+          tasks: sprintTasks,
+          sprint_id: selectedSprint?.sprint_id || `SPR-0${selectedSprint?.sprint_number || 1}`,
+          project_id: selectedProject?.project_id || 'P00001'
+        });
+        allocResult = resp.data?.assignments || resp.data?.data || null;
+      } catch (expErr) {
+        console.warn('Express allocation fallback:', expErr.message);
+      }
+
+      // 2. If Express returned assignments, use them!
+      if (Array.isArray(allocResult) && allocResult.length > 0) {
+        setAssignments(allocResult);
+        setViewMode('allocation_results');
+        setLoading(false);
+        return;
+      }
+
+      // 3. Client-side Skill-Based Allocation algorithm using Project Module Developer assignments
+      const developerPool = developers.length > 0 ? developers : [
+        { id: 1, name: 'Alice', role: 'Senior', capacity_hours: 40, primary_domain: 'backend', languages: ['JavaScript', 'Python', 'SQL'] },
+        { id: 2, name: 'Bob', role: 'Senior', capacity_hours: 40, primary_domain: 'frontend', languages: ['JavaScript', 'React', 'Tailwind'] },
+        { id: 3, name: 'Charlie', role: 'Junior', capacity_hours: 40, primary_domain: 'frontend', languages: ['HTML', 'CSS', 'JavaScript'] },
+        { id: 4, name: 'David', role: 'Senior', capacity_hours: 40, primary_domain: 'backend', languages: ['Python', 'SQL', 'PostgreSQL'] },
+        { id: 5, name: 'Kasun Perera', role: 'Lead Architect', capacity_hours: 40, primary_domain: 'backend', languages: ['Python', 'OAuth', 'Security'] }
+      ];
+
+      const devHoursUsed = {};
+      developerPool.forEach(d => { devHoursUsed[d.id] = 0; });
+
+      const generatedAssignments = sprintTasks.map(task => {
+        const taskHours = Number(task.estimated_hours) || 24;
+        const taskDomain = (task.domain || 'backend').toLowerCase();
+        const taskSkills = Array.isArray(task.required_skills) ? task.required_skills : ['JavaScript'];
+
+        // Find developer matching primary domain with available capacity
+        let bestDev = developerPool.find(d => 
+          (d.primary_domain || '').toLowerCase() === taskDomain && 
+          ((devHoursUsed[d.id] || 0) + taskHours <= (Number(d.capacity_hours) || 40))
+        );
+
+        // Fallback: Developer with lowest current workload
+        if (!bestDev) {
+          bestDev = [...developerPool].sort((a, b) => (devHoursUsed[a.id] || 0) - (devHoursUsed[b.id] || 0))[0];
+        }
+
+        if (bestDev) {
+          devHoursUsed[bestDev.id] = (devHoursUsed[bestDev.id] || 0) + taskHours;
+        }
+
+        return {
+          story_id: task.story_id,
+          user_story_id: task.story_id,
+          title: task.title,
+          allocated_hours: taskHours,
+          developer_id: bestDev?.id || 1,
+          developer_name: bestDev?.name || 'Unassigned',
+          predicted_complexity: task.priority_tier === 'CRITICAL' ? 'High' : (task.priority === 'HIGH' ? 'High' : 'Medium'),
+          matched_domain: bestDev?.primary_domain || taskDomain,
+          skills: taskSkills
+        };
       });
 
-      if (response.data && response.data.results) {
-        const generatedItems = [];
-        let combinedRules = { patterns_detected: [] };
-
-        response.data.results.forEach(res => {
-          if (res.work_items) {
-            generatedItems.push(...res.work_items);
-          }
-          if (res.rule_analysis && res.rule_analysis.patterns_detected) {
-            res.rule_analysis.patterns_detected.forEach(p => {
-              if (!combinedRules.patterns_detected.includes(p)) {
-                combinedRules.patterns_detected.push(p);
-              }
-            });
-          }
-        });
-
-        setWorkItems(generatedItems);
-        setRuleAnalysis(combinedRules);
-        setViewMode('decomposition_review');
-      }
+      setAssignments(generatedAssignments);
+      setViewMode('allocation_results');
     } catch (err) {
-      console.error('Decomposition error:', err);
-      alert('Failed to decompose User Stories: ' + (err.response?.data?.error || err.message));
+      console.error('Resource Allocation error:', err);
+      alert('Resource Allocation error: ' + err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // ================= 3. HUMAN-IN-THE-LOOP VALIDATION HANDLERS =================
-  const handleUpdateWorkItem = async (updatedItem) => {
-    try {
-      await axios.put(`${EXPRESS_API}/work-items/${updatedItem.work_item_id}`, updatedItem);
-      setWorkItems(prev => prev.map(wi => wi.work_item_id === updatedItem.work_item_id ? updatedItem : wi));
-    } catch (err) {
-      console.error('Error updating work item:', err);
-      alert('Failed to update work item: ' + err.message);
-    }
-  };
-
-  const handleDeleteWorkItem = async (workItemId) => {
-    try {
-      await axios.delete(`${EXPRESS_API}/work-items/${workItemId}`);
-      setWorkItems(prev => prev.filter(wi => wi.work_item_id !== workItemId));
-    } catch (err) {
-      console.error('Error deleting work item:', err);
-      alert('Failed to delete work item: ' + err.message);
-    }
-  };
-
-  const handleAddWorkItem = async (newItem) => {
-    try {
-      const pid = selectedProject ? (selectedProject.id || selectedProject.project_id) : 'P00001';
-      const itemToSave = { ...newItem, project_id: pid };
-      const res = await axios.post(`${EXPRESS_API}/work-items`, itemToSave);
-      setWorkItems(prev => [...prev, { ...itemToSave, work_item_id: res.data?.work_item_id || newItem.work_item_id }]);
-    } catch (err) {
-      console.error('Error adding work item:', err);
-      alert('Failed to add work item: ' + err.message);
-    }
-  };
-
-  const handleApproveAllWorkItems = async () => {
-    try {
-      const pid = selectedProject ? (selectedProject.id || selectedProject.project_id) : 'P00001';
-      const workItemIds = workItems.map(w => w.work_item_id);
-      await axios.post(`${EXPRESS_API}/work-items/approve`, {
-        work_item_ids: workItemIds,
-        project_id: pid
-      });
-      setWorkItems(prev => prev.map(wi => ({ ...wi, status: 'approved' })));
-      alert('✅ All Work Items approved! You can now proceed to Resource Allocation.');
-    } catch (err) {
-      console.error('Error approving work items:', err);
-      alert('Failed to approve work items: ' + err.message);
-    }
-  };
-
-  // ================= 4. INTEGRATION WITH EXISTING RESOURCE ALLOCATION =================
-  const runAllocation = async () => {
-    if (developers.length === 0) {
-      alert('No developers found. Please add developers first.');
-      return;
-    }
-
-    // Determine tasks for allocation: If work items exist, pass approved Work Items into existing allocation algorithm
-    let itemsToAllocate = [];
-    if (workItems && workItems.length > 0) {
-      itemsToAllocate = workItems.map(wi => {
-        const parentStory = tasks.find(t => t.story_id === wi.story_id || t.id === wi.story_id) || {};
-        return {
-          story_id: wi.work_item_id,
-          user_story_id: wi.story_id,
-          title: `${wi.work_item_id}: ${wi.title}`,
-          description: wi.description,
-          priority: parentStory.priority || 'MEDIUM',
-          estimated_hours: Number(wi.estimated_hours) || 8,
-          story_points: Number(wi.story_points) || 1,
-          domain: (wi.domain || 'Backend').toLowerCase(),
-          required_domain: (wi.domain || 'Backend').toLowerCase(),
-          skills: Array.isArray(wi.required_skills) ? wi.required_skills : (wi.required_skills ? String(wi.required_skills).split(',').map(s => s.trim()) : ['JavaScript', 'SQL']),
-          required_skills: Array.isArray(wi.required_skills) ? wi.required_skills : (wi.required_skills ? String(wi.required_skills).split(',').map(s => s.trim()) : ['JavaScript', 'SQL'])
-        };
-      });
-    } else {
-      itemsToAllocate = tasks;
-    }
-
-    if (itemsToAllocate.length === 0) {
-      alert('No tasks or work items found for allocation.');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await axios.post(`${EXPRESS_API}/allocate`, {
-        tasks: itemsToAllocate,
-        sprint_id: selectedSprint ? (selectedSprint.id || selectedSprint.sprint_id) : null,
-        project_id: selectedProject ? (selectedProject.id || selectedProject.project_id) : null
-      });
-      const allocs = response.data?.assignments || response.data?.data || [];
-      setAssignments(allocs);
-      setViewMode('allocation_results');
-    } catch (error) {
-      console.error('Allocation error:', error);
-      alert('Allocation failed: ' + (error.response?.data?.error || error.message));
-    }
-    setLoading(false);
-  };
-
-  // ================= REBALANCE =================
-  const handleRebalance = async () => {
-    setLoading(true);
-    try {
-      let itemsToAllocate = workItems.length > 0 ? workItems.map(wi => ({
-        story_id: wi.work_item_id,
-        user_story_id: wi.story_id,
-        title: `${wi.work_item_id}: ${wi.title}`,
-        priority: 'MEDIUM',
-        estimated_hours: Number(wi.estimated_hours) || 8,
-        domain: (wi.domain || 'Backend').toLowerCase(),
-        required_domain: (wi.domain || 'Backend').toLowerCase(),
-        skills: wi.required_skills || ['JavaScript', 'SQL'],
-        required_skills: wi.required_skills || ['JavaScript', 'SQL']
-      })) : tasks;
-
-      const response = await axios.post(`${EXPRESS_API}/allocate`, {
-        tasks: itemsToAllocate,
-        sprint_id: selectedSprint ? (selectedSprint.id || selectedSprint.sprint_id) : null
-      });
-      const allocs = response.data?.assignments || response.data?.data || [];
-      setAssignments(allocs);
-    } catch (error) {
-      console.error('Rebalance error:', error);
-      alert('Rebalance failed: ' + (error.response?.data?.error || error.message));
-    }
-    setLoading(false);
-  };
-
-  // ================= SAVE ALLOCATION =================
-  const handleSaveAllocation = async () => {
-    try {
-      const pid = selectedProject ? (selectedProject.project_id || selectedProject.id) : 'P00001';
-      const projName = selectedProject ? (selectedProject.project_name || selectedProject.name || selectedProject.title) : 'Project Tracker';
-      const spId = selectedSprint ? (selectedSprint.id || selectedSprint.sprint_id) : 'SPR-01';
-
-      const res = await axios.post(`${EXPRESS_API}/task-assignments`, {
-        sprint_id: spId,
-        project_id: pid,
-        project_name: projName,
-        assignments: assignments
-      });
-
-      const confirmedProject = res.data?.project_name || projName;
-      alert(`✅ Resource allocations saved to database for project "${confirmedProject}" (${pid})!\n\nUser stories and allocated work items are now ready for Sprint Planning in Module 3 (Project Management).`);
-    } catch (error) {
-      console.error('Save error:', error);
-      alert('Failed to save allocation: ' + (error.response?.data?.error || error.message));
-    }
-  };
-
-  // ================= DRAG & DROP =================
+  // ================= 7. DRAG & DROP REASSIGNMENT =================
   const handleTaskMove = (task, fromDevId, toDevId) => {
     const updatedAssignments = assignments.map(a => {
       if (String(a.story_id) === String(task.story_id)) {
@@ -453,46 +458,32 @@ export default function ResourceManagementModule({
     setAssignments(updatedAssignments);
   };
 
-  // ================= BACK TO TASKS =================
-  const handleBackToTasks = () => {
-    setViewMode('backlog');
+  // ================= 8. REBALANCE =================
+  const handleRebalance = async () => {
+    await runSkillBasedAllocation();
   };
 
-  // Map tasks with decomposed work items for TaskPreview (deduplicated by domain)
-  const getUniqueWorkItemsForTask = (tId) => {
-    const cleanTId = String(tId || '').replace(/[^a-zA-Z0-9]/g, '');
-    const matched = workItems.filter(wi => {
-      const cleanWiStoryId = String(wi.story_id || wi.parent_user_story_id || '').replace(/[^a-zA-Z0-9]/g, '');
-      return cleanWiStoryId === cleanTId;
-    });
+  // ================= 9. SAVE ALLOCATION =================
+  const handleSaveAllocation = async () => {
+    try {
+      const pid = selectedProject ? (selectedProject.project_id || selectedProject.id) : 'P00001';
+      const projName = selectedProject ? (selectedProject.project_name || selectedProject.name) : 'Agile Project';
+      const spId = selectedSprint ? (selectedSprint.id || selectedSprint.sprint_id) : 'SPR-01';
 
-    const seenDomains = new Set();
-    const unique = [];
-    for (const item of matched) {
-      const domUpper = (item.domain || '').toUpperCase();
-      let normDomain = domUpper;
-      if (domUpper.includes('BACKEND')) normDomain = 'BACKEND';
-      else if (domUpper.includes('FRONTEND')) normDomain = 'FRONTEND';
-      else if (domUpper.includes('QA') || domUpper.includes('TESTING')) normDomain = 'QA';
-      else if (domUpper.includes('DEVOPS')) normDomain = 'DEVOPS';
-      else if (domUpper.includes('AI') || domUpper.includes('ML')) normDomain = 'AI';
+      await axios.post(`${EXPRESS_API}/task-assignments`, {
+        sprint_id: spId,
+        project_id: pid,
+        project_name: projName,
+        assignments: assignments
+      });
 
-      if (!seenDomains.has(normDomain)) {
-        seenDomains.add(normDomain);
-        unique.push(item);
-      }
+      alert(`✅ Skill-based Resource Allocations successfully saved to database for project "${projName}" (${pid})!\n\nAll tasks and developer workloads have been synchronized.`);
+    } catch (error) {
+      console.error('Save error:', error);
+      alert('Failed to save allocation: ' + (error.response?.data?.error || error.message));
     }
-    return unique;
   };
 
-  const tasksWithWorkItems = tasks.map(t => ({
-    ...t,
-    work_items: getUniqueWorkItemsForTask(t.story_id || t.id)
-  }));
-
-  const approvedWorkItemsCount = workItems.filter(w => w.status === 'approved').length;
-
-  // ================= RENDER =================
   return (
     <div className="space-y-6">
       {/* Header Banner */}
@@ -501,11 +492,27 @@ export default function ResourceManagementModule({
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-semibold mb-2">
               <Users size={14} className="text-indigo-300" />
-              <span>Sprint Resource Allocation System</span>
+              <span>Skill-Based Staff & Capacity Allocation System</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
               Sprint Resource Allocation Module
             </h1>
+            <p className="text-xs text-slate-400 mt-1">
+              Consumes Sprint Plans, Story Points, Fibonacci Effort & Cadence Timelines directly from the Project Management Module.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsManageTeamOpen(true)}
+              className="px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all border border-indigo-400/40 cursor-pointer"
+            >
+              <Users size={16} />
+              <span>Manage Resources & Skills</span>
+              <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-mono font-extrabold ml-1">
+                {developers.length}
+              </span>
+            </button>
           </div>
         </div>
       </div>
@@ -518,7 +525,7 @@ export default function ResourceManagementModule({
           <div>
             <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">Select Project</h3>
             <ProjectSelection
-              projects={projects}
+              projects={unifiedProjects}
               selectedProject={selectedProject}
               onSelect={handleSelectProject}
             />
@@ -551,46 +558,34 @@ export default function ResourceManagementModule({
           </div>
         </div>
 
-        {/* VIEW MODE SWITCHING */}
+        {/* VIEW MODE 1: SPRINT STORIES & RESOURCE ALLOCATION TRIGGER */}
         {viewMode === 'backlog' && selectedProject && (
           <TaskPreview
-            tasks={tasksWithWorkItems}
-            onRunAllocation={runAllocation}
-            onDecomposeStories={handleDecomposeStories}
-            onReviewWorkItems={() => setViewMode('decomposition_review')}
-            hasWorkItems={workItems.length > 0}
-            approvedWorkItemsCount={approvedWorkItemsCount}
+            tasks={sprintTasks}
+            sprintDetails={selectedSprint}
+            onRunAllocation={runSkillBasedAllocation}
+            hasAssignments={assignments.length > 0}
+            onViewAssignments={() => setViewMode('allocation_results')}
+            onOpenManageTeam={() => setIsManageTeamOpen(true)}
             loading={loading}
             apiSource={apiSource}
-            apiStatus={{ pooliyadda: false, express: true }}
+            apiStatus={{ pooliyadda: true, express: true }}
           />
         )}
 
-        {viewMode === 'decomposition_review' && selectedProject && (
-          <WorkItemDecompositionReview
-            workItems={workItems}
-            ruleAnalysis={ruleAnalysis}
-            onUpdateWorkItem={handleUpdateWorkItem}
-            onDeleteWorkItem={handleDeleteWorkItem}
-            onAddWorkItem={handleAddWorkItem}
-            onApproveAll={handleApproveAllWorkItems}
-            onProceedToAllocation={runAllocation}
-            onBack={() => setViewMode('backlog')}
-            loading={loading}
-          />
-        )}
-
+        {/* VIEW MODE 2: RESOURCE ALLOCATION RESULTS & DRAG-AND-DROP BOARD */}
         {viewMode === 'allocation_results' && (
           <AllocationResults
             assignments={assignments}
             developers={developers}
-            tasks={workItems.length > 0 ? workItems : tasks}
+            tasks={sprintTasks}
             selectedProject={selectedProject}
             selectedSprint={selectedSprint}
             onRebalance={handleRebalance}
             onSave={handleSaveAllocation}
             onTaskMove={handleTaskMove}
-            onBack={() => setViewMode('decomposition_review')}
+            onBack={() => setViewMode('backlog')}
+            onOpenManageTeam={() => setIsManageTeamOpen(true)}
             loading={loading}
             apiSource={apiSource}
           />
@@ -603,21 +598,29 @@ export default function ResourceManagementModule({
               <Code size={40} />
             </div>
             <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200">Select a Project</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Choose a project to view and decompose User Stories</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Choose a project to allocate development resources.</p>
           </div>
         )}
       </div>
 
       {/* Footer Status */}
-      <div className="flex items-center justify-between">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 text-xs font-medium border border-slate-200 dark:border-slate-700">
+      <div className="flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 font-medium border border-slate-200 dark:border-slate-700">
           <Info size={14} />
-          <span>Status: Hybrid User Story Decomposition Preprocessing Active</span>
+          <span>Status: Synchronized with Project Management Sprint Planning Engine</span>
         </div>
-        <div className="text-xs text-slate-400 dark:text-slate-500">
-          Powered by Capacity & Priority-Aware Allocation Engine
+        <div>
+          Powered by Capacity & Skill-Aware Developer Allocation
         </div>
       </div>
+
+      {/* Manage Team & Technical Skills Modal */}
+      <ManageTeamModal
+        isOpen={isManageTeamOpen}
+        onClose={() => setIsManageTeamOpen(false)}
+        developers={developers}
+        onTeamUpdated={loadDevelopers}
+      />
     </div>
   );
 }

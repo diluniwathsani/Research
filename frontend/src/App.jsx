@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -9,12 +9,17 @@ import Footer from './components/Footer';
 // Core Module Views
 import DashboardView from './components/DashboardView';
 import DevelopmentArtifactModule from './components/DevelopmentArtifactModule';
-import WorkItemsModule from './components/WorkItemsModule';
 import ResourceManagementModule from './components/ResourceManagementModule';
 import ProjectManagementModule from './components/ProjectManagementModule';
 import ChangeRequestModule from './components/ChangeRequestModule';
 
-function App() {
+// Auth Components
+import { AuthProvider, useAuth } from './context/AuthContext';
+import AuthModal from './components/AuthModal';
+
+function MainLayout() {
+  const { user, isAuthenticated } = useAuth();
+
   // --- STATE MANAGEMENT ---
   const [requirements, setRequirements] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -23,18 +28,21 @@ function App() {
   
   // Navigation tab: 'artifacts', 'dashboard', 'resources', 'projects', 'changerequests'
   const [activeTab, setActiveTab] = useState('artifacts');
+  const [projectInitialTab, setProjectInitialTab] = useState('sprint-plan');
+  const [projectRefreshKey, setProjectRefreshKey] = useState(Date.now());
 
   // Global Project Selection State
   const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState('P00001');
 
-  const fetchProjects = async () => {
+  const fetchProjects = async (targetProjectId = null) => {
     try {
       const res = await axios.get('http://localhost:3000/api/projects');
       const list = Array.isArray(res.data) ? res.data : (res.data && res.data.data ? res.data.data : []);
       if (list.length > 0) {
         setProjects(list);
         setSelectedProjectId(prevId => {
+          if (targetProjectId) return targetProjectId;
           const exists = list.some(p => p.project_id === prevId || p.id === prevId);
           if (!prevId || !exists) {
             return list[0].project_id || list[0].id || prevId;
@@ -49,7 +57,7 @@ function App() {
 
   useEffect(() => {
     fetchProjects();
-  }, [requirements]);
+  }, []);
 
   // --- THEME SYNC ---
   useEffect(() => {
@@ -63,18 +71,13 @@ function App() {
   // --- API HANDLERS ---
   const fetchRequirements = async (retryCount = 0) => {
     try {
-      const url = selectedProjectId 
-        ? `http://localhost:3000/api/requirements?project_id=${encodeURIComponent(selectedProjectId)}`
-        : 'http://localhost:3000/api/requirements';
-      const res = await axios.get(url);
+      const res = await axios.get('http://localhost:3000/api/requirements');
       const list = Array.isArray(res.data) ? res.data : (res.data && res.data.data ? res.data.data : []);
       setRequirements(list);
       setError(null);
-      fetchProjects();
     } catch (err) {
       console.error('Fetch requirements error:', err);
       setError("Failed to fetch requirements from backend.");
-      // Auto-retry up to 4 times (every 2 seconds) if backend is still starting up
       if (retryCount < 4) {
         setTimeout(() => {
           fetchRequirements(retryCount + 1);
@@ -83,15 +86,25 @@ function App() {
     }
   };
 
+  const handleUploadSuccess = async (uploadData) => {
+    if (uploadData && uploadData.project_id) {
+      setSelectedProjectId(uploadData.project_id);
+      await fetchProjects(uploadData.project_id);
+    } else {
+      await fetchProjects();
+    }
+    await fetchRequirements();
+  };
+
   useEffect(() => {
     fetchRequirements();
-  }, [selectedProjectId]);
+  }, []);
 
   const handleProcess = async () => {
     setLoading(true);
     setError(null);
     try {
-      await axios.post('http://localhost:3000/api/process');
+      await axios.post('http://localhost:3000/api/process', { email: user?.email });
       await fetchRequirements();
       setLoading(false);
     } catch (err) {
@@ -102,114 +115,130 @@ function App() {
   };
 
   const handleExport = () => {
-    window.location.href = 'http://localhost:3000/api/export';
+    const emailParam = user?.email ? `?email=${encodeURIComponent(user.email)}` : '';
+    window.location.href = `http://localhost:3000/api/export${emailParam}`;
   };
 
-  // Count epics for sidebar stat badge
   const epicCount = new Set(requirements.map((r) => r.epic).filter(Boolean)).size;
 
   return (
-    <DndProvider backend={HTML5Backend}>
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans transition-colors duration-200 text-slate-900 dark:text-slate-100">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans transition-colors duration-200 text-slate-900 dark:text-slate-100">
+      
+      {/* Top Header */}
+      <Header 
+        isDark={isDark} 
+        setIsDark={setIsDark} 
+        activeTab={activeTab} 
+        reqCount={requirements.length}
+        onRefresh={fetchRequirements} 
+        projects={projects}
+        selectedProjectId={selectedProjectId}
+        onSelectProject={setSelectedProjectId}
+      />
+
+      {/* Main Body with Sidebar + View Container */}
+      <div className="flex-1 flex overflow-hidden">
         
-        {/* Top Admin Header */}
-        <Header 
-          isDark={isDark} 
-          setIsDark={setIsDark} 
+        {/* Sidebar Navigation */}
+        <Sidebar 
           activeTab={activeTab} 
+          setActiveTab={setActiveTab} 
           reqCount={requirements.length}
-          onRefresh={fetchRequirements} 
-          projects={projects}
+          epicCount={epicCount}
           selectedProjectId={selectedProjectId}
-          onSelectProject={setSelectedProjectId}
         />
 
-        {/* Main Body with Sidebar + View Container */}
-        <div className="flex-1 flex overflow-hidden">
+        {/* Content View Area */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-6">
           
-          {/* Sidebar Navigation */}
-          <Sidebar 
-            activeTab={activeTab} 
-            setActiveTab={setActiveTab} 
-            reqCount={requirements.length}
-            epicCount={epicCount}
-            selectedProjectId={selectedProjectId}
-          />
+          {activeTab === 'dashboard' && (
+            <DashboardView 
+              requirements={requirements}
+              loading={loading}
+              onRunAI={handleProcess}
+              onExport={handleExport}
+              onUploadSuccess={handleUploadSuccess}
+              setActiveTab={setActiveTab}
+              projects={projects}
+              selectedProjectId={selectedProjectId}
+              onSelectProject={setSelectedProjectId}
+            />
+          )}
 
-          {/* Content View Area */}
-          <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-6">
-            
-            {activeTab === 'dashboard' && (
-              <DashboardView 
-                requirements={requirements}
-                loading={loading}
-                onRunAI={handleProcess}
-                onExport={handleExport}
-                onUploadSuccess={fetchRequirements}
-                setActiveTab={setActiveTab}
-                projects={projects}
-                selectedProjectId={selectedProjectId}
-                onSelectProject={setSelectedProjectId}
-              />
-            )}
+          {activeTab === 'artifacts' && (
+            <DevelopmentArtifactModule
+              requirements={requirements}
+              loading={loading}
+              error={error}
+              onFetchRequirements={handleUploadSuccess}
+              onProcess={handleProcess}
+              onExport={handleExport}
+              projects={projects}
+              selectedProjectId={selectedProjectId}
+              onSelectProject={setSelectedProjectId}
+              onNavigateToSprintPlan={() => {
+                setProjectInitialTab('sprint-plan');
+                setProjectRefreshKey(Date.now());
+                setActiveTab('projects');
+              }}
+            />
+          )}
 
-            {activeTab === 'artifacts' && (
-              <DevelopmentArtifactModule
-                requirements={requirements}
-                loading={loading}
-                error={error}
-                onFetchRequirements={fetchRequirements}
-                onProcess={handleProcess}
-                onExport={handleExport}
-                projects={projects}
-                selectedProjectId={selectedProjectId}
-                onSelectProject={setSelectedProjectId}
-              />
-            )}
+          {activeTab === 'projects' && (
+            <ProjectManagementModule 
+              key={projectRefreshKey}
+              requirements={requirements} 
+              initialTab={projectInitialTab}
+              projects={projects}
+              selectedProjectId={selectedProjectId}
+              onSelectProject={setSelectedProjectId}
+              onNavigateToArtifacts={() => setActiveTab('artifacts')}
+              onNavigateToChangeRequests={() => setActiveTab('changerequests')}
+              onNavigateToResources={() => setActiveTab('resources')}
+            />
+          )}
 
-            {activeTab === 'workitems' && (
-              <WorkItemsModule
-                projects={projects}
-                selectedProjectId={selectedProjectId}
-                onSelectProject={setSelectedProjectId}
-              />
-            )}
+          {activeTab === 'resources' && (
+            <ResourceManagementModule 
+              requirements={requirements} 
+              projects={projects}
+              selectedProjectId={selectedProjectId}
+              onSelectProject={setSelectedProjectId}
+            />
+          )}
 
-            {activeTab === 'resources' && (
-              <ResourceManagementModule 
-                requirements={requirements} 
-                projects={projects}
-                selectedProjectId={selectedProjectId}
-                onSelectProject={setSelectedProjectId}
-              />
-            )}
+          {activeTab === 'changerequests' && (
+            <ChangeRequestModule 
+              requirements={requirements} 
+              projects={projects}
+              selectedProjectId={selectedProjectId}
+              onSelectProject={setSelectedProjectId}
+              onNavigateToReplanning={() => {
+                setProjectInitialTab('replanning');
+                setProjectRefreshKey(Date.now());
+                setActiveTab('projects');
+              }}
+            />
+          )}
 
-            {activeTab === 'projects' && (
-              <ProjectManagementModule 
-                requirements={requirements} 
-                projects={projects}
-                selectedProjectId={selectedProjectId}
-                onSelectProject={setSelectedProjectId}
-              />
-            )}
-
-            {activeTab === 'changerequests' && (
-              <ChangeRequestModule 
-                requirements={requirements} 
-                projects={projects}
-                selectedProjectId={selectedProjectId}
-                onSelectProject={setSelectedProjectId}
-              />
-            )}
-
-          </main>
-        </div>
-
-        {/* Admin Dashboard Footer */}
-        <Footer />
+        </main>
       </div>
-    </DndProvider>
+
+      {/* Auth Modal */}
+      <AuthModal />
+
+      {/* Footer */}
+      <Footer />
+    </div>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <DndProvider backend={HTML5Backend}>
+      <AuthProvider>
+        <MainLayout />
+      </AuthProvider>
+    </DndProvider>
+  );
+}

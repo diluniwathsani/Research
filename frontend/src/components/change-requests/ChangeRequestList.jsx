@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import './changeRequests.css';
 
-export default function ChangeRequestList({ onNavigateToNew }) {
+export default function ChangeRequestList({ onNavigateToNew, onNavigateToReplanning }) {
   const [requests, setRequests] = useState([]);
   const [filteredRequests, setFilteredRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -238,7 +238,17 @@ export default function ChangeRequestList({ onNavigateToNew }) {
           <h1>Change Requests Registry & Governance</h1>
           <p>Integrated governance registry linking active projects, user stories, pending sprints, and AI impact assessments.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          {onNavigateToReplanning && (
+            <button
+              onClick={onNavigateToReplanning}
+              className="p-2.5 px-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-extrabold transition-all text-xs flex items-center gap-1.5 shadow-md shadow-orange-500/20"
+              title="Switch to Project Module Replanning Tab"
+            >
+              <Sparkles size={14} className="text-slate-950" />
+              <span>Project Replanning Tab</span>
+            </button>
+          )}
           <button 
             onClick={fetchRequests}
             className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors border border-white/20 text-xs font-semibold flex items-center gap-1.5"
@@ -486,6 +496,31 @@ export default function ChangeRequestList({ onNavigateToNew }) {
                     rows="3"
                     className="cr-modal-comment-textarea"
                   />
+                </div>
+              )}
+
+              {/* Project Module Sprint Replanning Bridge */}
+              {onNavigateToReplanning && (
+                <div className="p-4 rounded-xl border border-amber-300 dark:border-amber-700/50 bg-gradient-to-r from-amber-500/10 to-orange-500/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 mt-3">
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+                      <Sparkles size={14} className="text-amber-600 dark:text-amber-400" />
+                      Dynamic Mid-Sprint Re-Planning Engine
+                    </h4>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                      Analyze blast radius, knapsack 0/1 sprint re-balancing, and ripple effects for this change request in the Project Management Module.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSelectedRequest(null);
+                      onNavigateToReplanning();
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-1.5 shrink-0"
+                  >
+                    <span>Open Replanning Tab</span>
+                    <Sparkles size={13} />
+                  </button>
                 </div>
               )}
             </div>

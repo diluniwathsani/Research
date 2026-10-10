@@ -1,0 +1,52 @@
+sprint_number,story_id,title,priority,priority_tier,story_points,estimated_hours,dependencies,sprint_length_days,team_size
+1,US042,"The system shall accept cash, credit/debit card, mobile wallet and ban",HIGH,HIGH,8,64,,14,5
+1,US041,The system shall integrate with EMV-compliant card payment terminals.,HIGH,HIGH,5,40,,14,5
+1,US043,The system shall allow authorized users to void a transaction with a r,HIGH,HIGH,5,40,,14,5
+1,US007,The system shall integrate with accounting software to post sales and ,HIGH,HIGH,5,40,,14,5
+1,US012,"The system shall authenticate users with a PIN, password or badge.",HIGH,HIGH,5,40,,14,5
+1,US019,The system shall display a customer's purchase history.,LOW,MEDIUM,2,16,,14,5
+2,US014,The system shall provide a real-time dashboard of sales KPIs.,HIGH,HIGH,3,24,US012,14,5
+2,US015,"The system shall export reports to Excel, CSV and PDF.",HIGH,HIGH,3,24,US012,14,5
+2,US008,"The system shall support barcode scanners, receipt printers, cash draw",HIGH,HIGH,8,64,,14,5
+2,US002,The system shall complete a standard checkout transaction in under 2 s,HIGH,HIGH,8,64,,14,5
+2,US046,The system shall allow a transaction to be put on hold and recalled la,HIGH,HIGH,5,40,,14,5
+2,US034,The system shall send receipts to customers by email or SMS.,LOW,MEDIUM,3,24,,14,5
+3,US039,The system shall issue and redeem gift cards and vouchers.,LOW,MEDIUM,3,24,,14,5
+3,US044,The system shall process returns and refunds linked to the original sa,HIGH,HIGH,8,64,,14,5
+3,US033,"The system shall allow configurable receipt templates (logo, footer, t",LOW,MEDIUM,5,40,,14,5
+3,US005,The system shall expose secure REST APIs and webhooks for third-party ,LOW,MEDIUM,5,40,,14,5
+3,US021,The system shall store customer profiles with contact details and cons,LOW,MEDIUM,5,40,,14,5
+3,US026,The system shall manage supplier records and purchase orders.,LOW,MEDIUM,3,24,,14,5
+4,US024,The system shall support product categories and bundled items.,LOW,MEDIUM,5,40,,14,5
+4,US049,"The system shall allow cashiers to search products by name, SKU or cat",LOW,MEDIUM,5,40,,14,5
+4,US009,The system shall require manager approval for restricted actions.,LOW,MEDIUM,5,40,,14,5
+4,US029,The system shall support stock transfers between outlets or warehouses,LOW,MEDIUM,5,40,,14,5
+4,US031,The system shall alert users when stock falls below a configurable reo,LOW,MEDIUM,5,40,,14,5
+4,US048,The system shall allow cashiers to change quantity or remove items bef,LOW,MEDIUM,5,40,,14,5
+5,US050,Add staff login,LOW,LOW,3,24,,14,5
+5,US035,The system shall print receipts on thermal printers.,LOW,LOW,2,16,,14,5
+5,US006,"The system shall synchronise products, prices and stock with an online",LOW,MEDIUM,5,40,,14,5
+5,US013,The system shall restrict functions based on configurable user roles.,LOW,MEDIUM,5,40,,14,5
+5,US038,The system shall support partial payments and deposits against an orde,LOW,MEDIUM,5,40,,14,5
+5,US050,The system shall add products to the cart by scanning a barcode or QR ,LOW,MEDIUM,5,40,,14,5
+5,US022,The system shall support different price lists by outlet or customer g,LOW,MEDIUM,5,40,,14,5
+6,US010,The system shall support opening and closing shifts with cash drawer r,LOW,MEDIUM,5,40,,14,5
+6,US017,"The system shall report sales by product, category, cashier, outlet an",LOW,MEDIUM,5,40,US012,14,5
+6,US032,The system shall deduct stock automatically on each sale and restore i,LOW,MEDIUM,5,40,,14,5
+6,US028,The system shall support stock counts and adjustments with reason code,LOW,MEDIUM,5,40,,14,5
+6,US020,The system shall award and redeem loyalty points based on configurable,LOW,LOW,5,40,,14,5
+6,US040,The system shall calculate change due and track cash in/out of the dra,LOW,LOW,5,40,,14,5
+7,US003,The system shall continue to process sales when internet connectivity ,LOW,MEDIUM,8,64,,14,5
+7,US001,"The system shall encrypt sensitive data, follow PCI DSS guidelines and",LOW,MEDIUM,8,64,,14,5
+7,US004,The system shall synchronise data across multiple outlets via a centra,LOW,MEDIUM,8,64,,14,5
+7,US027,The system shall track batch numbers and expiry dates for applicable p,LOW,LOW,5,40,,14,5
+8,US047,The system shall support line-item and order-level discounts (percenta,LOW,MEDIUM,8,64,,14,5
+8,US018,"The system shall generate X and Z reports summarising sales, payments ",LOW,MEDIUM,8,64,US012,14,5
+8,US037,The system shall accept payments in multiple currencies using configur,LOW,MEDIUM,8,64,,14,5
+8,US045,The system shall allow an order to be split by item or amount across m,LOW,LOW,5,40,,14,5
+9,US023,"The system shall support configurable promotions (BOGO, percentage off",LOW,MEDIUM,8,64,,14,5
+9,US011,"The system shall log sensitive actions (voids, refunds, discounts, pri",LOW,MEDIUM,8,64,,14,5
+9,US036,"The system shall calculate VAT/sales tax using configurable rates, inc",LOW,LOW,8,64,,14,5
+9,US016,"The system shall report stock on hand, stock movement and inventory va",LOW,LOW,5,40,US012,14,5
+10,US030,The system shall record incoming stock against purchase orders (GRN).,LOW,LOW,5,40,,14,5
+10,US025,"The system shall maintain products with SKU, barcode, cost, price and ",LOW,LOW,8,64,,14,5

@@ -131,6 +131,9 @@ pool.on('error', (err) => {
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
+        try {
+            await client.query(`ALTER TABLE requirements ADD COLUMN IF NOT EXISTS user_email TEXT;`);
+        } catch (_) {}
         console.log('✅ Developers table is ready.');
 
         // ================= CREATE ALLOCATIONS TABLE =================

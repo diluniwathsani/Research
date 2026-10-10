@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { AlertCircle, CheckCircle, Edit2, Save, X, ChevronDown, ChevronRight, Layout, Database, Shield, Zap, Calendar, Clock, Layers, Folder, FolderOpen, MoreVertical, Trash2, Download } from 'lucide-react';
+import { AlertCircle, CheckCircle, Edit2, Save, X, ChevronDown, ChevronRight, Layout, Database, Shield, Zap, Calendar, Clock, Layers, Folder, FolderOpen, MoreVertical, Trash2, Download, ArrowRight, Sparkles, Rocket } from 'lucide-react';
+import SprintTimelineWizardModal from './SprintTimelineWizardModal';
+import { useAuth } from '../context/AuthContext';
 
-export default function RequirementsTable({ requirements, onUpdate }) {
+export default function RequirementsTable({ requirements, onUpdate, onNavigateToSprintPlan }) {
+  const { user } = useAuth();
   // --- UI STATE ---
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState("");
@@ -15,24 +18,104 @@ export default function RequirementsTable({ requirements, onUpdate }) {
   const [batchNameValue, setBatchNameValue] = useState("");
 
   // handleExportBatch: Triggers Excel download for a specific set of requirements
-  const handleExportBatch = (timestamp, setTitle) => {
-    window.location.href = `http://localhost:3000/api/export/batch?timestamp=${encodeURIComponent(timestamp)}`;
+  const handleExportBatch = (timestamp, setTitle, projectId) => {
+    const projParam = projectId ? `&project_id=${encodeURIComponent(projectId)}` : '';
+    window.location.href = `http://localhost:3000/api/export/batch?timestamp=${encodeURIComponent(timestamp)}${projParam}`;
+  };
+
+  const [syncAlert, setSyncAlert] = useState(null);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [wizardBatchData, setWizardBatchData] = useState({ title: '', reqs: [] });
+
+  const handleOpenTimelineWizard = (batchTitle, domains) => {
+    const allReqs = Object.values(domains).flat();
+    setWizardBatchData({
+      title: batchTitle,
+      reqs: allReqs
+    });
+    setIsWizardOpen(true);
+  };
+
+  const handleGeneratePlanWithTimeline = async (timelineSettings) => {
+    try {
+      const email = user?.email || localStorage.getItem('user_email') || 'default';
+      const batchTitle = wizardBatchData.title || 'POS_SYSTEM_REQUIREMENTS';
+      
+      // Persist active requirements filename / batch name for Sprint Plan headings
+      localStorage.setItem(`active_requirements_batch_${email}`, batchTitle);
+      localStorage.setItem('active_requirements_batch', batchTitle);
+      localStorage.setItem('active_project_name', batchTitle);
+
+      const res = await axios.post('http://localhost:8082/api/import-requirements', {
+        project_name: batchTitle,
+        batch_title: batchTitle,
+        requirements: wizardBatchData.reqs,
+        timeline_settings: {
+          ...timelineSettings,
+          project_name: batchTitle
+        }
+      });
+      if (res.data.status === 'success') {
+        const finalSprintsCount = res.data.sprints_count || timelineSettings.target_sprint_count || 0;
+        localStorage.setItem(`planned_sprints_${email}`, String(finalSprintsCount));
+        localStorage.setItem('total_sprints_count', String(finalSprintsCount));
+        localStorage.setItem('target_sprint_count', String(finalSprintsCount));
+        localStorage.setItem(`planned_stories_${email}`, String(res.data.imported_count || wizardBatchData.reqs.length || 0));
+        window.dispatchEvent(new Event('sprints-updated'));
+
+        setIsWizardOpen(false);
+        setSyncAlert({
+          type: 'success',
+          msg: `🎉 Successfully planned ${res.data.imported_count} Requirements into ${res.data.sprints_count} Sprints (${res.data.total_points} Story Points) with custom ${timelineSettings.sprint_duration_weeks}-week Cadence & Gantt Schedule!`,
+          sprintsCount: res.data.sprints_count,
+          totalPoints: res.data.total_points
+        });
+
+        if (onNavigateToSprintPlan) {
+          onNavigateToSprintPlan();
+        }
+      } else {
+        throw new Error(res.data.message || 'Import to sprint plan failed');
+      }
+    } catch (err) {
+      console.error('Sprint Sync error:', err);
+      setIsWizardOpen(false);
+      setSyncAlert({
+        type: 'error',
+        msg: `❌ Failed to bridge requirements to Sprint Plan: ${err.response?.data?.message || err.message || 'Ensure Flask API (port 8082) is running.'}`
+      });
+      setTimeout(() => setSyncAlert(null), 7000);
+    }
   };
 
   // --- DATA PROCESSING: GROUPING ---
-  // 1. Group requirements by Batch (using created_at timestamp)
+  // 1. Group requirements by Batch / Project
   const processedGroups = (requirements || []).reduce((acc, req) => {
     const uploadTime = req.created_at || 'Historical';
     const batchName = req.batch_name && req.batch_name !== 'Untitled Batch' ? req.batch_name : "";
-    const batchKey = `${uploadTime}`; 
+    // Differentiate batches accurately by project_id and batch_name/timestamp
+    const batchKey = (req.project_id && req.project_id !== 'P00001')
+      ? req.project_id
+      : (batchName ? `${req.project_id || 'P00001'}__${batchName}` : uploadTime);
     const domain = req.epic || "Pending Classification";
     
     if (!acc[batchKey]) {
       acc[batchKey] = {
         requirements: {},
         originalBatchName: batchName,
-        timestamp: uploadTime
+        timestamp: uploadTime,
+        projectId: req.project_id || null
       };
+    }
+
+    // Keep the most recent timestamp for this batch to ensure correct descending sort
+    if (uploadTime !== 'Historical' && uploadTime) {
+      if (acc[batchKey].timestamp === 'Historical' || !acc[batchKey].timestamp || uploadTime > acc[batchKey].timestamp) {
+        acc[batchKey].timestamp = uploadTime;
+      }
+    }
+    if (batchName && !acc[batchKey].originalBatchName) {
+      acc[batchKey].originalBatchName = batchName;
     }
     
     // Nested group by Epic/Domain
@@ -44,9 +127,11 @@ export default function RequirementsTable({ requirements, onUpdate }) {
   // --- DATA PROCESSING: SORTING ---
   // 2. Determine Chronological Numbers (Oldest First for numbering)
   const chronologicalKeys = Object.keys(processedGroups).sort((a, b) => {
-    if (a === 'Historical') return -1;
-    if (b === 'Historical') return 1;
-    return new Date(a) - new Date(b);
+    const timeA = processedGroups[a].timestamp;
+    const timeB = processedGroups[b].timestamp;
+    if (timeA === 'Historical' || !timeA) return -1;
+    if (timeB === 'Historical' || !timeB) return 1;
+    return new Date(timeA) - new Date(timeB);
   });
 
   // Create a mapping for display titles (e.g. "Requirement Set 1")
@@ -55,8 +140,14 @@ export default function RequirementsTable({ requirements, onUpdate }) {
     batchNumberMap[key] = `${batchPrefix} ${index + 1}`;
   });
 
-  // 3. Prepare for Display (FIFO Order matching original Excel upload sequence)
-  const displayKeys = [...chronologicalKeys];
+  // 3. Prepare for Display: Put newest upload at the TOP so newly uploaded Excel shows immediately!
+  const displayKeys = Object.keys(processedGroups).sort((a, b) => {
+    const timeA = processedGroups[a].timestamp;
+    const timeB = processedGroups[b].timestamp;
+    if (timeA === 'Historical' || !timeA) return 1;
+    if (timeB === 'Historical' || !timeB) return -1;
+    return new Date(timeB) - new Date(timeA);
+  });
 
   const toggleSection = (id) => {
     setExpandedSections(prev => ({ ...prev, [id]: !prev[id] }));
@@ -95,10 +186,13 @@ export default function RequirementsTable({ requirements, onUpdate }) {
     setBatchNameValue(currentName);
   };
 
-  const saveBatchRename = async (timestamp) => {
+  const saveBatchRename = async (key) => {
     try {
-      await axios.put(`http://localhost:3000/api/batches/${encodeURIComponent(timestamp)}`, {
-        batch_name: batchNameValue
+      const batchData = processedGroups[key];
+      const targetTime = batchData?.timestamp || key;
+      await axios.put(`http://localhost:3000/api/batches/${encodeURIComponent(targetTime)}`, {
+        batch_name: batchNameValue,
+        project_id: batchData?.projectId
       });
       setEditingBatchTimestamp(null);
       onUpdate();
@@ -143,6 +237,43 @@ export default function RequirementsTable({ requirements, onUpdate }) {
 
   return (
     <div className="p-8 space-y-8">
+      {syncAlert && (
+        <div className={`p-4 sm:p-5 rounded-3xl font-bold text-xs border shadow-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-all duration-300 animate-in fade-in ${
+          syncAlert.type === 'error' 
+            ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' 
+            : 'bg-gradient-to-r from-indigo-950/80 via-slate-900 to-purple-950/80 text-white border-indigo-500/50 ring-4 ring-indigo-500/10'
+        }`}>
+          <div className="flex items-center gap-3">
+            <div className={`p-2.5 rounded-2xl ${syncAlert.type === 'error' ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>
+              {syncAlert.type === 'error' ? <AlertCircle size={22} /> : <CheckCircle size={22} />}
+            </div>
+            <div>
+              <p className="font-extrabold text-sm text-white">{syncAlert.msg}</p>
+              {syncAlert.sprintsCount && (
+                <p className="text-xs text-indigo-300/80 mt-0.5 font-semibold">
+                  NLP story points decomposed • ILP knapsack solved • Gantt calendar and CPM float matrix initialized.
+                </p>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            {syncAlert.type === 'success' && onNavigateToSprintPlan && (
+              <button 
+                onClick={onNavigateToSprintPlan}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:opacity-90 text-white rounded-xl font-black text-xs shadow-lg shadow-indigo-600/30 transition-all hover:scale-105 active:scale-95"
+              >
+                <span>View Sprint Plan & Gantt</span>
+                <ArrowRight size={14} />
+              </button>
+            )}
+            <button onClick={() => setSyncAlert(null)} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Configuration Header: Allow changing the Batch Prefix & Total Records */}
       <div className="flex items-center justify-between gap-4 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
         <div className="flex items-center gap-3">
@@ -166,7 +297,7 @@ export default function RequirementsTable({ requirements, onUpdate }) {
         const batchData = processedGroups[batchKey];
         const domains = batchData.requirements;
         const batchTotal = Object.values(domains).flat().length;
-        const isBatchExpanded = expandedSections[batchKey] || false;
+        const isBatchExpanded = Boolean(expandedSections[batchKey]);
         const setTitle = batchNumberMap[batchKey];
 
         return (
@@ -230,7 +361,7 @@ export default function RequirementsTable({ requirements, onUpdate }) {
                   </div>
                   <div className="flex items-center gap-4 mt-3 text-slate-400 font-bold">
                     <span className="flex items-center gap-1.5 text-xs">
-                      <Calendar size={14} className="text-primary/60" /> {formatDate(batchKey)}
+                      <Calendar size={14} className="text-primary/60" /> {formatDate(batchData.timestamp)}
                     </span>
                     <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
                     <span className="flex items-center gap-1.5 text-xs">
@@ -240,14 +371,33 @@ export default function RequirementsTable({ requirements, onUpdate }) {
                 </div>
               </div>
               
-              <div className="flex items-center gap-4">
-                 <div className="flex items-center gap-3 pr-4 border-r border-slate-200 dark:border-slate-700">
+              <div className="flex items-center gap-3">
+                 <div className="flex items-center gap-2 pr-3 border-r border-slate-200 dark:border-slate-700">
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleExportBatch(batchKey, setTitle);
+                        const bTitle = batchData.originalBatchName || setTitle;
+                        const email = user?.email || localStorage.getItem('user_email') || 'default';
+                        try {
+                          localStorage.setItem(`active_requirements_batch_${email}`, bTitle);
+                          localStorage.setItem('active_requirements_batch', bTitle);
+                          localStorage.setItem('active_project_name', bTitle);
+                        } catch (_) {}
+                        handleOpenTimelineWizard(bTitle, domains);
                       }}
-                      className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-green-600 hover:text-white rounded-xl transition-all duration-300 text-slate-600 dark:text-slate-300 font-black text-[10px] uppercase tracking-widest shadow-sm hover:shadow-lg group/btn"
+                      className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl transition-all duration-300 font-black text-[10px] uppercase tracking-wider shadow-md hover:shadow-indigo-500/25 group/sprint hover:scale-105"
+                      title="Configure 6-Question Timeline & Cadence Setup Wizard before AI + ILP Partitioning"
+                    >
+                      <Zap size={14} className="text-amber-300 group-hover/sprint:animate-spin" />
+                      <span>Plan Sprints</span>
+                    </button>
+
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleExportBatch(batchData.timestamp || batchKey, setTitle, batchData.projectId);
+                      }}
+                      className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-green-600 hover:text-white rounded-xl transition-all duration-300 text-slate-600 dark:text-slate-300 font-black text-[10px] uppercase tracking-wider shadow-sm hover:shadow-lg group/btn"
                     >
                       <Download size={14} className="group-hover/btn:animate-bounce" />
                       <span>Export Excel</span>
@@ -449,6 +599,15 @@ export default function RequirementsTable({ requirements, onUpdate }) {
           </div>
         );
       })}
+
+      {/* TIMELINE & CADENCE 6-QUESTION SETUP WIZARD MODAL */}
+      <SprintTimelineWizardModal
+        isOpen={isWizardOpen}
+        onClose={() => setIsWizardOpen(false)}
+        batchTitle={wizardBatchData.title}
+        requirementsCount={wizardBatchData.reqs.length}
+        onGeneratePlan={handleGeneratePlanWithTimeline}
+      />
     </div>
   );
 }

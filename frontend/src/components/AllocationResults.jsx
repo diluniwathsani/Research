@@ -138,6 +138,32 @@ const DeveloperColumn = ({ developer, tasks, onDrop, theme }) => {
           </div>
         )}
 
+        {/* Distinct Technical Skills Badges */}
+        {(() => {
+          const rawSkills = developer.languages || developer.skills;
+          const skillsList = Array.isArray(rawSkills) 
+            ? rawSkills 
+            : (typeof rawSkills === 'string' && rawSkills.trim() ? rawSkills.split(',').map(s => s.trim()).filter(Boolean) : []);
+          if (skillsList.length === 0) return null;
+          return (
+            <div className="mb-3 pt-2 border-t border-slate-100 dark:border-slate-700/60">
+              <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1">
+                Specialized Skills:
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {skillsList.map((sk, sIdx) => (
+                  <span 
+                    key={sIdx} 
+                    className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 text-emerald-600 dark:text-emerald-300 font-mono text-[10px] font-semibold"
+                  >
+                    {sk}
+                  </span>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         <div className="flex justify-between gap-4 text-xs">
           <div>
             <div className="text-slate-500 dark:text-slate-400 mb-0.5 font-medium">Sprint / Total Used</div>
@@ -183,7 +209,7 @@ const DeveloperColumn = ({ developer, tasks, onDrop, theme }) => {
   );
 };
 
-const AllocationResults = ({ assignments = [], developers = [], tasks = [], selectedProject, selectedSprint, onRebalance, onSave, onTaskMove, onBack, loading, apiSource }) => {
+const AllocationResults = ({ assignments = [], developers = [], tasks = [], selectedProject, selectedSprint, onRebalance, onSave, onTaskMove, onBack, onOpenManageTeam, loading, apiSource }) => {
   const safeAssignments = Array.isArray(assignments) ? assignments : (assignments?.data || []);
   const safeDevelopers = Array.isArray(developers) ? developers : (developers?.data || []);
   const safeTasks = Array.isArray(tasks) ? tasks : (tasks?.data || []);
@@ -270,6 +296,14 @@ const AllocationResults = ({ assignments = [], developers = [], tasks = [], sele
               <span className="text-xs font-normal text-slate-400 dark:text-slate-500">(drag & drop to reassign)</span>
             </h3>
             <div className="flex gap-2.5">
+              {onOpenManageTeam && (
+                <button
+                  onClick={onOpenManageTeam}
+                  className="px-4 py-2.5 rounded-full text-sm font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500/20 dark:hover:bg-indigo-500/20 transition-colors flex items-center gap-1.5"
+                >
+                  👥 Manage Resources & Skills
+                </button>
+              )}
               <button
                 onClick={onRebalance}
                 disabled={loading}

@@ -1,0 +1,1269 @@
+{
+  "tasks": [
+    {
+      "story_id": "US001",
+      "title": "To create and manage IT Services Company | Requirements baseline and implementation tracker so that the core functional feature is executed correctly.",
+      "description": "IT Services Company | Requirements baseline and implementation tracker",
+      "epic": "General System Operations",
+      "feature": "Core Functional Feature",
+      "priority": "HIGH",
+      "priority_tier": "CRITICAL",
+      "priority_score": 100,
+      "confidence": 99.0,
+      "story_points": 13,
+      "estimated_hours": 104,
+      "dependencies": [],
+      "reason": "Critical blocker: severe security risk or production stability hazard.",
+      "badge_color": "rose",
+      "optimization_value": 297.0,
+      "sprint_number": 1,
+      "allocated_by": "ILP_HIGHS_SOLVER",
+      "assigned_developer": {
+        "id": "DEV01",
+        "name": "Kasun Perera",
+        "role": "Senior Backend & Security Architect",
+        "primary_domain": "Senior Backend",
+        "avatar_bg": "bg-rose-500",
+        "initials": "KP",
+        "skill_match_pct": 50,
+        "matched_skills": [],
+        "suitability_reason": "Cross-functional coverage: Kasun Perera has available sprint capacity and general capability to execute this General System Operations story."
+      },
+      "is_manual_assigned": true,
+      "sub_tasks": [
+        {
+          "id": "US001.1",
+          "story_id": "US001.1",
+          "parent_id": "US001",
+          "title": "To implement Database Schema & Backend REST API for Create and manage IT Services Company | Requirements baseline and implementation tracker",
+          "description": "Backend persistence layer, database schemas, and REST endpoints for Create and manage IT Services Company | Requirements baseline and implementation tracker.",
+          "points": 4,
+          "story_points": 4,
+          "estimated_hours": 32,
+          "hours": 32,
+          "status": "To Do",
+          "priority_tier": "CRITICAL",
+          "priority": "HIGH",
+          "assigned_developer": {
+            "id": "DEV01",
+            "name": "Kasun Perera",
+            "role": "Senior Backend & Security Architect",
+            "primary_domain": "Senior Backend",
+            "avatar_bg": "bg-rose-500",
+            "initials": "KP",
+            "skill_match_pct": 50,
+            "matched_skills": [],
+            "suitability_reason": "Cross-functional coverage: Kasun Perera has available sprint capacity and general capability to execute this General System Operations story."
+          },
+          "gherkin_criteria": "Feature: To implement Database Schema & Backend REST API for Create and manage IT Services Company | Requirements baseline and implementation tracker\n  As a Platform User\n  I want \"To implement Database Schema & Backend REST API for Create and manage IT Services Company | Requirements baseline and implementation tracker\" functionality implemented reliably\n  So that business deliverables are achieved with high quality.\n\n  Scenario: Primary Happy Path Execution\n    Given the user is on the target interface and system services are healthy\n    When the user inputs valid operational data and confirms submission\n    Then the server processes the transaction with sub-second response time\n    And updates the persistent storage with complete audit tracking.\n\n  Scenario: Boundary Validation & Error Recovery\n    Given required input fields are empty or exceed boundary constraints\n    When the user clicks the submit action\n    Then client-side and server-side validation flags the invalid fields\n    And highlights actionable remediation tips without losing form state.",
+          "dependencies": []
+        },
+        {
+          "id": "US001.2",
+          "story_id": "US001.2",
+          "parent_id": "US001",
+          "title": "To build Interactive UI Components & State Management for Create and manage IT Services Company | Requirements baseline and implementation tracker",
+          "description": "Responsive user interface, real-time client state binding, and interactive UX for Create and manage IT Services Company | Requirements baseline and implementation tracker.",
+          "points": 4,
+          "story_points": 4,
+          "estimated_hours": 32,
+          "hours": 32,
+          "status": "To Do",
+          "priority_tier": "CRITICAL",
+          "priority": "HIGH",
+          "assigned_developer": {
+            "id": "DEV01",
+            "name": "Kasun Perera",
+            "role": "Senior Backend & Security Architect",
+            "primary_domain": "Senior Backend",
+            "avatar_bg": "bg-rose-500",
+            "initials": "KP",
+            "skill_match_pct": 50,
+            "matched_skills": [],
+            "suitability_reason": "Cross-functional coverage: Kasun Perera has available sprint capacity and general capability to execute this General System Operations story."
+          },
+          "gherkin_criteria": "Feature: To build Interactive UI Components & State Management for Create and manage IT Services Company | Requirements baseline and implementation tracker\n  As a Platform User\n  I want \"To build Interactive UI Components & State Management for Create and manage IT Services Company | Requirements baseline and implementation tracker\" functionality implemented reliably\n  So that business deliverables are achieved with high quality.\n\n  Scenario: Primary Happy Path Execution\n    Given the user is on the target interface and system services are healthy\n    When the user inputs valid operational data and confirms submission\n    Then the server processes the transaction with sub-second response time\n    And updates the persistent storage with complete audit tracking.\n\n  Scenario: Boundary Validation & Error Recovery\n    Given required input fields are empty or exceed boundary constraints\n    When the user clicks the submit action\n    Then client-side and server-side validation flags the invalid fields\n    And highlights actionable remediation tips without losing form state.",
+          "dependencies": [
+            "US001.1"
+          ]
+        },
+        {
+          "id": "US001.3",
+          "story_id": "US001.3",
+          "parent_id": "US001",
+          "title": "To implement Validation, Error Handling & Automated Tests for Create and manage IT Services Company | Requirements baseline and implementation tracker",
+          "description": "Security verification, exception handling, automated tests, and edge case coverage for Create and manage IT Services Company | Requirements baseline and implementation tracker.",
+          "points": 5,
+          "story_points": 5,
+          "estimated_hours": 40,
+          "hours": 40,
+          "status": "To Do",
+          "priority_tier": "CRITICAL",
+          "priority": "HIGH",
+          "assigned_developer": {
+            "id": "DEV01",
+            "name": "Kasun Perera",
+            "role": "Senior Backend & Security Architect",
+            "primary_domain": "Senior Backend",
+            "avatar_bg": "bg-rose-500",
+            "initials": "KP",
+            "skill_match_pct": 50,
+            "matched_skills": [],
+            "suitability_reason": "Cross-functional coverage: Kasun Perera has available sprint capacity and general capability to execute this General System Operations story."
+          },
+          "gherkin_criteria": "Feature: To implement Validation, Error Handling & Automated Tests for Create and manage IT Services Company | Requirements baseline and implementation tracker\n  As a Platform User\n  I want \"To implement Validation, Error Handling & Automated Tests for Create and manage IT Services Company | Requirements baseline and implementation tracker\" functionality implemented reliably\n  So that business deliverables are achieved with high quality.\n\n  Scenario: Primary Happy Path Execution\n    Given the user is on the target interface and system services are healthy\n    When the user inputs valid operational data and confirms submission\n    Then the server processes the transaction with sub-second response time\n    And updates the persistent storage with complete audit tracking.\n\n  Scenario: Boundary Validation & Error Recovery\n    Given required input fields are empty or exceed boundary constraints\n    When the user clicks the submit action\n    Then client-side and server-side validation flags the invalid fields\n    And highlights actionable remediation tips without losing form state.",
+          "dependencies": [
+            "US001.2"
+          ]
+        }
+      ],
+      "is_decomposed": true
+    },
+    {
+      "story_id": "US002",
+      "title": "To create and manage Register overview so that the core functional feature is executed correctly.",
+      "description": "Register overview",
+      "epic": "General System Operations",
+      "feature": "Core Functional Feature",
+      "priority": "LOW",
+      "priority_tier": "LOW",
+      "priority_score": 15,
+      "confidence": 85.0,
+      "story_points": 3,
+      "estimated_hours": 24,
+      "dependencies": [],
+      "reason": "Low priority: minor cosmetic, stylistic, or non-urgent enhancement.",
+      "badge_color": "emerald",
+      "optimization_value": 10.2,
+      "sprint_number": 1,
+      "allocated_by": "ILP_HIGHS_SOLVER",
+      "assigned_developer": {
+        "id": "DEV02",
+        "name": "Nimali Fernando",
+        "role": "Senior Frontend & UI/UX Specialist",
+        "primary_domain": "Senior Frontend",
+        "avatar_bg": "bg-sky-500",
+        "initials": "NF",
+        "skill_match_pct": 50,
+        "matched_skills": [],
+        "suitability_reason": "Cross-functional coverage: Nimali Fernando has available sprint capacity and general capability to execute this General System Operations story."
+      },
+      "is_manual_assigned": true,
+      "sub_tasks": [],
+      "is_decomposed": false
+    },
+    {
+      "story_id": "US003",
+      "title": "To create and manage Total requirements so that the core functional feature is executed correctly.",
+      "description": "Total requirements",
+      "epic": "General System Operations",
+      "feature": "Core Functional Feature",
+      "priority": "LOW",
+      "priority_tier": "LOW",
+      "priority_score": 15,
+      "confidence": 85.0,
+      "story_points": 3,
+      "estimated_hours": 24,
+      "dependencies": [],
+      "reason": "Low priority: minor cosmetic, stylistic, or non-urgent enhancement.",
+      "badge_color": "emerald",
+      "optimization_value": 10.2,
+      "sprint_number": 1,
+      "allocated_by": "ILP_HIGHS_SOLVER",
+      "assigned_developer": {
+        "id": "DEV01",
+        "name": "Kasun Perera",
+        "role": "Senior Backend & Security Architect",
+        "primary_domain": "Senior Backend",
+        "avatar_bg": "bg-rose-500",
+        "initials": "KP",
+        "skill_match_pct": 50,
+        "matched_skills": [],
+        "suitability_reason": "Cross-functional coverage: Kasun Perera has available sprint capacity and general capability to execute this General System Operations story."
+      },
+      "is_manual_assigned": true,
+      "sub_tasks": [],
+      "is_decomposed": false
+    },
+    {
+      "story_id": "US006",
+      "title": "To create and manage Approved / in progress / implemented so that the core functional feature is executed correctly.",
+      "description": "Approved / in progress / implemented",
+      "epic": "General System Operations",
+      "feature": "Core Functional Feature",
+      "priority": "HIGH",
+      "priority_tier": "CRITICAL",
+      "priority_score": 100,
+      "confidence": 99.0,
+      "story_points": 5,
+      "estimated_hours": 40,
+      "dependencies": [],
+      "reason": "Critical blocker: severe security risk or production stability hazard.",
+      "badge_color": "rose",
+      "optimization_value": 297.0,
+      "sprint_number": 1,
+      "allocated_by": "ILP_HIGHS_SOLVER",
+      "assigned_developer": {
+        "id": "DEV02",
+        "name": "Nimali Fernando",
+        "role": "Senior Frontend & UI/UX Specialist",
+        "primary_domain": "Senior Frontend",
+        "avatar_bg": "bg-sky-500",
+        "initials": "NF",
+        "skill_match_pct": 50,
+        "matched_skills": [],
+        "suitability_reason": "Cross-functional coverage: Nimali Fernando has available sprint capacity and general capability to execute this General System Operations story."
+      },
+      "is_manual_assigned": true,
+      "sub_tasks": [
+        {
+          "id": "US006.1",
+          "story_id": "US006.1",
+          "parent_id": "US006",
+          "title": "To implement Core Business API & Database Logic for Create and manage Approved / in progress / implemented",
+          "description": "Fundamental API logic, database handlers, and data transactions for Create and manage Approved / in progress / implemented.",
+          "points": 2,
+          "story_points": 2,
+          "estimated_hours": 16,
+          "hours": 16,
+          "status": "To Do",
+          "priority_tier": "CRITICAL",
+          "priority": "HIGH",
+          "assigned_developer": {
+            "id": "DEV02",
+            "name": "Nimali Fernando",
+            "role": "Senior Frontend & UI/UX Specialist",
+            "primary_domain": "Senior Frontend",
+            "avatar_bg": "bg-sky-500",
+            "initials": "NF",
+            "skill_match_pct": 50,
+            "matched_skills": [],
+            "suitability_reason": "Cross-functional coverage: Nimali Fernando has available sprint capacity and general capability to execute this General System Operations story."
+          },
+          "gherkin_criteria": "Feature: To implement Core Business API & Database Logic for Create and manage Approved / in progress / implemented\n  As a Platform User\n  I want \"To implement Core Business API & Database Logic for Create and manage Approved / in progress / implemented\" functionality implemented reliably\n  So that business deliverables are achieved with high quality.\n\n  Scenario: Primary Happy Path Execution\n    Given the user is on the target interface and system services are healthy\n    When the user inputs valid operational data and confirms submission\n    Then the server processes the transaction with sub-second response time\n    And updates the persistent storage with complete audit tracking.\n\n  Scenario: Boundary Validation & Error Recovery\n    Given required input fields are empty or exceed boundary constraints\n    When the user clicks the submit action\n    Then client-side and server-side validation flags the invalid fields\n    And highlights actionable remediation tips without losing form state.",
+          "dependencies": []
+        },
+        {
+          "id": "US006.2",
+          "story_id": "US006.2",
+          "parent_id": "US006",
+          "title": "To build Frontend UI View, Input Validation & Testing for Create and manage Approved / in progress / implemented",
+          "description": "Client-facing components, interactive handlers, input validation, and user feedback for Create and manage Approved / in progress / implemented.",
+          "points": 3,
+          "story_points": 3,
+          "estimated_hours": 24,
+          "hours": 24,
+          "status": "To Do",
+          "priority_tier": "CRITICAL",
+          "priority": "HIGH",
+          "assigned_developer": {
+            "id": "DEV02",
+            "name": "Nimali Fernando",
+            "role": "Senior Frontend & UI/UX Specialist",
+            "primary_domain": "Senior Frontend",
+            "avatar_bg": "bg-sky-500",
+            "initials": "NF",
+            "skill_match_pct": 50,
+            "matched_skills": [],
+            "suitability_reason": "Cross-functional coverage: Nimali Fernando has available sprint capacity and general capability to execute this General System Operations story."
+          },
+          "gherkin_criteria": "Feature: To build Frontend UI View, Input Validation & Testing for Create and manage Approved / in progress / implemented\n  As a Platform User\n  I want \"To build Frontend UI View, Input Validation & Testing for Create and manage Approved / in progress / implemented\" functionality implemented reliably\n  So that business deliverables are achieved with high quality.\n\n  Scenario: Primary Happy Path Execution\n    Given the user is on the target interface and system services are healthy\n    When the user inputs valid operational data and confirms submission\n    Then the server processes the transaction with sub-second response time\n    And updates the persistent storage with complete audit tracking.\n\n  Scenario: Boundary Validation & Error Recovery\n    Given required input fields are empty or exceed boundary constraints\n    When the user clicks the submit action\n    Then client-side and server-side validation flags the invalid fields\n    And highlights actionable remediation tips without losing form state.",
+          "dependencies": [
+            "US006.1"
+          ]
+        }
+      ],
+      "is_decomposed": true
+    },
+    {
+      "story_id": "US008",
+      "title": "To create and manage 1. Review the requirements with process owners and confirm applicability so that the core functional feature is executed correctly.",
+      "description": "1. Review the requirements with process owners and confirm applicability.",
+      "epic": "General System Operations",
+      "feature": "Core Functional Feature",
+      "priority": "HIGH",
+      "priority_tier": "CRITICAL",
+      "priority_score": 100,
+      "confidence": 99.0,
+      "story_points": 13,
+      "estimated_hours": 104,
+      "dependencies": [],
+      "reason": "Critical blocker: severe security risk or production stability hazard.",
+      "badge_color": "rose",
+      "optimization_value": 297.0,
+      "sprint_number": 1,
+      "allocated_by": "ILP_HIGHS_SOLVER",
+      "assigned_developer": {
+        "id": "DEV02",
+        "name": "Nimali Fernando",
+        "role": "Senior Frontend & UI/UX Specialist",
+        "primary_domain": "Senior Frontend",
+        "avatar_bg": "bg-sky-500",
+        "initials": "NF",
+        "skill_match_pct": 93,
+        "matched_skills": [
+          "ui"
+        ],
+        "suitability_reason": "High skill alignment: Story requirements contain tokens [ui], directly matching Nimali Fernando's Senior Frontend profile (93% Fit)."
+      },
+      "is_manual_assigned": true,
+      "sub_tasks": [
+        {
+          "id": "US008.1",
+          "story_id": "US008.1",
+          "parent_id": "US008",
+          "title": "To implement Database Schema & Backend REST API for Create and manage 1. Review the requirements with process owners and confirm applicability",
+          "description": "Backend persistence layer, database schemas, and REST endpoints for Create and manage 1. Review the requirements with process owners and confirm applicability.",
+          "points": 4,
+          "story_points": 4,
+          "estimated_hours": 32,
+          "hours": 32,
+          "status": "To Do",
+          "priority_tier": "CRITICAL",
+          "priority": "HIGH",
+          "assigned_developer": {
+            "id": "DEV02",
+            "name": "Nimali Fernando",
+            "role": "Senior Frontend & UI/UX Specialist",
+            "primary_domain": "Senior Frontend",
+            "avatar_bg": "bg-sky-500",
+            "initials": "NF",
+            "skill_match_pct": 93,
+            "matched_skills": [
+              "ui"
+            ],
+            "suitability_reason": "High skill alignment: Story requirements contain tokens [ui], directly matching Nimali Fernando's Senior Frontend profile (93% Fit)."
+          },
+          "gherkin_criteria": "Feature: To implement Database Schema & Backend REST API for Create and manage 1. Review the requirements with process owners and confirm applicability\n  As a Platform User\n  I want \"To implement Database Schema & Backend REST API for Create and manage 1. Review the requirements with process owners and confirm applicability\" functionality implemented reliably\n  So that business deliverables are achieved with high quality.\n\n  Scenario: Primary Happy Path Execution\n    Given the user is on the target interface and system services are healthy\n    When the user inputs valid operational data and confirms submission\n    Then the server processes the transaction with sub-second response time\n    And updates the persistent storage with complete audit tracking.\n\n  Scenario: Boundary Validation & Error Recovery\n    Given required input fields are empty or exceed boundary constraints\n    When the user clicks the submit action\n    Then client-side and server-side validation flags the invalid fields\n    And highlights actionable remediation tips without losing form state.",
+          "dependencies": []
+        },
+        {
+          "id": "US008.2",
+          "story_id": "US008.2",
+          "parent_id": "US008",
+          "title": "To build Interactive UI Components & State Management for Create and manage 1. Review the requirements with process owners and confirm applicability",
+          "description": "Responsive user interface, real-time client state binding, and interactive UX for Create and manage 1. Review the requirements with process owners and confirm applicability.",
+          "points": 4,
+          "story_points": 4,
+          "estimated_hours": 32,
+          "hours": 32,
+          "status": "To Do",
+          "priority_tier": "CRITICAL",
+          "priority": "HIGH",
+          "assigned_developer": {
+            "id": "DEV02",
+            "name": "Nimali Fernando",
+            "role": "Senior Frontend & UI/UX Specialist",
+            "primary_domain": "Senior Frontend",
+            "avatar_bg": "bg-sky-500",
+            "initials": "NF",
+            "skill_match_pct": 93,
+            "matched_skills": [
+              "ui"
+            ],
+            "suitability_reason": "High skill alignment: Story requirements contain tokens [ui], directly matching Nimali Fernando's Senior Frontend profile (93% Fit)."
+          },
+          "gherkin_criteria": "Feature: To build Interactive UI Components & State Management for Create and manage 1. Review the requirements with process owners and confirm applicability\n  As a Platform User\n  I want \"To build Interactive UI Components & State Management for Create and manage 1. Review the requirements with process owners and confirm applicability\" functionality implemented reliably\n  So that business deliverables are achieved with high quality.\n\n  Scenario: Primary Happy Path Execution\n    Given the user is on the target interface and system services are healthy\n    When the user inputs valid operational data and confirms submission\n    Then the server processes the transaction with sub-second response time\n    And updates the persistent storage with complete audit tracking.\n\n  Scenario: Boundary Validation & Error Recovery\n    Given required input fields are empty or exceed boundary constraints\n    When the user clicks the submit action\n    Then client-side and server-side validation flags the invalid fields\n    And highlights actionable remediation tips without losing form state.",
+          "dependencies": [
+            "US008.1"
+          ]
+        },
+        {
+          "id": "US008.3",
+          "story_id": "US008.3",
+          "parent_id": "US008",
+          "title": "To implement Validation, Error Handling & Automated Tests for Create and manage 1. Review the requirements with process owners and confirm applicability",
+          "description": "Security verification, exception handling, automated tests, and edge case coverage for Create and manage 1. Review the requirements with process owners and confirm applicability.",
+          "points": 5,
+          "story_points": 5,
+          "estimated_hours": 40,
+          "hours": 40,
+          "status": "To Do",
+          "priority_tier": "CRITICAL",
+          "priority": "HIGH",
+          "assigned_developer": {
+            "id": "DEV02",
+            "name": "Nimali Fernando",
+            "role": "Senior Frontend & UI/UX Specialist",
+            "primary_domain": "Senior Frontend",
+            "avatar_bg": "bg-sky-500",
+            "initials": "NF",
+            "skill_match_pct": 93,
+            "matched_skills": [
+              "ui"
+            ],
+            "suitability_reason": "High skill alignment: Story requirements contain tokens [ui], directly matching Nimali Fernando's Senior Frontend profile (93% Fit)."
+          },
+          "gherkin_criteria": "Feature: To implement Validation, Error Handling & Automated Tests for Create and manage 1. Review the requirements with process owners and confirm applicability\n  As a Platform User\n  I want \"To implement Validation, Error Handling & Automated Tests for Create and manage 1. Review the requirements with process owners and confirm applicability\" functionality implemented reliably\n  So that business deliverables are achieved with high quality.\n\n  Scenario: Primary Happy Path Execution\n    Given the user is on the target interface and system services are healthy\n    When the user inputs valid operational data and confirms submission\n    Then the server processes the transaction with sub-second response time\n    And updates the persistent storage with complete audit tracking.\n\n  Scenario: Boundary Validation & Error Recovery\n    Given required input fields are empty or exceed boundary constraints\n    When the user clicks the submit action\n    Then client-side and server-side validation flags the invalid fields\n    And highlights actionable remediation tips without losing form state.",
+          "dependencies": [
+            "US008.2"
+          ]
+        }
+      ],
+      "is_decomposed": true
+    },
+    {
+      "story_id": "US009",
+      "title": "To 3. Update Owner and Status for accountability and delivery tracking so that the core functional feature is executed correctly.",
+      "description": "3. Update Owner and Status for accountability and delivery tracking.",
+      "epic": "General System Operations",
+      "feature": "Core Functional Feature",
+      "priority": "HIGH",
+      "priority_tier": "CRITICAL",
+      "priority_score": 100,
+      "confidence": 99.0,
+      "story_points": 13,
+      "estimated_hours": 104,
+      "dependencies": [],
+      "reason": "Critical blocker: severe security risk or production stability hazard.",
+      "badge_color": "rose",
+      "optimization_value": 297.0,
+      "sprint_number": 1,
+      "allocated_by": "ILP_HIGHS_SOLVER",
+      "assigned_developer": {
+        "id": "DEV02",
+        "name": "Nimali Fernando",
+        "role": "Senior Frontend & UI/UX Specialist",
+        "primary_domain": "Senior Frontend",
+        "avatar_bg": "bg-sky-500",
+        "initials": "NF",
+        "skill_match_pct": 50,
+        "matched_skills": [],
+        "suitability_reason": "Cross-functional coverage: Nimali Fernando has available sprint capacity and general capability to execute this General System Operations story."
+      },
+      "is_manual_assigned": true,
+      "sub_tasks": [
+        {
+          "id": "US009.1",
+          "story_id": "US009.1",
+          "parent_id": "US009",
+          "title": "To implement Database Schema & Backend REST API for 3. Update Owner and Status for accountability and delivery tracking",
+          "description": "Backend persistence layer, database schemas, and REST endpoints for 3. Update Owner and Status for accountability and delivery tracking.",
+          "points": 4,
+          "story_points": 4,
+          "estimated_hours": 32,
+          "hours": 32,
+          "status": "To Do",
+          "priority_tier": "CRITICAL",
+          "priority": "HIGH",
+          "assigned_developer": {
+            "id": "DEV02",
+            "name": "Nimali Fernando",
+            "role": "Senior Frontend & UI/UX Specialist",
+            "primary_domain": "Senior Frontend",
+            "avatar_bg": "bg-sky-500",
+            "initials": "NF",
+            "skill_match_pct": 50,
+            "matched_skills": [],
+            "suitability_reason": "Cross-functional coverage: Nimali Fernando has available sprint capacity and general capability to execute this General System Operations story."
+          },
+          "gherkin_criteria": "Feature: To implement Database Schema & Backend REST API for 3. Update Owner and Status for accountability and delivery tracking\n  As a Software Developer / QA Engineer\n  I want interactive card state progression on the Kanban Board\n  So that real-time task status is synchronized across all sprint views.\n\n  Scenario: Valid State Transition\n    Given a task card in \"In Progress\" with all prerequisite blocker stories completed\n    When the engineer moves the card to \"QA Review\"\n    Then the card status updates instantly on the board\n    And recalculates overall delivered velocity and burndown trajectories.\n\n  Scenario: Prerequisite Blocker Prevention\n    Given a story card with uncompleted upstream dependencies\n    When a team member attempts to move it directly to \"Done\"\n    Then the system displays an instant DAG Dependency Blocker alert\n    And retains the card in its original valid state.",
+          "dependencies": []
+        },
+        {
+          "id": "US009.2",
+          "story_id": "US009.2",
+          "parent_id": "US009",
+          "title": "To build Interactive UI Components & State Management for 3. Update Owner and Status for accountability and delivery tracking",
+          "description": "Responsive user interface, real-time client state binding, and interactive UX for 3. Update Owner and Status for accountability and delivery tracking.",
+          "points": 4,
+          "story_points": 4,
+          "estimated_hours": 32,
+          "hours": 32,
+          "status": "To Do",
+          "priority_tier": "CRITICAL",
+          "priority": "HIGH",
+          "assigned_developer": {
+            "id": "DEV02",
+            "name": "Nimali Fernando",
+            "role": "Senior Frontend & UI/UX Specialist",
+            "primary_domain": "Senior Frontend",
+            "avatar_bg": "bg-sky-500",
+            "initials": "NF",
+            "skill_match_pct": 50,
+            "matched_skills": [],
+            "suitability_reason": "Cross-functional coverage: Nimali Fernando has available sprint capacity and general capability to execute this General System Operations story."
+          },
+          "gherkin_criteria": "Feature: To build Interactive UI Components & State Management for 3. Update Owner and Status for accountability and delivery tracking\n  As a Software Developer / QA Engineer\n  I want interactive card state progression on the Kanban Board\n  So that real-time task status is synchronized across all sprint views.\n\n  Scenario: Valid State Transition\n    Given a task card in \"In Progress\" with all prerequisite blocker stories completed\n    When the engineer moves the card to \"QA Review\"\n    Then the card status updates instantly on the board\n    And recalculates overall delivered velocity and burndown trajectories.\n\n  Scenario: Prerequisite Blocker Prevention\n    Given a story card with uncompleted upstream dependencies\n    When a team member attempts to move it directly to \"Done\"\n    Then the system displays an instant DAG Dependency Blocker alert\n    And retains the card in its original valid state.",
+          "dependencies": [
+            "US009.1"
+          ]
+        },
+        {
+          "id": "US009.3",
+          "story_id": "US009.3",
+          "parent_id": "US009",
+          "title": "To implement Validation, Error Handling & Automated Tests for 3. Update Owner and Status for accountability and delivery tracking",
+          "description": "Security verification, exception handling, automated tests, and edge case coverage for 3. Update Owner and Status for accountability and delivery tracking.",
+          "points": 5,
+          "story_points": 5,
+          "estimated_hours": 40,
+          "hours": 40,
+          "status": "To Do",
+          "priority_tier": "CRITICAL",
+          "priority": "HIGH",
+          "assigned_developer": {
+            "id": "DEV02",
+            "name": "Nimali Fernando",
+            "role": "Senior Frontend & UI/UX Specialist",
+            "primary_domain": "Senior Frontend",
+            "avatar_bg": "bg-sky-500",
+            "initials": "NF",
+            "skill_match_pct": 50,
+            "matched_skills": [],
+            "suitability_reason": "Cross-functional coverage: Nimali Fernando has available sprint capacity and general capability to execute this General System Operations story."
+          },
+          "gherkin_criteria": "Feature: To implement Validation, Error Handling & Automated Tests for 3. Update Owner and Status for accountability and delivery tracking\n  As a Software Developer / QA Engineer\n  I want interactive card state progression on the Kanban Board\n  So that real-time task status is synchronized across all sprint views.\n\n  Scenario: Valid State Transition\n    Given a task card in \"In Progress\" with all prerequisite blocker stories completed\n    When the engineer moves the card to \"QA Review\"\n    Then the card status updates instantly on the board\n    And recalculates overall delivered velocity and burndown trajectories.\n\n  Scenario: Prerequisite Blocker Prevention\n    Given a story card with uncompleted upstream dependencies\n    When a team member attempts to move it directly to \"Done\"\n    Then the system displays an instant DAG Dependency Blocker alert\n    And retains the card in its original valid state.",
+          "dependencies": [
+            "US009.2"
+          ]
+        }
+      ],
+      "is_decomposed": true
+    },
+    {
+      "story_id": "US010",
+      "title": "To create and manage 4. Define company-specific acceptance tests, targets, legal/tax needs, and integrations so that the core functional feature is executed correctly.",
+      "description": "4. Define company-specific acceptance tests, targets, legal/tax needs, and integrations.",
+      "epic": "General System Operations",
+      "feature": "Core Functional Feature",
+      "priority": "HIGH",
+      "priority_tier": "CRITICAL",
+      "priority_score": 100,
+      "confidence": 99.0,
+      "story_points": 13,
+      "estimated_hours": 104,
+      "dependencies": [],
+      "reason": "Critical blocker: severe security risk or production stability hazard.",
+      "badge_color": "rose",
+      "optimization_value": 297.0,
+      "sprint_number": 1,
+      "allocated_by": "ILP_HIGHS_SOLVER",
+      "assigned_developer": {
+        "id": "DEV02",
+        "name": "Nimali Fernando",
+        "role": "Senior Frontend & UI/UX Specialist",
+        "primary_domain": "Senior Frontend",
+        "avatar_bg": "bg-sky-500",
+        "initials": "NF",
+        "skill_match_pct": 50,
+        "matched_skills": [],
+        "suitability_reason": "Cross-functional coverage: Nimali Fernando has available sprint capacity and general capability to execute this General System Operations story."
+      },
+      "is_manual_assigned": true,
+      "sub_tasks": [
+        {
+          "id": "US010.1",
+          "story_id": "US010.1",
+          "parent_id": "US010",
+          "title": "To implement Database Schema & Backend REST API for Create and manage 4. Define company-specific acceptance tests, targets, legal/tax needs, and integrations",
+          "description": "Backend persistence layer, database schemas, and REST endpoints for Create and manage 4. Define company-specific acceptance tests, targets, legal/tax needs, and integrations.",
+          "points": 4,
+          "story_points": 4,
+          "estimated_hours": 32,
+          "hours": 32,
+          "status": "To Do",
+          "priority_tier": "CRITICAL",
+          "priority": "HIGH",
+          "assigned_developer": {
+            "id": "DEV02",
+            "name": "Nimali Fernando",
+            "role": "Senior Frontend & UI/UX Specialist",
+            "primary_domain": "Senior Frontend",
+            "avatar_bg": "bg-sky-500",
+            "initials": "NF",
+            "skill_match_pct": 50,
+            "matched_skills": [],
+            "suitability_reason": "Cross-functional coverage: Nimali Fernando has available sprint capacity and general capability to execute this General System Operations story."
+          },
+          "gherkin_criteria": "Feature: To implement Database Schema & Backend REST API for Create and manage 4. Define company-specific acceptance tests, targets, legal/tax needs, and integrations\n  As a Platform User\n  I want \"To implement Database Schema & Backend REST API for Create and manage 4. Define company-specific acceptance tests, targets, legal/tax needs, and integrations\" functionality implemented reliably\n  So that business deliverables are achieved with high quality.\n\n  Scenario: Primary Happy Path Execution\n    Given the user is on the target interface and system services are healthy\n    When the user inputs valid operational data and confirms submission\n    Then the server processes the transaction with sub-second response time\n    And updates the persistent storage with complete audit tracking.\n\n  Scenario: Boundary Validation & Error Recovery\n    Given required input fields are empty or exceed boundary constraints\n    When the user clicks the submit action\n    Then client-side and server-side validation flags the invalid fields\n    And highlights actionable remediation tips without losing form state.",
+          "dependencies": []
+        },
+        {
+          "id": "US010.2",
+          "story_id": "US010.2",
+          "parent_id": "US010",
+          "title": "To build Interactive UI Components & State Management for Create and manage 4. Define company-specific acceptance tests, targets, legal/tax needs, and integrations",
+          "description": "Responsive user interface, real-time client state binding, and interactive UX for Create and manage 4. Define company-specific acceptance tests, targets, legal/tax needs, and integrations.",
+          "points": 4,
+          "story_points": 4,
+          "estimated_hours": 32,
+          "hours": 32,
+          "status": "To Do",
+          "priority_tier": "CRITICAL",
+          "priority": "HIGH",
+          "assigned_developer": {
+            "id": "DEV02",
+            "name": "Nimali Fernando",
+            "role": "Senior Frontend & UI/UX Specialist",
+            "primary_domain": "Senior Frontend",
+            "avatar_bg": "bg-sky-500",
+            "initials": "NF",
+            "skill_match_pct": 50,
+            "matched_skills": [],
+            "suitability_reason": "Cross-functional coverage: Nimali Fernando has available sprint capacity and general capability to execute this General System Operations story."
+          },
+          "gherkin_criteria": "Feature: To build Interactive UI Components & State Management for Create and manage 4. Define company-specific acceptance tests, targets, legal/tax needs, and integrations\n  As a Platform User\n  I want \"To build Interactive UI Components & State Management for Create and manage 4. Define company-specific acceptance tests, targets, legal/tax needs, and integrations\" functionality implemented reliably\n  So that business deliverables are achieved with high quality.\n\n  Scenario: Primary Happy Path Execution\n    Given the user is on the target interface and system services are healthy\n    When the user inputs valid operational data and confirms submission\n    Then the server processes the transaction with sub-second response time\n    And updates the persistent storage with complete audit tracking.\n\n  Scenario: Boundary Validation & Error Recovery\n    Given required input fields are empty or exceed boundary constraints\n    When the user clicks the submit action\n    Then client-side and server-side validation flags the invalid fields\n    And highlights actionable remediation tips without losing form state.",
+          "dependencies": [
+            "US010.1"
+          ]
+        },
+        {
+          "id": "US010.3",
+          "story_id": "US010.3",
+          "parent_id": "US010",
+          "title": "To implement Validation, Error Handling & Automated Tests for Create and manage 4. Define company-specific acceptance tests, targets, legal/tax needs, and integrations",
+          "description": "Security verification, exception handling, automated tests, and edge case coverage for Create and manage 4. Define company-specific acceptance tests, targets, legal/tax needs, and integrations.",
+          "points": 5,
+          "story_points": 5,
+          "estimated_hours": 40,
+          "hours": 40,
+          "status": "To Do",
+          "priority_tier": "CRITICAL",
+          "priority": "HIGH",
+          "assigned_developer": {
+            "id": "DEV02",
+            "name": "Nimali Fernando",
+            "role": "Senior Frontend & UI/UX Specialist",
+            "primary_domain": "Senior Frontend",
+            "avatar_bg": "bg-sky-500",
+            "initials": "NF",
+            "skill_match_pct": 50,
+            "matched_skills": [],
+            "suitability_reason": "Cross-functional coverage: Nimali Fernando has available sprint capacity and general capability to execute this General System Operations story."
+          },
+          "gherkin_criteria": "Feature: To implement Validation, Error Handling & Automated Tests for Create and manage 4. Define company-specific acceptance tests, targets, legal/tax needs, and integrations\n  As a Platform User\n  I want \"To implement Validation, Error Handling & Automated Tests for Create and manage 4. Define company-specific acceptance tests, targets, legal/tax needs, and integrations\" functionality implemented reliably\n  So that business deliverables are achieved with high quality.\n\n  Scenario: Primary Happy Path Execution\n    Given the user is on the target interface and system services are healthy\n    When the user inputs valid operational data and confirms submission\n    Then the server processes the transaction with sub-second response time\n    And updates the persistent storage with complete audit tracking.\n\n  Scenario: Boundary Validation & Error Recovery\n    Given required input fields are empty or exceed boundary constraints\n    When the user clicks the submit action\n    Then client-side and server-side validation flags the invalid fields\n    And highlights actionable remediation tips without losing form state.",
+          "dependencies": [
+            "US010.2"
+          ]
+        }
+      ],
+      "is_decomposed": true
+    },
+    {
+      "story_id": "US004",
+      "title": "To create and manage Must-have requirements so that the core functional feature is executed correctly.",
+      "description": "Must-have requirements",
+      "epic": "General System Operations",
+      "feature": "Core Functional Feature",
+      "priority": "LOW",
+      "priority_tier": "LOW",
+      "priority_score": 15,
+      "confidence": 85.0,
+      "story_points": 5,
+      "estimated_hours": 40,
+      "dependencies": [],
+      "reason": "Low priority: minor cosmetic, stylistic, or non-urgent enhancement.",
+      "badge_color": "emerald",
+      "optimization_value": 10.2,
+      "sprint_number": 2,
+      "allocated_by": "ILP_HIGHS_SOLVER",
+      "assigned_developer": {
+        "id": "DEV01",
+        "name": "Kasun Perera",
+        "role": "Senior Backend & Security Architect",
+        "primary_domain": "Senior Backend",
+        "avatar_bg": "bg-rose-500",
+        "initials": "KP",
+        "skill_match_pct": 50,
+        "matched_skills": [],
+        "suitability_reason": "Cross-functional coverage: Kasun Perera has available sprint capacity and general capability to execute this General System Operations story."
+      },
+      "is_manual_assigned": true,
+      "sub_tasks": [],
+      "is_decomposed": false
+    },
+    {
+      "story_id": "US005",
+      "title": "To create and manage Proposed status so that the core functional feature is executed correctly.",
+      "description": "Proposed status",
+      "epic": "General System Operations",
+      "feature": "Core Functional Feature",
+      "priority": "LOW",
+      "priority_tier": "LOW",
+      "priority_score": 15,
+      "confidence": 85.0,
+      "story_points": 3,
+      "estimated_hours": 24,
+      "dependencies": [],
+      "reason": "Low priority: minor cosmetic, stylistic, or non-urgent enhancement.",
+      "badge_color": "emerald",
+      "optimization_value": 10.2,
+      "sprint_number": 2,
+      "allocated_by": "ILP_HIGHS_SOLVER",
+      "assigned_developer": {
+        "id": "DEV01",
+        "name": "Kasun Perera",
+        "role": "Senior Backend & Security Architect",
+        "primary_domain": "Senior Backend",
+        "avatar_bg": "bg-rose-500",
+        "initials": "KP",
+        "skill_match_pct": 50,
+        "matched_skills": [],
+        "suitability_reason": "Cross-functional coverage: Kasun Perera has available sprint capacity and general capability to execute this General System Operations story."
+      },
+      "is_manual_assigned": true,
+      "sub_tasks": [],
+      "is_decomposed": false
+    },
+    {
+      "story_id": "US007",
+      "title": "To how to use this workbook so that the core functional feature is executed correctly.",
+      "description": "How to use this workbook",
+      "epic": "General System Operations",
+      "feature": "Core Functional Feature",
+      "priority": "LOW",
+      "priority_tier": "LOW",
+      "priority_score": 5,
+      "confidence": 95.0,
+      "story_points": 3,
+      "estimated_hours": 24,
+      "dependencies": [],
+      "reason": "Low priority: minor cosmetic, stylistic, or non-urgent enhancement.",
+      "badge_color": "emerald",
+      "optimization_value": 3.8,
+      "sprint_number": 2,
+      "allocated_by": "ILP_HIGHS_SOLVER",
+      "assigned_developer": {
+        "id": "DEV01",
+        "name": "Kasun Perera",
+        "role": "Senior Backend & Security Architect",
+        "primary_domain": "Senior Backend",
+        "avatar_bg": "bg-rose-500",
+        "initials": "KP",
+        "skill_match_pct": 50,
+        "matched_skills": [],
+        "suitability_reason": "Cross-functional coverage: Kasun Perera has available sprint capacity and general capability to execute this General System Operations story."
+      },
+      "is_manual_assigned": true,
+      "sub_tasks": [],
+      "is_decomposed": false
+    },
+    {
+      "story_id": "US011",
+      "title": "To 5. Use the unique Requirement ID to trace each requirement through design, testing, and sign-off so that the core functional feature is executed correctly.",
+      "description": "5. Use the unique Requirement ID to trace each requirement through design, testing, and sign-off.",
+      "epic": "General System Operations",
+      "feature": "Core Functional Feature",
+      "priority": "HIGH",
+      "priority_tier": "CRITICAL",
+      "priority_score": 100,
+      "confidence": 99.0,
+      "story_points": 13,
+      "estimated_hours": 104,
+      "dependencies": [],
+      "reason": "Critical blocker: severe security risk or production stability hazard.",
+      "badge_color": "rose",
+      "optimization_value": 297.0,
+      "sprint_number": 2,
+      "allocated_by": "ILP_HIGHS_SOLVER",
+      "assigned_developer": {
+        "id": "DEV04",
+        "name": "Tharushi Jayasuriya",
+        "role": "QA & Automation Test Lead",
+        "primary_domain": "QA / Testing",
+        "avatar_bg": "bg-purple-500",
+        "initials": "TJ",
+        "skill_match_pct": 95,
+        "matched_skills": [
+          "testing"
+        ],
+        "suitability_reason": "High skill alignment: Story requirements contain tokens [testing], directly matching Tharushi Jayasuriya's QA / Testing profile (95% Fit)."
+      },
+      "is_manual_assigned": true,
+      "sub_tasks": [
+        {
+          "id": "US011.1",
+          "story_id": "US011.1",
+          "parent_id": "US011",
+          "title": "To implement Database Schema & Backend REST API for 5. Use the unique Requirement ID to trace each requirement through design, testing, and sign-off",
+          "description": "Backend persistence layer, database schemas, and REST endpoints for 5. Use the unique Requirement ID to trace each requirement through design, testing, and sign-off.",
+          "points": 4,
+          "story_points": 4,
+          "estimated_hours": 32,
+          "hours": 32,
+          "status": "To Do",
+          "priority_tier": "CRITICAL",
+          "priority": "HIGH",
+          "assigned_developer": {
+            "id": "DEV04",
+            "name": "Tharushi Jayasuriya",
+            "role": "QA & Automation Test Lead",
+            "primary_domain": "QA / Testing",
+            "avatar_bg": "bg-purple-500",
+            "initials": "TJ",
+            "skill_match_pct": 95,
+            "matched_skills": [
+              "testing"
+            ],
+            "suitability_reason": "High skill alignment: Story requirements contain tokens [testing], directly matching Tharushi Jayasuriya's QA / Testing profile (95% Fit)."
+          },
+          "gherkin_criteria": "Feature: To implement Database Schema & Backend REST API for 5. Use the unique Requirement ID to trace each requirement through design, testing, and sign-off\n  As a Platform User\n  I want \"To implement Database Schema & Backend REST API for 5. Use the unique Requirement ID to trace each requirement through design, testing, and sign-off\" functionality implemented reliably\n  So that business deliverables are achieved with high quality.\n\n  Scenario: Primary Happy Path Execution\n    Given the user is on the target interface and system services are healthy\n    When the user inputs valid operational data and confirms submission\n    Then the server processes the transaction with sub-second response time\n    And updates the persistent storage with complete audit tracking.\n\n  Scenario: Boundary Validation & Error Recovery\n    Given required input fields are empty or exceed boundary constraints\n    When the user clicks the submit action\n    Then client-side and server-side validation flags the invalid fields\n    And highlights actionable remediation tips without losing form state.",
+          "dependencies": []
+        },
+        {
+          "id": "US011.2",
+          "story_id": "US011.2",
+          "parent_id": "US011",
+          "title": "To build Interactive UI Components & State Management for 5. Use the unique Requirement ID to trace each requirement through design, testing, and sign-off",
+          "description": "Responsive user interface, real-time client state binding, and interactive UX for 5. Use the unique Requirement ID to trace each requirement through design, testing, and sign-off.",
+          "points": 4,
+          "story_points": 4,
+          "estimated_hours": 32,
+          "hours": 32,
+          "status": "To Do",
+          "priority_tier": "CRITICAL",
+          "priority": "HIGH",
+          "assigned_developer": {
+            "id": "DEV04",
+            "name": "Tharushi Jayasuriya",
+            "role": "QA & Automation Test Lead",
+            "primary_domain": "QA / Testing",
+            "avatar_bg": "bg-purple-500",
+            "initials": "TJ",
+            "skill_match_pct": 95,
+            "matched_skills": [
+              "testing"
+            ],
+            "suitability_reason": "High skill alignment: Story requirements contain tokens [testing], directly matching Tharushi Jayasuriya's QA / Testing profile (95% Fit)."
+          },
+          "gherkin_criteria": "Feature: To build Interactive UI Components & State Management for 5. Use the unique Requirement ID to trace each requirement through design, testing, and sign-off\n  As a Platform User\n  I want \"To build Interactive UI Components & State Management for 5. Use the unique Requirement ID to trace each requirement through design, testing, and sign-off\" functionality implemented reliably\n  So that business deliverables are achieved with high quality.\n\n  Scenario: Primary Happy Path Execution\n    Given the user is on the target interface and system services are healthy\n    When the user inputs valid operational data and confirms submission\n    Then the server processes the transaction with sub-second response time\n    And updates the persistent storage with complete audit tracking.\n\n  Scenario: Boundary Validation & Error Recovery\n    Given required input fields are empty or exceed boundary constraints\n    When the user clicks the submit action\n    Then client-side and server-side validation flags the invalid fields\n    And highlights actionable remediation tips without losing form state.",
+          "dependencies": [
+            "US011.1"
+          ]
+        },
+        {
+          "id": "US011.3",
+          "story_id": "US011.3",
+          "parent_id": "US011",
+          "title": "To implement Validation, Error Handling & Automated Tests for 5. Use the unique Requirement ID to trace each requirement through design, testing, and sign-off",
+          "description": "Security verification, exception handling, automated tests, and edge case coverage for 5. Use the unique Requirement ID to trace each requirement through design, testing, and sign-off.",
+          "points": 5,
+          "story_points": 5,
+          "estimated_hours": 40,
+          "hours": 40,
+          "status": "To Do",
+          "priority_tier": "CRITICAL",
+          "priority": "HIGH",
+          "assigned_developer": {
+            "id": "DEV04",
+            "name": "Tharushi Jayasuriya",
+            "role": "QA & Automation Test Lead",
+            "primary_domain": "QA / Testing",
+            "avatar_bg": "bg-purple-500",
+            "initials": "TJ",
+            "skill_match_pct": 95,
+            "matched_skills": [
+              "testing"
+            ],
+            "suitability_reason": "High skill alignment: Story requirements contain tokens [testing], directly matching Tharushi Jayasuriya's QA / Testing profile (95% Fit)."
+          },
+          "gherkin_criteria": "Feature: To implement Validation, Error Handling & Automated Tests for 5. Use the unique Requirement ID to trace each requirement through design, testing, and sign-off\n  As a Platform User\n  I want \"To implement Validation, Error Handling & Automated Tests for 5. Use the unique Requirement ID to trace each requirement through design, testing, and sign-off\" functionality implemented reliably\n  So that business deliverables are achieved with high quality.\n\n  Scenario: Primary Happy Path Execution\n    Given the user is on the target interface and system services are healthy\n    When the user inputs valid operational data and confirms submission\n    Then the server processes the transaction with sub-second response time\n    And updates the persistent storage with complete audit tracking.\n\n  Scenario: Boundary Validation & Error Recovery\n    Given required input fields are empty or exceed boundary constraints\n    When the user clicks the submit action\n    Then client-side and server-side validation flags the invalid fields\n    And highlights actionable remediation tips without losing form state.",
+          "dependencies": [
+            "US011.2"
+          ]
+        }
+      ],
+      "is_decomposed": true
+    },
+    {
+      "story_id": "US012",
+      "title": "To create and manage 6. Add, remove, or split requirements as needed; preserve IDs once referenced by test cases so that the core functional feature is executed correctly.",
+      "description": "6. Add, remove, or split requirements as needed; preserve IDs once referenced by test cases.",
+      "epic": "General System Operations",
+      "feature": "Core Functional Feature",
+      "priority": "HIGH",
+      "priority_tier": "CRITICAL",
+      "priority_score": 100,
+      "confidence": 99.0,
+      "story_points": 13,
+      "estimated_hours": 104,
+      "dependencies": [],
+      "reason": "Critical blocker: severe security risk or production stability hazard.",
+      "badge_color": "rose",
+      "optimization_value": 297.0,
+      "sprint_number": 2,
+      "allocated_by": "ILP_HIGHS_SOLVER",
+      "assigned_developer": {
+        "id": "DEV02",
+        "name": "Nimali Fernando",
+        "role": "Senior Frontend & UI/UX Specialist",
+        "primary_domain": "Senior Frontend",
+        "avatar_bg": "bg-sky-500",
+        "initials": "NF",
+        "skill_match_pct": 93,
+        "matched_skills": [
+          "ui"
+        ],
+        "suitability_reason": "High skill alignment: Story requirements contain tokens [ui], directly matching Nimali Fernando's Senior Frontend profile (93% Fit)."
+      },
+      "is_manual_assigned": true,
+      "sub_tasks": [
+        {
+          "id": "US012.1",
+          "story_id": "US012.1",
+          "parent_id": "US012",
+          "title": "To implement Database Schema & Backend REST API for Create and manage 6. Add, remove, or split requirements as needed; preserve IDs once referenced by test cases",
+          "description": "Backend persistence layer, database schemas, and REST endpoints for Create and manage 6. Add, remove, or split requirements as needed; preserve IDs once referenced by test cases.",
+          "points": 4,
+          "story_points": 4,
+          "estimated_hours": 32,
+          "hours": 32,
+          "status": "To Do",
+          "priority_tier": "CRITICAL",
+          "priority": "HIGH",
+          "assigned_developer": {
+            "id": "DEV02",
+            "name": "Nimali Fernando",
+            "role": "Senior Frontend & UI/UX Specialist",
+            "primary_domain": "Senior Frontend",
+            "avatar_bg": "bg-sky-500",
+            "initials": "NF",
+            "skill_match_pct": 93,
+            "matched_skills": [
+              "ui"
+            ],
+            "suitability_reason": "High skill alignment: Story requirements contain tokens [ui], directly matching Nimali Fernando's Senior Frontend profile (93% Fit)."
+          },
+          "gherkin_criteria": "Feature: To implement Database Schema & Backend REST API for Create and manage 6. Add, remove, or split requirements as needed; preserve IDs once referenced by test cases\n  As a Platform User\n  I want \"To implement Database Schema & Backend REST API for Create and manage 6. Add, remove, or split requirements as needed; preserve IDs once referenced by test cases\" functionality implemented reliably\n  So that business deliverables are achieved with high quality.\n\n  Scenario: Primary Happy Path Execution\n    Given the user is on the target interface and system services are healthy\n    When the user inputs valid operational data and confirms submission\n    Then the server processes the transaction with sub-second response time\n    And updates the persistent storage with complete audit tracking.\n\n  Scenario: Boundary Validation & Error Recovery\n    Given required input fields are empty or exceed boundary constraints\n    When the user clicks the submit action\n    Then client-side and server-side validation flags the invalid fields\n    And highlights actionable remediation tips without losing form state.",
+          "dependencies": []
+        },
+        {
+          "id": "US012.2",
+          "story_id": "US012.2",
+          "parent_id": "US012",
+          "title": "To build Interactive UI Components & State Management for Create and manage 6. Add, remove, or split requirements as needed; preserve IDs once referenced by test cases",
+          "description": "Responsive user interface, real-time client state binding, and interactive UX for Create and manage 6. Add, remove, or split requirements as needed; preserve IDs once referenced by test cases.",
+          "points": 4,
+          "story_points": 4,
+          "estimated_hours": 32,
+          "hours": 32,
+          "status": "To Do",
+          "priority_tier": "CRITICAL",
+          "priority": "HIGH",
+          "assigned_developer": {
+            "id": "DEV02",
+            "name": "Nimali Fernando",
+            "role": "Senior Frontend & UI/UX Specialist",
+            "primary_domain": "Senior Frontend",
+            "avatar_bg": "bg-sky-500",
+            "initials": "NF",
+            "skill_match_pct": 93,
+            "matched_skills": [
+              "ui"
+            ],
+            "suitability_reason": "High skill alignment: Story requirements contain tokens [ui], directly matching Nimali Fernando's Senior Frontend profile (93% Fit)."
+          },
+          "gherkin_criteria": "Feature: To build Interactive UI Components & State Management for Create and manage 6. Add, remove, or split requirements as needed; preserve IDs once referenced by test cases\n  As a Platform User\n  I want \"To build Interactive UI Components & State Management for Create and manage 6. Add, remove, or split requirements as needed; preserve IDs once referenced by test cases\" functionality implemented reliably\n  So that business deliverables are achieved with high quality.\n\n  Scenario: Primary Happy Path Execution\n    Given the user is on the target interface and system services are healthy\n    When the user inputs valid operational data and confirms submission\n    Then the server processes the transaction with sub-second response time\n    And updates the persistent storage with complete audit tracking.\n\n  Scenario: Boundary Validation & Error Recovery\n    Given required input fields are empty or exceed boundary constraints\n    When the user clicks the submit action\n    Then client-side and server-side validation flags the invalid fields\n    And highlights actionable remediation tips without losing form state.",
+          "dependencies": [
+            "US012.1"
+          ]
+        },
+        {
+          "id": "US012.3",
+          "story_id": "US012.3",
+          "parent_id": "US012",
+          "title": "To implement Validation, Error Handling & Automated Tests for Create and manage 6. Add, remove, or split requirements as needed; preserve IDs once referenced by test cases",
+          "description": "Security verification, exception handling, automated tests, and edge case coverage for Create and manage 6. Add, remove, or split requirements as needed; preserve IDs once referenced by test cases.",
+          "points": 5,
+          "story_points": 5,
+          "estimated_hours": 40,
+          "hours": 40,
+          "status": "To Do",
+          "priority_tier": "CRITICAL",
+          "priority": "HIGH",
+          "assigned_developer": {
+            "id": "DEV02",
+            "name": "Nimali Fernando",
+            "role": "Senior Frontend & UI/UX Specialist",
+            "primary_domain": "Senior Frontend",
+            "avatar_bg": "bg-sky-500",
+            "initials": "NF",
+            "skill_match_pct": 93,
+            "matched_skills": [
+              "ui"
+            ],
+            "suitability_reason": "High skill alignment: Story requirements contain tokens [ui], directly matching Nimali Fernando's Senior Frontend profile (93% Fit)."
+          },
+          "gherkin_criteria": "Feature: To implement Validation, Error Handling & Automated Tests for Create and manage 6. Add, remove, or split requirements as needed; preserve IDs once referenced by test cases\n  As a Platform User\n  I want \"To implement Validation, Error Handling & Automated Tests for Create and manage 6. Add, remove, or split requirements as needed; preserve IDs once referenced by test cases\" functionality implemented reliably\n  So that business deliverables are achieved with high quality.\n\n  Scenario: Primary Happy Path Execution\n    Given the user is on the target interface and system services are healthy\n    When the user inputs valid operational data and confirms submission\n    Then the server processes the transaction with sub-second response time\n    And updates the persistent storage with complete audit tracking.\n\n  Scenario: Boundary Validation & Error Recovery\n    Given required input fields are empty or exceed boundary constraints\n    When the user clicks the submit action\n    Then client-side and server-side validation flags the invalid fields\n    And highlights actionable remediation tips without losing form state.",
+          "dependencies": [
+            "US012.2"
+          ]
+        }
+      ],
+      "is_decomposed": true
+    },
+    {
+      "story_id": "US013",
+      "title": "To create and manage Document status so that the core functional feature is executed correctly.",
+      "description": "Document status",
+      "epic": "General System Operations",
+      "feature": "Core Functional Feature",
+      "priority": "LOW",
+      "priority_tier": "LOW",
+      "priority_score": 15,
+      "confidence": 85.0,
+      "story_points": 3,
+      "estimated_hours": 24,
+      "dependencies": [],
+      "reason": "Low priority: minor cosmetic, stylistic, or non-urgent enhancement.",
+      "badge_color": "emerald",
+      "optimization_value": 10.2,
+      "sprint_number": 2,
+      "allocated_by": "ILP_HIGHS_SOLVER",
+      "assigned_developer": {
+        "id": "DEV02",
+        "name": "Nimali Fernando",
+        "role": "Senior Frontend & UI/UX Specialist",
+        "primary_domain": "Senior Frontend",
+        "avatar_bg": "bg-sky-500",
+        "initials": "NF",
+        "skill_match_pct": 50,
+        "matched_skills": [],
+        "suitability_reason": "Cross-functional coverage: Nimali Fernando has available sprint capacity and general capability to execute this General System Operations story."
+      },
+      "is_manual_assigned": true,
+      "sub_tasks": [],
+      "is_decomposed": false
+    },
+    {
+      "story_id": "US014",
+      "title": "To create and manage 2. Change Priority using the dropdown: Must, Should, Could, or Won\u2019t have now so that the repair priority & severity management is executed correctly.",
+      "description": "2. Change Priority using the dropdown: Must, Should, Could, or Won\u2019t have now.",
+      "epic": "Defect & Quality Management",
+      "feature": "Repair Priority & Severity Management",
+      "priority": "HIGH",
+      "priority_tier": "CRITICAL",
+      "priority_score": 100,
+      "confidence": 99.0,
+      "story_points": 13,
+      "estimated_hours": 104,
+      "dependencies": [],
+      "reason": "Critical blocker: severe security risk or production stability hazard.",
+      "badge_color": "rose",
+      "optimization_value": 297.0,
+      "sprint_number": 2,
+      "allocated_by": "ILP_HIGHS_SOLVER",
+      "assigned_developer": {
+        "id": "DEV02",
+        "name": "Nimali Fernando",
+        "role": "Senior Frontend & UI/UX Specialist",
+        "primary_domain": "Senior Frontend",
+        "avatar_bg": "bg-sky-500",
+        "initials": "NF",
+        "skill_match_pct": 50,
+        "matched_skills": [],
+        "suitability_reason": "Cross-functional coverage: Nimali Fernando has available sprint capacity and general capability to execute this Defect & Quality Management story."
+      },
+      "is_manual_assigned": true,
+      "sub_tasks": [
+        {
+          "id": "US014.1",
+          "story_id": "US014.1",
+          "parent_id": "US014",
+          "title": "To implement Database Schema & Backend REST API for Create and manage 2. Change Priority using the dropdown: Must, Should, Could, or Won\u2019t have now",
+          "description": "Backend persistence layer, database schemas, and REST endpoints for Create and manage 2. Change Priority using the dropdown: Must, Should, Could, or Won\u2019t have now.",
+          "points": 4,
+          "story_points": 4,
+          "estimated_hours": 32,
+          "hours": 32,
+          "status": "To Do",
+          "priority_tier": "CRITICAL",
+          "priority": "HIGH",
+          "assigned_developer": {
+            "id": "DEV02",
+            "name": "Nimali Fernando",
+            "role": "Senior Frontend & UI/UX Specialist",
+            "primary_domain": "Senior Frontend",
+            "avatar_bg": "bg-sky-500",
+            "initials": "NF",
+            "skill_match_pct": 50,
+            "matched_skills": [],
+            "suitability_reason": "Cross-functional coverage: Nimali Fernando has available sprint capacity and general capability to execute this Defect & Quality Management story."
+          },
+          "gherkin_criteria": "Feature: To implement Database Schema & Backend REST API for Create and manage 2. Change Priority using the dropdown: Must, Should, Could, or Won\u2019t have now\n  As a Software Developer / QA Engineer\n  I want interactive card state progression on the Kanban Board\n  So that real-time task status is synchronized across all sprint views.\n\n  Scenario: Valid State Transition\n    Given a task card in \"In Progress\" with all prerequisite blocker stories completed\n    When the engineer moves the card to \"QA Review\"\n    Then the card status updates instantly on the board\n    And recalculates overall delivered velocity and burndown trajectories.\n\n  Scenario: Prerequisite Blocker Prevention\n    Given a story card with uncompleted upstream dependencies\n    When a team member attempts to move it directly to \"Done\"\n    Then the system displays an instant DAG Dependency Blocker alert\n    And retains the card in its original valid state.",
+          "dependencies": []
+        },
+        {
+          "id": "US014.2",
+          "story_id": "US014.2",
+          "parent_id": "US014",
+          "title": "To build Interactive UI Components & State Management for Create and manage 2. Change Priority using the dropdown: Must, Should, Could, or Won\u2019t have now",
+          "description": "Responsive user interface, real-time client state binding, and interactive UX for Create and manage 2. Change Priority using the dropdown: Must, Should, Could, or Won\u2019t have now.",
+          "points": 4,
+          "story_points": 4,
+          "estimated_hours": 32,
+          "hours": 32,
+          "status": "To Do",
+          "priority_tier": "CRITICAL",
+          "priority": "HIGH",
+          "assigned_developer": {
+            "id": "DEV02",
+            "name": "Nimali Fernando",
+            "role": "Senior Frontend & UI/UX Specialist",
+            "primary_domain": "Senior Frontend",
+            "avatar_bg": "bg-sky-500",
+            "initials": "NF",
+            "skill_match_pct": 50,
+            "matched_skills": [],
+            "suitability_reason": "Cross-functional coverage: Nimali Fernando has available sprint capacity and general capability to execute this Defect & Quality Management story."
+          },
+          "gherkin_criteria": "Feature: To build Interactive UI Components & State Management for Create and manage 2. Change Priority using the dropdown: Must, Should, Could, or Won\u2019t have now\n  As a Software Developer / QA Engineer\n  I want interactive card state progression on the Kanban Board\n  So that real-time task status is synchronized across all sprint views.\n\n  Scenario: Valid State Transition\n    Given a task card in \"In Progress\" with all prerequisite blocker stories completed\n    When the engineer moves the card to \"QA Review\"\n    Then the card status updates instantly on the board\n    And recalculates overall delivered velocity and burndown trajectories.\n\n  Scenario: Prerequisite Blocker Prevention\n    Given a story card with uncompleted upstream dependencies\n    When a team member attempts to move it directly to \"Done\"\n    Then the system displays an instant DAG Dependency Blocker alert\n    And retains the card in its original valid state.",
+          "dependencies": [
+            "US014.1"
+          ]
+        },
+        {
+          "id": "US014.3",
+          "story_id": "US014.3",
+          "parent_id": "US014",
+          "title": "To implement Validation, Error Handling & Automated Tests for Create and manage 2. Change Priority using the dropdown: Must, Should, Could, or Won\u2019t have now",
+          "description": "Security verification, exception handling, automated tests, and edge case coverage for Create and manage 2. Change Priority using the dropdown: Must, Should, Could, or Won\u2019t have now.",
+          "points": 5,
+          "story_points": 5,
+          "estimated_hours": 40,
+          "hours": 40,
+          "status": "To Do",
+          "priority_tier": "CRITICAL",
+          "priority": "HIGH",
+          "assigned_developer": {
+            "id": "DEV02",
+            "name": "Nimali Fernando",
+            "role": "Senior Frontend & UI/UX Specialist",
+            "primary_domain": "Senior Frontend",
+            "avatar_bg": "bg-sky-500",
+            "initials": "NF",
+            "skill_match_pct": 50,
+            "matched_skills": [],
+            "suitability_reason": "Cross-functional coverage: Nimali Fernando has available sprint capacity and general capability to execute this Defect & Quality Management story."
+          },
+          "gherkin_criteria": "Feature: To implement Validation, Error Handling & Automated Tests for Create and manage 2. Change Priority using the dropdown: Must, Should, Could, or Won\u2019t have now\n  As a Software Developer / QA Engineer\n  I want interactive card state progression on the Kanban Board\n  So that real-time task status is synchronized across all sprint views.\n\n  Scenario: Valid State Transition\n    Given a task card in \"In Progress\" with all prerequisite blocker stories completed\n    When the engineer moves the card to \"QA Review\"\n    Then the card status updates instantly on the board\n    And recalculates overall delivered velocity and burndown trajectories.\n\n  Scenario: Prerequisite Blocker Prevention\n    Given a story card with uncompleted upstream dependencies\n    When a team member attempts to move it directly to \"Done\"\n    Then the system displays an instant DAG Dependency Blocker alert\n    And retains the card in its original valid state.",
+          "dependencies": [
+            "US014.2"
+          ]
+        }
+      ],
+      "is_decomposed": true
+    }
+  ],
+  "capacities": [
+    63,
+    63
+  ],
+  "config": {
+    "start_date": "2026-10-10",
+    "sprint_duration_weeks": 2,
+    "working_days_per_sprint": 10,
+    "holidays": [
+      {
+        "date": "2026-10-25",
+        "name": "\ud83c\udf15 Vap Full Moon Poya Day",
+        "category": "Poya"
+      },
+      {
+        "date": "2026-11-23",
+        "name": "\ud83c\udf15 Il Full Moon Poya Day",
+        "category": "Poya"
+      },
+      {
+        "date": "2026-12-23",
+        "name": "\ud83c\udf15 Unduvap Full Moon Poya Day",
+        "category": "Poya"
+      },
+      {
+        "date": "2027-01-22",
+        "name": "\ud83c\udf15 Duruthu Full Moon Poya Day",
+        "category": "Poya"
+      },
+      {
+        "date": "2027-02-20",
+        "name": "\ud83c\udf15 Navam Full Moon Poya Day",
+        "category": "Poya"
+      },
+      {
+        "date": "2027-03-22",
+        "name": "\ud83c\udf15 Medin Full Moon Poya Day",
+        "category": "Poya"
+      },
+      {
+        "date": "2027-04-20",
+        "name": "\ud83c\udf15 Bak Full Moon Poya Day",
+        "category": "Poya"
+      },
+      {
+        "date": "2027-05-20",
+        "name": "\ud83c\udf15 Vesak Full Moon Poya Day",
+        "category": "Poya"
+      },
+      {
+        "date": "2027-05-21",
+        "name": "\ud83c\udf15 Day following Vesak Poya Day",
+        "category": "Poya"
+      },
+      {
+        "date": "2026-12-25",
+        "name": "\ud83c\udf84 Christmas Day",
+        "category": "Mercantile/Public"
+      },
+      {
+        "date": "2027-01-14",
+        "name": "\ud83c\udf3e Tamil Thai Pongal Day",
+        "category": "Mercantile/Public"
+      },
+      {
+        "date": "2027-02-04",
+        "name": "\ud83c\uddf1\ud83c\uddf0 National Independence Day",
+        "category": "Mercantile/Public"
+      },
+      {
+        "date": "2027-04-13",
+        "name": "\u2600\ufe0f Sinhala & Tamil New Year Eve",
+        "category": "Mercantile/Public"
+      },
+      {
+        "date": "2027-04-14",
+        "name": "\u2600\ufe0f Sinhala & Tamil New Year Day",
+        "category": "Mercantile/Public"
+      },
+      {
+        "date": "2027-05-01",
+        "name": "\ud83d\udee0\ufe0f May Day (Labour Day)",
+        "category": "Mercantile/Public"
+      },
+      {
+        "date": "2026-10-20",
+        "name": "\ud83e\ude94 Deepavali Festival Day",
+        "category": "Public/Bank"
+      },
+      {
+        "date": "2027-03-07",
+        "name": "\ud83d\udd31 Mahasivarathri Day",
+        "category": "Public/Bank"
+      },
+      {
+        "date": "2027-03-26",
+        "name": "\u271d\ufe0f Good Friday",
+        "category": "Public/Bank"
+      },
+      {
+        "date": "2027-03-31",
+        "name": "\ud83c\udf19 Id-Ul-Fitr (Ramazan Festival Day)",
+        "category": "Public/Bank"
+      },
+      {
+        "date": "2027-06-06",
+        "name": "\ud83c\udf19 Id-Ul-Alha (Hadji Festival Day)",
+        "category": "Public/Bank"
+      }
+    ],
+    "capacities": [
+      63,
+      63
+    ],
+    "buffer_percentage": 10.0,
+    "daily_working_hours": 8,
+    "organization_type": "international_offshore",
+    "target_sprint_count": 2,
+    "project_name": "ERP_Implementation_Requirements_IT_Services"
+  }
+}

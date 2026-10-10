@@ -689,14 +689,22 @@ app.put('/api/requirements/:id', async (req, res) => {
 
 // Rename a Batch
 app.put('/api/batches/:timestamp', async (req, res) => {
-    const { batch_name } = req.body;
+    const { batch_name, project_id } = req.body;
     const { timestamp } = req.params;
 
     try {
-        const result = await pool.query(
-            "UPDATE requirements SET batch_name = $1 WHERE created_at = $2",
-            [batch_name, timestamp]
-        );
+        let result;
+        if (project_id) {
+            result = await pool.query(
+                "UPDATE requirements SET batch_name = $1 WHERE project_id = $2 OR created_at = $3",
+                [batch_name, project_id, timestamp]
+            );
+        } else {
+            result = await pool.query(
+                "UPDATE requirements SET batch_name = $1 WHERE created_at = $2",
+                [batch_name, timestamp]
+            );
+        }
         res.json({ message: 'Batch renamed successfully', count: result.rowCount });
     } catch (err) {
         console.error(err);
@@ -872,20 +880,25 @@ async function updateDatabase(results, res) {
 
 // Export batch to Excel
 app.get('/api/export/batch', async (req, res) => {
-    let { timestamp } = req.query;
+    let { timestamp, project_id } = req.query;
 
     try {
-        if (!timestamp) {
+        let result;
+        if (project_id) {
+            result = await pool.query("SELECT * FROM requirements WHERE project_id = $1 ORDER BY requirement_order ASC, id ASC", [project_id]);
+        } else if (timestamp) {
+            result = await pool.query("SELECT * FROM requirements WHERE created_at = $1 ORDER BY requirement_order ASC, id ASC", [timestamp]);
+        } else {
             const latestRes = await pool.query("SELECT created_at FROM requirements ORDER BY id DESC LIMIT 1");
             if (latestRes.rows.length > 0) {
                 timestamp = latestRes.rows[0].created_at;
+                result = await pool.query("SELECT * FROM requirements WHERE created_at = $1 ORDER BY requirement_order ASC, id ASC", [timestamp]);
             } else {
                 return res.status(200).json({ success: true, count: 0, data: [], message: 'No requirements found to export' });
             }
         }
 
-        const result = await pool.query("SELECT * FROM requirements WHERE created_at = $1 ORDER BY requirement_order ASC, id ASC", [timestamp]);
-        const rows = result.rows;
+        const rows = result ? result.rows : [];
         if (rows.length === 0) return res.status(200).json({ success: true, count: 0, data: [], message: 'No requirements found for this batch' });
 
         const worksheet = xlsx.utils.json_to_sheet(rows);
@@ -1125,6 +1138,125 @@ app.get('/api/developers', async (req, res) => {
         res.json(developers);
     } catch (error) {
         console.error('Error fetching developers:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// POST /api/developers - Add new developer with custom skills
+app.post('/api/developers', async (req, res) => {
+    try {
+        const { name, role, primary_domain, languages, skills, capacity_hours, email } = req.body;
+        if (!name || !name.trim()) {
+            return res.status(400).json({ error: 'Developer name is required' });
+        }
+
+        let langStr = '';
+        if (Array.isArray(languages)) {
+            langStr = languages.map(s => String(s).trim()).filter(Boolean).join(',');
+        } else if (Array.isArray(skills)) {
+            langStr = skills.map(s => String(s).trim()).filter(Boolean).join(',');
+        } else if (typeof languages === 'string') {
+            langStr = languages;
+        } else if (typeof skills === 'string') {
+            langStr = skills;
+        }
+
+        const domain = (primary_domain || 'general').toLowerCase();
+        const capacity = parseInt(capacity_hours, 10) || 40;
+        const devRole = role || 'Full-Stack Developer';
+        const devEmail = email || `${name.toLowerCase().replace(/[^a-z0-9]/g, '')}@example.com`;
+
+        const result = await pool.query(
+            `INSERT INTO developers (name, role, primary_domain, languages, capacity_hours, email, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+             RETURNING *`,
+            [name.trim(), devRole, domain, langStr, capacity, devEmail]
+        );
+
+        const newDev = result.rows[0];
+        res.status(201).json({
+            success: true,
+            developer: {
+                ...newDev,
+                languages: newDev.languages ? newDev.languages.split(',') : []
+            }
+        });
+    } catch (error) {
+        console.error('Error creating developer:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// PUT /api/developers/:id - Edit developer & skills
+app.put('/api/developers/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, role, primary_domain, languages, skills, capacity_hours, email } = req.body;
+
+        let langStr = undefined;
+        if (Array.isArray(languages)) {
+            langStr = languages.map(s => String(s).trim()).filter(Boolean).join(',');
+        } else if (Array.isArray(skills)) {
+            langStr = skills.map(s => String(s).trim()).filter(Boolean).join(',');
+        } else if (typeof languages === 'string') {
+            langStr = languages;
+        } else if (typeof skills === 'string') {
+            langStr = skills;
+        }
+
+        const domain = primary_domain ? primary_domain.toLowerCase() : undefined;
+        const capacity = capacity_hours !== undefined ? (parseInt(capacity_hours, 10) || 40) : undefined;
+
+        const check = await pool.query('SELECT * FROM developers WHERE id = $1', [id]);
+        if (check.rows.length === 0) {
+            return res.status(404).json({ error: 'Developer not found' });
+        }
+        const current = check.rows[0];
+
+        const updatedName = name !== undefined ? name.trim() : current.name;
+        const updatedRole = role !== undefined ? role : current.role;
+        const updatedDomain = domain !== undefined ? domain : current.primary_domain;
+        const updatedLanguages = langStr !== undefined ? langStr : current.languages;
+        const updatedCapacity = capacity !== undefined ? capacity : current.capacity_hours;
+        const updatedEmail = email !== undefined ? email : current.email;
+
+        const result = await pool.query(
+            `UPDATE developers 
+             SET name = $1, role = $2, primary_domain = $3, languages = $4, capacity_hours = $5, email = $6, updated_at = NOW()
+             WHERE id = $7
+             RETURNING *`,
+            [updatedName, updatedRole, updatedDomain, updatedLanguages, updatedCapacity, updatedEmail, id]
+        );
+
+        const updatedDev = result.rows[0];
+        res.json({
+            success: true,
+            developer: {
+                ...updatedDev,
+                languages: updatedDev.languages ? updatedDev.languages.split(',') : []
+            }
+        });
+    } catch (error) {
+        console.error('Error updating developer:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// DELETE /api/developers/:id - Delete developer
+app.delete('/api/developers/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        try {
+            await pool.query('DELETE FROM allocations WHERE developer_id = $1', [id]);
+        } catch (_) {}
+
+        const result = await pool.query('DELETE FROM developers WHERE id = $1 RETURNING *', [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Developer not found' });
+        }
+        res.json({ success: true, message: `Developer ${result.rows[0].name} deleted successfully` });
+    } catch (error) {
+        console.error('Error deleting developer:', error);
         res.status(500).json({ error: error.message });
     }
 });
