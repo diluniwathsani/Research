@@ -213,6 +213,11 @@ function MainLayout() {
               projects={projects}
               selectedProjectId={selectedProjectId}
               onSelectProject={setSelectedProjectId}
+              onNavigateToReplanning={() => {
+                setProjectInitialTab('replanning');
+                setProjectRefreshKey(Date.now());
+                setActiveTab('projects');
+              }}
             />
           )}
 

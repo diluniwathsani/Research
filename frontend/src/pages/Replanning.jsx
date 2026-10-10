@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { 
   RefreshCw, AlertTriangle, ShieldCheck, ArrowRight, 
-  Layers, Zap, TrendingUp, CheckCircle2, FileText, ChevronRight, Activity
+  Layers, Zap, TrendingUp, CheckCircle2, FileText, ChevronRight, Activity,
+  GitPullRequest
 } from "lucide-react";
 
-export default function Replanning() {
+export default function Replanning({ requirements = [], onNavigateToChangeRequests }) {
   const [changeType, setChangeType] = useState("NEW_STORY_ADDED");
   const [storyId, setStoryId] = useState("");
   const [title, setTitle] = useState("");
@@ -12,13 +13,27 @@ export default function Replanning() {
   const [newPriorityTier, setNewPriorityTier] = useState("CRITICAL");
   const [dependencies, setDependencies] = useState("");
   const [existingStories, setExistingStories] = useState([]);
+  const [changeRequests, setChangeRequests] = useState([]);
   const [status, setStatus] = useState(null);
   const [replanData, setReplanData] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchStories();
+    fetchChangeRequests();
   }, []);
+
+  const fetchChangeRequests = async () => {
+    try {
+      const res = await fetch("http://localhost:3000/api/change-requests");
+      const data = await res.json();
+      if (data && data.success && Array.isArray(data.data)) {
+        setChangeRequests(data.data);
+      }
+    } catch (e) {
+      console.warn("Could not fetch change requests for replanning simulator:", e);
+    }
+  };
 
   const fetchStories = async () => {
     try {
@@ -125,7 +140,17 @@ export default function Replanning() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2.5">
+          {onNavigateToChangeRequests && (
+            <button
+              onClick={onNavigateToChangeRequests}
+              className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-indigo-600/30"
+              title="Navigate to Change Request Module"
+            >
+              <GitPullRequest size={14} />
+              <span>Change Requests Governance</span>
+            </button>
+          )}
           <span className="px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/30 rounded-xl text-xs font-bold text-indigo-400 flex items-center gap-1.5">
             <Activity size={14} />
             Change Management & Impact Contract
@@ -134,19 +159,65 @@ export default function Replanning() {
       </div>
 
       {/* Preset Action Buttons */}
-      <div className="bg-slate-800/80 border border-slate-700/70 rounded-2xl p-4 shadow-lg">
-        <p className="text-xs font-semibold text-slate-400 mb-2.5">⚡ Quick Test Scenarios (Simulate Scope Change Events):</p>
-        <div className="flex flex-wrap gap-2.5">
-          {samplePresets.map((p, idx) => (
-            <button
-              key={idx}
-              onClick={() => applyPreset(p)}
-              className="px-3.5 py-1.5 bg-slate-900/90 hover:bg-slate-700 border border-slate-700 hover:border-indigo-500/50 rounded-xl text-xs font-bold text-slate-200 transition-all flex items-center gap-1.5 shadow-sm"
-            >
-              {p.name}
-            </button>
-          ))}
+      <div className="bg-slate-800/80 border border-slate-700/70 rounded-2xl p-4 shadow-lg space-y-3">
+        <div>
+          <p className="text-xs font-semibold text-slate-400 mb-2">⚡ Quick Test Scenarios (Simulate Scope Change Events):</p>
+          <div className="flex flex-wrap gap-2.5">
+            {samplePresets.map((p, idx) => (
+              <button
+                key={idx}
+                onClick={() => applyPreset(p)}
+                className="px-3.5 py-1.5 bg-slate-900/90 hover:bg-slate-700 border border-slate-700 hover:border-indigo-500/50 rounded-xl text-xs font-bold text-slate-200 transition-all flex items-center gap-1.5 shadow-sm"
+              >
+                {p.name}
+              </button>
+            ))}
+          </div>
         </div>
+
+        {/* Incoming Change Requests from Governance Module */}
+        {changeRequests.length > 0 && (
+          <div className="pt-3 border-t border-slate-700/60">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                <GitPullRequest size={14} className="text-amber-400" />
+                Live Change Requests from Governance Module (Click to load into replanning):
+              </p>
+              {onNavigateToChangeRequests && (
+                <button 
+                  onClick={onNavigateToChangeRequests}
+                  className="text-xs text-amber-400 hover:underline flex items-center gap-1 font-semibold"
+                >
+                  Manage Requests →
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {changeRequests.slice(0, 6).map((cr) => (
+                <button
+                  key={cr.id || cr.request_id}
+                  onClick={() => {
+                    setChangeType("NEW_STORY_ADDED");
+                    setStoryId(cr.user_story_id || cr.request_id || "CR-REQ");
+                    setTitle(cr.title || "Change Request Task");
+                    setPoints(Number(cr.story_points) || 5);
+                    setNewPriorityTier(cr.impact_level === "HIGH" ? "CRITICAL" : cr.impact_level === "LOW" ? "LOW" : "HIGH");
+                    setDependencies(cr.user_story_id || "");
+                  }}
+                  className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-400 rounded-xl text-xs font-semibold text-amber-200 transition-all flex items-center gap-1.5 shadow-sm"
+                  title={cr.description || cr.title}
+                >
+                  <span className="font-bold">{cr.request_id}:</span> {cr.title?.slice(0, 28)}... 
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${
+                    cr.impact_level === 'HIGH' ? 'bg-rose-500/30 text-rose-300' : 'bg-emerald-500/30 text-emerald-300'
+                  }`}>
+                    {cr.impact_level}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

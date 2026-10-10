@@ -4,7 +4,7 @@ import { getDashboardStats, getAllChangeRequests, getScopeCreepAlert } from '../
 import { BarChart3, AlertTriangle, CheckCircle, ArrowUpRight, TrendingUp, ShieldAlert, Sparkles, RefreshCw } from 'lucide-react';
 import './changeRequests.css';
 
-export default function ChangeRequestDashboard({ onNavigate }) {
+export default function ChangeRequestDashboard({ onNavigate, onNavigateToReplanning }) {
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
@@ -184,12 +184,22 @@ export default function ChangeRequestDashboard({ onNavigate }) {
                 <span>⚡ {scopeAlert.total_changes_14d || 0} changes in past 14 days</span>
                 <span>🔥 {scopeAlert.high_impact_changes || 0} high-impact changes</span>
               </div>
-              <button 
-                className="cr-alert-action flex items-center gap-1 mt-2" 
-                onClick={() => onNavigate && onNavigate('requests')}
-              >
-                Review Requests in Registry <ArrowUpRight size={14} />
-              </button>
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                <button 
+                  className="cr-alert-action flex items-center gap-1" 
+                  onClick={() => onNavigate && onNavigate('requests')}
+                >
+                  Review Requests in Registry <ArrowUpRight size={14} />
+                </button>
+                {onNavigateToReplanning && (
+                  <button 
+                    className="cr-alert-action flex items-center gap-1 bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 font-bold" 
+                    onClick={onNavigateToReplanning}
+                  >
+                    ⚡ Trigger Sprint Replanning <ArrowUpRight size={14} />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         ) : (
@@ -288,6 +298,14 @@ export default function ChangeRequestDashboard({ onNavigate }) {
           >
             Open Change Request Registry
           </button>
+          {onNavigateToReplanning && (
+            <button 
+              className="cr-action-btn flex items-center gap-1.5 bg-gradient-to-r from-amber-600 to-indigo-600 hover:from-amber-500 hover:to-indigo-500 text-white font-extrabold shadow-md border-0"
+              onClick={onNavigateToReplanning}
+            >
+              <Sparkles size={16} className="text-amber-200" /> Replan Sprints in Project Module
+            </button>
+          )}
         </div>
       </div>
     </div>
