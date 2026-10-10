@@ -1372,7 +1372,7 @@ def compute_timeline_schedule(tasks, config):
 
             timeline_tasks.append({
                 "id": story['story_id'],
-                "title": story['title'],
+                "title": clean_story_title_text(story.get('title', '')),
                 "sprint_number": s_num,
                 "epic": story.get('epic', 'Core Feature'),
                 "priority_tier": story.get('priority_tier', 'MEDIUM'),
@@ -1411,7 +1411,7 @@ def compute_timeline_schedule(tasks, config):
                     timeline_tasks.append({
                         "id": sub.get('id') or sub.get('story_id'),
                         "parent_id": story['story_id'],
-                        "title": sub.get('title'),
+                        "title": clean_story_title_text(sub.get('title', '')),
                         "sprint_number": s_num,
                         "epic": story.get('epic', 'Core Feature'),
                         "priority_tier": sub.get('priority_tier', story.get('priority_tier', 'MEDIUM')),
