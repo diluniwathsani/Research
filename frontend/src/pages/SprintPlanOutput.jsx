@@ -11,6 +11,7 @@ import SprintKanbanBoard from "../components/SprintKanbanBoard";
 import SprintBurndownAnalytics from "../components/SprintBurndownAnalytics";
 import StoryDecomposerModal from "../components/StoryDecomposerModal";
 import SprintCPMAnalyzer from "../components/SprintCPMAnalyzer";
+import { cleanStoryTitle } from "../utils/storyUtils";
 
 export default function SprintPlanOutput({ requirements = [], onNavigateToAddStories, onNavigateToArtifacts, onNavigateToResources }) {
   const [hasLoadedDemo, setHasLoadedDemo] = useState(true);
@@ -457,7 +458,7 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
         })),
         tasks: allTasks.map(t => ({
           story_id: t.story_id,
-          title: t.title,
+          title: cleanStoryTitle(t.title),
           sprint_number: t.sprint_number,
           points: t.story_points || t.points || 0,
           hours: t.estimated_hours || ((t.story_points || t.points || 0) * 8),
@@ -754,7 +755,8 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
       // Title
       ctx.fillStyle = isSub ? "#475569" : "#1E293B";
       ctx.font = isSub ? "normal 11px 'Segoe UI', Arial, sans-serif" : "bold 11px 'Segoe UI', Arial, sans-serif";
-      const displayTitle = isSub ? `   ${task.title}` : task.title;
+      const formattedTitle = cleanStoryTitle(task.title);
+      const displayTitle = isSub ? `   ${formattedTitle}` : formattedTitle;
       const titleTrunc = displayTitle.length > 56 ? displayTitle.slice(0, 54) + "..." : displayTitle;
       ctx.fillText(titleTrunc, rX, rowY + 25);
       rX += colW.title;
@@ -948,7 +950,7 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
       const barW = Math.max(80, dur * dayWidth);
       const subStyle = "fillColor=#0D9488;strokeColor=#0F766E;fontColor=#ffffff;";
       const style = isSub ? subStyle : (tierStyles[task.priority_tier] || tierStyles.MEDIUM);
-      const cleanTitle = (task.title || "").replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const cleanTitle = (cleanStoryTitle(task.title) || "").replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       const labelText = isSub 
         ? `&amp;nbsp;&amp;nbsp;↳ &lt;b&gt;${task.id}&lt;/b&gt;: ${cleanTitle} &lt;br&gt;&lt;i&gt;Sprint ${task.sprint_number} (Sub-task) | ${task.points} pts (${task.hours}h)&lt;/i&gt;`
         : `&lt;b&gt;${task.id}&lt;/b&gt;: ${cleanTitle} &lt;br&gt;&lt;i&gt;Sprint ${task.sprint_number} | ${task.points} pts (${task.hours}h)&lt;/i&gt;`;
@@ -1222,7 +1224,7 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
                                 </div>
                               </td>
                               <td className="p-3 font-semibold text-white">
-                                <div>{story.title}</div>
+                                <div>{cleanStoryTitle(story.title)}</div>
                                 {story.reason && (
                                   <p className="text-[10px] text-slate-400 mt-0.5">{story.reason}</p>
                                 )}
@@ -1355,7 +1357,7 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
                                                 ↳ {sub.id}
                                               </span>
                                               <span className={`font-semibold truncate ${subStatus === 'Done' ? 'line-through text-slate-500' : 'text-slate-200'}`}>
-                                                {sub.title}
+                                                {cleanStoryTitle(sub.title)}
                                               </span>
                                             </div>
 
@@ -1652,8 +1654,11 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
                         ) : (
                           <span className="font-mono font-bold text-xs text-emerald-400">{task.id}</span>
                         )}
-                        <span className={`text-xs truncate max-w-md ${isSubtask ? 'text-slate-300 font-medium' : 'font-bold text-white'}`}>
-                          {task.title}
+                        <span 
+                          className={`text-xs truncate max-w-md ${isSubtask ? 'text-slate-300 font-medium' : 'font-bold text-white'}`}
+                          title={cleanStoryTitle(task.title)}
+                        >
+                          {cleanStoryTitle(task.title)}
                         </span>
                         
                         {isSubtask ? (
@@ -1665,11 +1670,20 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
                             <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
                               Sprint {task.sprint_number}
                             </span>
-                            {task.has_subtasks && (
+                            {task.has_subtasks ? (
                               <span className="text-[10px] px-2 py-0.2 rounded bg-indigo-500/20 text-indigo-300 font-mono font-bold border border-indigo-500/40 flex items-center gap-1">
                                 <span>🧩</span>
                                 <span>Decomposed ({task.sub_tasks?.length || 3} units)</span>
                               </span>
+                            ) : (
+                              <button
+                                onClick={() => handleOpenDecomposer(task)}
+                                className="text-[10px] px-2 py-0.5 rounded bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 font-mono font-bold border border-indigo-500/40 flex items-center gap-1 transition-all"
+                                title="Manually decompose this story into sub-tasks"
+                              >
+                                <Scissors size={10} className="text-indigo-400" />
+                                <span>Decompose</span>
+                              </button>
                             )}
                           </>
                         )}

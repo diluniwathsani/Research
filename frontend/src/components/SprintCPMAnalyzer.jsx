@@ -5,6 +5,7 @@ import {
   HelpCircle, Sparkles, AlertCircle, CheckCircle2, ChevronRight,
   TrendingDown, TrendingUp, Info
 } from "lucide-react";
+import { cleanStoryTitle } from "../utils/storyUtils";
 
 export default function SprintCPMAnalyzer({
   tasks = [],
@@ -205,7 +206,7 @@ export default function SprintCPMAnalyzer({
                   </div>
                   
                   <p className="text-xs font-bold text-white mt-1.5 line-clamp-2">
-                    {story.title}
+                    {cleanStoryTitle(story.title)}
                   </p>
 
                   <div className="mt-3 pt-2.5 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400 font-mono">
@@ -265,7 +266,7 @@ export default function SprintCPMAnalyzer({
                 >
                   {allTasksCPM.map(t => (
                     <option key={t.story_id} value={t.story_id}>
-                      {t.is_critical ? "🔥 [CRITICAL] " : "🛡️ [SLACK] "} {t.story_id}: {t.title} ({t.story_points} pts / Float: {t.total_float}d)
+                      {t.is_critical ? "🔥 [CRITICAL] " : "🛡️ [SLACK] "} {t.story_id}: {cleanStoryTitle(t.title)} ({t.story_points} pts / Float: {t.total_float}d)
                     </option>
                   ))}
                 </select>
@@ -461,7 +462,7 @@ export default function SprintCPMAnalyzer({
                       </span>
                     </td>
                     <td className="p-3 font-semibold text-white max-w-xs truncate">
-                      <div>{item.title}</div>
+                      <div>{cleanStoryTitle(item.title)}</div>
                       <span className="text-[10px] text-slate-400">{item.epic}</span>
                     </td>
                     <td className="p-3 text-center font-mono text-slate-300">

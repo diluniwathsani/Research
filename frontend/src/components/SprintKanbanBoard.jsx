@@ -7,6 +7,7 @@ import {
   Zap, BarChart2, FileCheck, ArrowUpRight, Info, Scissors, Flame,
   ChevronDown
 } from "lucide-react";
+import { cleanStoryTitle } from "../utils/storyUtils";
 
 export default function SprintKanbanBoard({ 
   tasks = [], 
@@ -600,7 +601,7 @@ export default function SprintKanbanBoard({
 
                         {/* Title */}
                         <p className="text-xs font-semibold text-white leading-tight">
-                          {task.title}
+                          {cleanStoryTitle(task.title)}
                         </p>
 
                         {/* Dynamic DAG Status Badges */}
@@ -698,7 +699,7 @@ export default function SprintKanbanBoard({
                                             <div className="flex items-center gap-1 flex-wrap">
                                               <span className="font-mono text-[10px] text-teal-400 font-bold shrink-0">{sub.id}</span>
                                               <span className={`text-[11px] leading-tight ${isDone ? 'line-through text-slate-500' : 'text-slate-200'}`}>
-                                                {sub.title}
+                                                {cleanStoryTitle(sub.title)}
                                               </span>
                                             </div>
                                           </div>

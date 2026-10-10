@@ -4,6 +4,7 @@ import {
   X, Copy, Check, ArrowRight, ShieldCheck, FileText, 
   Clock, Hash, Sliders, ChevronDown, ChevronUp, Code
 } from "lucide-react";
+import { cleanStoryTitle } from "../utils/storyUtils";
 
 export default function StoryDecomposerModal({
   isOpen,
@@ -35,11 +36,12 @@ export default function StoryDecomposerModal({
     try {
       // If already a decomposed sub-story with BDD criteria, display directly
       if (targetStory.gherkin_criteria && (targetStory.is_auto_decomposed || (targetStory.story_id && targetStory.story_id.includes('.')))) {
-        setSubStories([targetStory]);
+        const cleanedTarget = { ...targetStory, title: cleanStoryTitle(targetStory.title) };
+        setSubStories([cleanedTarget]);
         setDecompositionPlan({
           status: "success",
-          parent_story: targetStory,
-          sub_stories: [targetStory]
+          parent_story: cleanedTarget,
+          sub_stories: [cleanedTarget]
         });
         setExpandedGherkin({ 0: true });
         setLoading(false);
@@ -53,8 +55,12 @@ export default function StoryDecomposerModal({
       });
       const data = await res.json();
       if (data.status === "success") {
+        const cleanedSubs = (data.sub_stories || []).map(s => ({
+          ...s,
+          title: cleanStoryTitle(s.title)
+        }));
         setDecompositionPlan(data);
-        setSubStories(data.sub_stories || []);
+        setSubStories(cleanedSubs);
         // Expand first gherkin by default
         setExpandedGherkin({ 0: true });
       } else {
@@ -178,7 +184,7 @@ export default function StoryDecomposerModal({
                 </span>
               </div>
               <h4 className="text-sm font-bold text-white leading-snug">
-                {story.title}
+                {cleanStoryTitle(story.title)}
               </h4>
               <p className="text-xs text-slate-400 line-clamp-2">
                 {story.description || story.reason || "No additional description provided."}

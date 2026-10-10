@@ -120,20 +120,66 @@ def generate_gherkin_scenarios(title, desc="", epic=""):
     Then client-side and server-side validation flags the invalid fields
     And highlights actionable remediation tips without losing form state."""
 
+def clean_story_title_text(raw_title):
+    """
+    Cleans user story titles so they start directly with actionable intent 'To ...',
+    stripping away verbose prefixes like 'As a System User, I want to', 'As a User, I want to', etc.
+    """
+    if not raw_title:
+        return "Feature Story"
+    cleaned = str(raw_title).strip()
+    
+    # Check if title already had [Part X: ...]
+    part_match = re.search(r'\[(Part\s*\d+[^\]]*)\]', cleaned, flags=re.IGNORECASE)
+    if part_match:
+        part_tag = re.sub(r'^Part\s*\d+\s*:\s*', '', part_match.group(1), flags=re.IGNORECASE).strip()
+        cleaned = re.sub(r'\[Part\s*\d+[^\]]*\]', '', cleaned, flags=re.IGNORECASE).strip()
+        core = extract_core_action(cleaned)
+        return f"To implement {part_tag} for {core}"
+
+    # Strip prefixes like "As a ..., I want to", "I want to", "The system shall allow ... to"
+    cleaned = re.sub(r'^(?:as\s+(?:an?|the)\s+[^,]+,\s*)?i\s+want\s+(?:to\s+)?', 'To ', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'^the\s+system\s+(?:shall|should|must)\s+(?:allow\s+[^,]+\s+to\s+)?', 'To ', cleaned, flags=re.IGNORECASE)
+    
+    if not re.match(r'^to\s+', cleaned, flags=re.IGNORECASE):
+        cleaned = "To " + (cleaned[0].lower() + cleaned[1:] if len(cleaned) > 1 else cleaned)
+    else:
+        cleaned = "To " + cleaned[3:].strip()
+    return cleaned.strip()
+
+def extract_core_action(raw_title):
+    """Extracts the core capability/action phrase from a user story title without boilerplate."""
+    if not raw_title:
+        return "Core Functionality"
+    clean = str(raw_title).strip()
+    clean = re.sub(r'\[Part\s*\d+[^\]]*\]', '', clean, flags=re.IGNORECASE).strip()
+    clean = re.sub(r'^(?:as\s+(?:an?|the)\s+[^,]+,\s*)?i\s+want\s+(?:to\s+)?', '', clean, flags=re.IGNORECASE)
+    clean = re.sub(r'^the\s+system\s+(?:shall|should|must)\s+(?:allow\s+[^,]+\s+to\s+)?', '', clean, flags=re.IGNORECASE)
+    clean = re.sub(r'^to\s+', '', clean, flags=re.IGNORECASE).strip()
+    
+    # Remove trailing "so that ..." or "in order to ..."
+    action = re.split(r'\s+so\s+that\s+|\s+in\s+order\s+to\s+', clean, flags=re.IGNORECASE)[0].strip()
+    if action:
+        return action[0].upper() + action[1:]
+    return "Core Functionality"
+
 def decompose_story_ai(story):
     """
-    Decomposes a complex parent story into 2-3 atomic child sub-stories
+    Decomposes a complex parent story into 2-3 distinct, atomic child sub-stories
     following INVEST principles, with Fibonacci estimation and BDD acceptance criteria.
+    Each child sub-task has a unique, specialized technical deliverable title.
     """
     sid = story.get('story_id', 'US001')
-    title = story.get('title', 'Feature Story')
+    raw_title = story.get('title', 'Feature Story')
+    title = clean_story_title_text(raw_title)
+    core_action = extract_core_action(raw_title)
     desc = story.get('description', '') or story.get('reason', '')
     epic = story.get('epic', 'Core Module')
     points = int(story.get('story_points', 5))
     deps = story.get('dependencies', [])
     tier = story.get('priority_tier', 'MEDIUM')
     
-    t_lower = title.lower()
+    t_lower = raw_title.lower()
     
     if points >= 8 or any(k in t_lower for k in ["full", "complete", "system", "module", "management", "platform", "dashboard", "engine"]):
         p1 = max(2, int(points * 0.4))
@@ -148,16 +194,16 @@ def decompose_story_ai(story):
         sub2_id = f"{sid}.2"
         sub3_id = f"{sid}.3"
         
-        sub1_title = f"{title} [Part 1: Backend Data Model & Core API]"
-        sub2_title = f"{title} [Part 2: Interactive UI & State Management]"
-        sub3_title = f"{title} [Part 3: Edge Cases, Security & Validation]"
+        sub1_title = f"To implement Database Schema & Backend REST API for {core_action}"
+        sub2_title = f"To build Interactive UI Components & State Management for {core_action}"
+        sub3_title = f"To implement Validation, Error Handling & Automated Tests for {core_action}"
         
         sub_stories = [
             {
                 "story_id": sub1_id,
                 "parent_id": sid,
                 "title": sub1_title,
-                "description": f"Backend persistence layer, database schemas, and REST endpoints for {title}.",
+                "description": f"Backend persistence layer, database schemas, and REST endpoints for {core_action}.",
                 "epic": epic,
                 "story_points": p1,
                 "priority_tier": tier,
@@ -169,7 +215,7 @@ def decompose_story_ai(story):
                 "story_id": sub2_id,
                 "parent_id": sid,
                 "title": sub2_title,
-                "description": f"Responsive user interface, real-time client state binding, and interactive UX for {title}.",
+                "description": f"Responsive user interface, real-time client state binding, and interactive UX for {core_action}.",
                 "epic": epic,
                 "story_points": p2,
                 "priority_tier": tier,
@@ -181,7 +227,7 @@ def decompose_story_ai(story):
                 "story_id": sub3_id,
                 "parent_id": sid,
                 "title": sub3_title,
-                "description": f"Security verification, exception handling, automated tests, and edge case coverage for {title}.",
+                "description": f"Security verification, exception handling, automated tests, and edge case coverage for {core_action}.",
                 "epic": epic,
                 "story_points": p3,
                 "priority_tier": "LOW" if tier == "LOW" else "MEDIUM",
@@ -200,15 +246,15 @@ def decompose_story_ai(story):
         sub1_id = f"{sid}.1"
         sub2_id = f"{sid}.2"
         
-        sub1_title = f"{title} [Core API & Foundation]"
-        sub2_title = f"{title} [UI View & Error Handling]"
+        sub1_title = f"To implement Core Business API & Database Logic for {core_action}"
+        sub2_title = f"To build Frontend UI View, Input Validation & Testing for {core_action}"
         
         sub_stories = [
             {
                 "story_id": sub1_id,
                 "parent_id": sid,
                 "title": sub1_title,
-                "description": f"Fundamental API logic and service handlers for {title}.",
+                "description": f"Fundamental API logic, database handlers, and data transactions for {core_action}.",
                 "epic": epic,
                 "story_points": p1,
                 "priority_tier": tier,
@@ -220,7 +266,7 @@ def decompose_story_ai(story):
                 "story_id": sub2_id,
                 "parent_id": sid,
                 "title": sub2_title,
-                "description": f"Client-facing components, interactive handlers, and error feedback for {title}.",
+                "description": f"Client-facing components, interactive handlers, input validation, and user feedback for {core_action}.",
                 "epic": epic,
                 "story_points": p2,
                 "priority_tier": tier,
@@ -242,12 +288,32 @@ def attach_subtasks_to_tasks(task_list, force_high_critical=True):
         tier = raw_tier
         sid = str(task.get('story_id') or task.get('id', ''))
         
-        # If already decomposed and has sub_tasks, preserve them
+        # Clean parent title to 'To ...'
+        if task.get('title'):
+            task['title'] = clean_story_title_text(task['title'])
+            
+        # If already decomposed and has sub_tasks, update/clean sub_tasks titles
         if task.get('sub_tasks') and len(task['sub_tasks']) > 0:
             task['is_decomposed'] = True
+            core = extract_core_action(task.get('title'))
+            for sub in task['sub_tasks']:
+                sub_id_str = str(sub.get('id') or sub.get('story_id') or '')
+                old_t = str(sub.get('title') or '')
+                # If old sub task was just parent title copy or had [Part X: ...]
+                if "[Part " in old_t or "As a " in old_t or "I want to" in old_t or old_t == task.get('title'):
+                    if sub_id_str.endswith('.1'):
+                        sub['title'] = f"To implement Database Schema & Backend REST API for {core}"
+                    elif sub_id_str.endswith('.2'):
+                        sub['title'] = f"To build Interactive UI Components & State Management for {core}"
+                    elif sub_id_str.endswith('.3'):
+                        sub['title'] = f"To implement Validation, Error Handling & Automated Tests for {core}"
+                    else:
+                        sub['title'] = clean_story_title_text(old_t)
+                else:
+                    sub['title'] = clean_story_title_text(old_t)
             continue
             
-        # Automatically decompose CRITICAL and HIGH tasks
+        # Automatically decompose CRITICAL and HIGH tasks ONLY
         if force_high_critical and (raw_tier in ['CRITICAL', 'HIGH'] or str(task.get('priority', '')).upper() in ['CRITICAL', 'HIGH']):
             generated = decompose_story_ai(task)
             sub_tasks = []
@@ -266,7 +332,7 @@ def attach_subtasks_to_tasks(task_list, force_high_critical=True):
                     "id": sub_id,
                     "story_id": sub_id,
                     "parent_id": sid,
-                    "title": sub.get('title', f"Subtask {i+1}"),
+                    "title": clean_story_title_text(sub.get('title', f"Subtask {i+1}")),
                     "description": sub.get('description', ''),
                     "points": sub_pt,
                     "story_points": sub_pt,
@@ -282,10 +348,8 @@ def attach_subtasks_to_tasks(task_list, force_high_critical=True):
             task['sub_tasks'] = sub_tasks
             task['is_decomposed'] = True
         else:
-            if 'sub_tasks' not in task:
-                task['sub_tasks'] = []
-            if 'is_decomposed' not in task:
-                task['is_decomposed'] = False
+            task['sub_tasks'] = []
+            task['is_decomposed'] = False
     return task_list
 
 def auto_decompose_critical_and_high_stories(task_list):
@@ -948,9 +1012,8 @@ def import_requirements_to_sprint():
         for idx, req in enumerate(req_list, 1):
             text = req.get('requirement_sentence') or req.get('description') or req.get('title') or ''
             epic = req.get('epic') or 'General Module'
-            feature = req.get('feature') or ''
-            
-            title = req.get('user_story') or (f"{feature}: {text[:60]}" if feature else text[:70])
+            raw_title = req.get('user_story') or (f"{feature}: {text[:60]}" if feature else text[:70])
+            title = clean_story_title_text(raw_title)
             desc = text
 
             # AI Prediction
