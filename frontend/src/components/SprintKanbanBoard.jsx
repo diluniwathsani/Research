@@ -698,7 +698,10 @@ export default function SprintKanbanBoard({
                                           <div className="min-w-0 flex-1">
                                             <div className="flex items-center gap-1 flex-wrap">
                                               <span className="font-mono text-[10px] text-teal-400 font-bold shrink-0">{sub.id}</span>
-                                              <span className={`text-[11px] leading-tight ${isDone ? 'line-through text-slate-500' : 'text-slate-200'}`}>
+                                              <span 
+                                                title={cleanStoryTitle(sub.title)}
+                                                className={`text-[11px] leading-tight ${isDone ? 'line-through text-slate-500' : 'text-slate-200'}`}
+                                              >
                                                 {cleanStoryTitle(sub.title)}
                                               </span>
                                             </div>

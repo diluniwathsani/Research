@@ -35,8 +35,17 @@ export default function StoryDecomposerModal({
     setErrorMsg(null);
     try {
       // If already a decomposed sub-story with BDD criteria, display directly
-      if (targetStory.gherkin_criteria && (targetStory.is_auto_decomposed || (targetStory.story_id && targetStory.story_id.includes('.')))) {
-        const cleanedTarget = { ...targetStory, title: cleanStoryTitle(targetStory.title) };
+      const isSub = Boolean(targetStory.is_subtask || (targetStory.story_id && String(targetStory.story_id).includes('.')) || (targetStory.id && String(targetStory.id).includes('.')));
+      if (isSub) {
+        const cleanedTitle = cleanStoryTitle(targetStory.title);
+        const subId = targetStory.story_id || targetStory.id;
+        const cleanedTarget = { 
+          ...targetStory, 
+          story_id: subId,
+          title: cleanedTitle,
+          description: targetStory.description || `Technical architecture deliverable and implementation scope for ${cleanedTitle}.`,
+          gherkin_criteria: targetStory.gherkin_criteria || `Feature: ${cleanedTitle}\n  Scenario: Automated Verification of ${subId}\n    Given the requirements and technical boundary assertions are validated\n    When the developer executes the automated build and test pipeline\n    Then all unit tests, state persistence, and API contracts must pass successfully.`
+        };
         setSubStories([cleanedTarget]);
         setDecompositionPlan({
           status: "success",
@@ -183,10 +192,10 @@ export default function StoryDecomposerModal({
                   {story.priority_tier || "MEDIUM"}
                 </span>
               </div>
-              <h4 className="text-sm font-bold text-white leading-snug">
+              <h4 className="text-sm font-bold text-white leading-snug break-words">
                 {cleanStoryTitle(story.title)}
               </h4>
-              <p className="text-xs text-slate-400 line-clamp-2">
+              <p className="text-xs text-slate-300 leading-relaxed break-words">
                 {story.description || story.reason || "No additional description provided."}
               </p>
             </div>

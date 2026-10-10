@@ -30,6 +30,7 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
   const [isDecomposerOpen, setIsDecomposerOpen] = useState(false);
   const [selectedStoryToDecompose, setSelectedStoryToDecompose] = useState(null);
   const [expandedSubtasks, setExpandedSubtasks] = useState({});
+  const [expandedSubtaskDetails, setExpandedSubtaskDetails] = useState({});
 
   // Active roadmap holidays strictly clamped to project start and end dates
   const activeRoadmapHolidays = ganttData ? (
@@ -101,6 +102,13 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
 
   const toggleSubtasks = (storyId) => {
     setExpandedSubtasks(prev => ({ ...prev, [storyId]: prev[storyId] === false ? true : false }));
+  };
+
+  const toggleSubtaskDetail = (subId) => {
+    setExpandedSubtaskDetails(prev => ({
+      ...prev,
+      [subId]: !prev[subId]
+    }));
   };
 
   const handleDecompositionApplied = (res) => {
@@ -1346,53 +1354,144 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
                                         const subStatus = sub.status || "To Do";
                                         const subPoints = sub.points || sub.story_points || 1;
                                         const subHours = sub.hours || sub.estimated_hours || (subPoints * 8);
+                                        const isDetailExpanded = Boolean(expandedSubtaskDetails[sub.id]);
 
                                         return (
                                           <div 
                                             key={sIdx} 
-                                            className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 hover:border-indigo-500/40 transition-all text-xs"
+                                            onClick={() => toggleSubtaskDetail(sub.id)}
+                                            className={`p-3 rounded-xl bg-slate-950/90 border transition-all text-xs cursor-pointer select-text ${
+                                              isDetailExpanded 
+                                                ? 'border-indigo-500/70 shadow-lg shadow-indigo-950/40 ring-1 ring-indigo-500/30' 
+                                                : 'border-slate-800 hover:border-indigo-500/40 hover:bg-slate-900/60'
+                                            }`}
+                                            title={isDetailExpanded ? "Click to collapse sub-task details" : "Click to read full sub-task details and technical scope"}
                                           >
-                                            <div className="flex items-center gap-2.5 min-w-0">
-                                              <span className="font-mono font-bold text-sky-400 text-xs px-2 py-0.5 rounded bg-sky-950/60 border border-sky-800/40 shrink-0">
-                                                ↳ {sub.id}
-                                              </span>
-                                              <span className={`font-semibold truncate ${subStatus === 'Done' ? 'line-through text-slate-500' : 'text-slate-200'}`}>
-                                                {cleanStoryTitle(sub.title)}
-                                              </span>
+                                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                                              <div className="flex items-start md:items-center gap-2.5 min-w-0 flex-1">
+                                                <span className="font-mono font-bold text-sky-400 text-xs px-2 py-0.5 rounded bg-sky-950/60 border border-sky-800/40 shrink-0 flex items-center gap-1 mt-0.5 md:mt-0">
+                                                  <span>↳</span>
+                                                  <span>{sub.id}</span>
+                                                </span>
+                                                <span className={`font-semibold transition-all ${
+                                                  isDetailExpanded 
+                                                    ? 'text-white whitespace-normal break-words leading-relaxed' 
+                                                    : 'truncate text-slate-200'
+                                                } ${subStatus === 'Done' ? 'line-through text-slate-500' : ''}`}>
+                                                  {cleanStoryTitle(sub.title)}
+                                                </span>
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    toggleSubtaskDetail(sub.id);
+                                                  }}
+                                                  className="text-[10px] px-2 py-0.5 rounded bg-indigo-950/60 hover:bg-indigo-900 border border-indigo-500/30 text-indigo-300 font-mono font-bold shrink-0 ml-1.5 transition-all flex items-center gap-1"
+                                                >
+                                                  {isDetailExpanded ? (
+                                                    <>
+                                                      <ChevronDown size={11} className="rotate-180 transition-transform" />
+                                                      <span>Collapse</span>
+                                                    </>
+                                                  ) : (
+                                                    <>
+                                                      <ChevronDown size={11} className="transition-transform" />
+                                                      <span>Read Full</span>
+                                                    </>
+                                                  )}
+                                                </button>
+                                              </div>
+
+                                              <div className="flex items-center gap-3 shrink-0 self-end md:self-auto" onClick={(e) => e.stopPropagation()}>
+                                                <span className="font-mono text-indigo-300 font-bold text-xs bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                                                  {subPoints} pts ({subHours}h)
+                                                </span>
+
+                                                {/* Interactive Sub-task Status Dropdown */}
+                                                <select
+                                                  value={subStatus}
+                                                  onChange={(e) => handleUpdateSubtaskStatus(story.story_id, sub.id, e.target.value)}
+                                                  className={`rounded-lg px-2.5 py-1 text-[11px] font-bold border focus:outline-none font-mono cursor-pointer transition-all ${
+                                                    subStatus === 'Done' 
+                                                      ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300' 
+                                                      : subStatus === 'In Progress' 
+                                                      ? 'bg-sky-950/80 border-sky-500/50 text-sky-300' 
+                                                      : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-850'
+                                                  }`}
+                                                >
+                                                  <option value="To Do">📝 To Do</option>
+                                                  <option value="In Progress">⚡ In Progress</option>
+                                                  <option value="Done">✓ Done</option>
+                                                </select>
+
+                                                {/* View Gherkin BDD scenario modal button */}
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleOpenDecomposer({ ...sub, story_id: sub.id });
+                                                  }}
+                                                  className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold flex items-center gap-1 transition-all"
+                                                  title="View Gherkin BDD Acceptance Test Criteria"
+                                                >
+                                                  <FileCode size={12} className="text-amber-400" />
+                                                  <span>BDD</span>
+                                                </button>
+                                              </div>
                                             </div>
 
-                                            <div className="flex items-center gap-3 shrink-0">
-                                              <span className="font-mono text-indigo-300 font-bold text-xs bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                                                {subPoints} pts ({subHours}h)
-                                              </span>
+                                            {/* Expanded Full Sub-Task Details Section */}
+                                            {isDetailExpanded && (
+                                              <div className="mt-3 pt-3 border-t border-slate-800/90 space-y-2.5 cursor-default" onClick={(e) => e.stopPropagation()}>
+                                                <div className="p-3 rounded-xl bg-slate-900/90 border border-indigo-500/30 space-y-1">
+                                                  <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider block">
+                                                    📋 Full Deliverable Title:
+                                                  </span>
+                                                  <p className="text-xs font-bold text-white leading-relaxed">
+                                                    {cleanStoryTitle(sub.title)}
+                                                  </p>
+                                                </div>
 
-                                              {/* Interactive Sub-task Status Dropdown */}
-                                              <select
-                                                value={subStatus}
-                                                onChange={(e) => handleUpdateSubtaskStatus(story.story_id, sub.id, e.target.value)}
-                                                className={`rounded-lg px-2.5 py-1 text-[11px] font-bold border focus:outline-none font-mono cursor-pointer transition-all ${
-                                                  subStatus === 'Done' 
-                                                    ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300' 
-                                                    : subStatus === 'In Progress' 
-                                                    ? 'bg-sky-950/80 border-sky-500/50 text-sky-300' 
-                                                    : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-850'
-                                                }`}
-                                              >
-                                                <option value="To Do">📝 To Do</option>
-                                                <option value="In Progress">⚡ In Progress</option>
-                                                <option value="Done">✓ Done</option>
-                                              </select>
+                                                {sub.description && (
+                                                  <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1">
+                                                    <span className="text-[10px] uppercase font-bold text-sky-400 tracking-wider block">
+                                                      🛠️ Technical Implementation Scope & Architecture:
+                                                    </span>
+                                                    <p className="text-xs text-slate-300 leading-relaxed">
+                                                      {sub.description}
+                                                    </p>
+                                                  </div>
+                                                )}
 
-                                              {/* View Gherkin BDD scenario modal button */}
-                                              <button
-                                                onClick={() => handleOpenDecomposer({ ...sub, story_id: sub.id })}
-                                                className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold flex items-center gap-1 transition-all"
-                                                title="View Gherkin BDD Acceptance Test Criteria"
-                                              >
-                                                <FileCode size={12} className="text-amber-400" />
-                                                <span>BDD</span>
-                                              </button>
-                                            </div>
+                                                {sub.gherkin_criteria && (
+                                                  <div className="p-3 rounded-xl bg-slate-950 border border-amber-500/30 space-y-1.5 font-mono text-[11px] text-amber-200/95 leading-relaxed">
+                                                    <div className="flex items-center justify-between pb-1.5 border-b border-slate-800/80">
+                                                      <span className="text-[10px] uppercase font-bold text-amber-400 flex items-center gap-1.5 font-sans">
+                                                        <FileCode size={12} />
+                                                        <span>Gherkin BDD Acceptance Test Scenarios</span>
+                                                      </span>
+                                                      <span className="text-[10px] text-slate-500 font-sans">Automated Test Assertions</span>
+                                                    </div>
+                                                    <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-amber-200/90 overflow-x-auto">
+                                                      {sub.gherkin_criteria}
+                                                    </pre>
+                                                  </div>
+                                                )}
+
+                                                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-slate-400">
+                                                  <span className="font-mono">
+                                                    Parent User Story: <strong className="text-indigo-300">{story.story_id}</strong> • Effort: <strong className="text-white">{subPoints} Story Points ({subHours} Working Hours)</strong>
+                                                  </span>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => handleOpenDecomposer({ ...sub, story_id: sub.id })}
+                                                    className="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-[11px] font-bold flex items-center gap-1.5 transition-all shadow-sm"
+                                                  >
+                                                    <FileCode size={12} className="text-amber-400" />
+                                                    <span>Open Full Modal View</span>
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            )}
                                           </div>
                                         );
                                       })}
@@ -1655,16 +1754,31 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
                           <span className="font-mono font-bold text-xs text-emerald-400">{task.id}</span>
                         )}
                         <span 
-                          className={`text-xs truncate max-w-md ${isSubtask ? 'text-slate-300 font-medium' : 'font-bold text-white'}`}
-                          title={cleanStoryTitle(task.title)}
+                          onClick={() => {
+                            if (isSubtask) {
+                              handleOpenDecomposer({ ...task, story_id: task.id });
+                            }
+                          }}
+                          className={`text-xs ${isSubtask ? 'cursor-pointer hover:text-indigo-300 hover:underline' : ''} truncate max-w-md ${isSubtask ? 'text-slate-300 font-medium' : 'font-bold text-white'}`}
+                          title={isSubtask ? `Click to view full details for ${task.id}: ${cleanStoryTitle(task.title)}` : cleanStoryTitle(task.title)}
                         >
                           {cleanStoryTitle(task.title)}
                         </span>
                         
                         {isSubtask ? (
-                          <span className="text-[10px] px-2 py-0.2 rounded bg-teal-500/15 text-teal-300 font-mono font-bold border border-teal-500/30">
-                            Sub-Task
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] px-2 py-0.2 rounded bg-teal-500/15 text-teal-300 font-mono font-bold border border-teal-500/30">
+                              Sub-Task
+                            </span>
+                            <button
+                              onClick={() => handleOpenDecomposer({ ...task, story_id: task.id })}
+                              className="text-[10px] px-2 py-0.2 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 font-mono font-bold border border-amber-500/30 flex items-center gap-1 transition-all"
+                              title="Click to view full sub-task details, scope, and BDD criteria"
+                            >
+                              <FileCode size={10} className="text-amber-400" />
+                              <span>Details</span>
+                            </button>
+                          </div>
                         ) : (
                           <>
                             <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
