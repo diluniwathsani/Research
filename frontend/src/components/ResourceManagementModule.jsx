@@ -245,9 +245,39 @@ export default function ResourceManagementModule({
 
     const loadProjectModulePlan = async () => {
       try {
-        // A. Fetch Sprint Plan output from Project Module Flask Engine (Port 8082)
-        const planRes = await axios.get(`${PROJECT_ENGINE_API}/sprint-plan`).catch(() => null);
-        let ganttRes = await axios.get(`${PROJECT_ENGINE_API}/timeline/gantt`).catch(() => null);
+        // Redundant endpoints for fetching sprint plan from Project Module
+        const planEndpoints = [
+          'http://127.0.0.1:8082/api/sprint-plan',
+          'http://localhost:8082/api/sprint-plan',
+          `${EXPRESS_API}/sprint-plan`
+        ];
+
+        let planRes = null;
+        for (const ep of planEndpoints) {
+          try {
+            const resp = await axios.get(ep, { timeout: 8000 });
+            if (resp?.data?.tasks && resp.data.tasks.length > 0) {
+              planRes = resp;
+              break;
+            }
+          } catch (_) {}
+        }
+
+        const ganttEndpoints = [
+          'http://127.0.0.1:8082/api/timeline/gantt',
+          'http://localhost:8082/api/timeline/gantt'
+        ];
+
+        let ganttRes = null;
+        for (const gep of ganttEndpoints) {
+          try {
+            const gresp = await axios.get(gep, { timeout: 8000 });
+            if (gresp?.data) {
+              ganttRes = gresp;
+              break;
+            }
+          } catch (_) {}
+        }
 
         let planTasks = planRes?.data?.tasks || [];
         let planSprints = ganttRes?.data?.sprints || [];
@@ -278,12 +308,45 @@ export default function ResourceManagementModule({
           } catch (_) {}
         }
 
-        // Normalize each task with domain, required skills, and duration
+        // Normalize each task and its nested sub-tasks with domain, required skills, and duration
         const normalizedTasks = planTasks.map((t, idx) => {
           const title = t.title || t.user_story || 'User Story';
           const detected = extractDomainAndSkills(title);
           const points = Number(t.story_points) || Number(t.points) || 5;
           const hours = Number(t.estimated_hours) || Number(t.hours) || (points * 8);
+
+          // Normalize decomposed sub-tasks from Project Management Module
+          const rawSubTasks = Array.isArray(t.sub_tasks) ? t.sub_tasks : [];
+          const normalizedSubTasks = rawSubTasks.map((sub, sIdx) => {
+            const subTitle = sub.title || `Subtask ${sIdx + 1}`;
+            const subDetected = extractDomainAndSkills(subTitle);
+            const subPts = Number(sub.story_points) || Number(sub.points) || 1;
+            const subHrs = Number(sub.estimated_hours) || Number(sub.hours) || (subPts * 8);
+
+            return {
+              ...sub,
+              id: sub.id || sub.story_id || `${t.story_id || t.id}.${sIdx + 1}`,
+              story_id: sub.story_id || sub.id || `${t.story_id || t.id}.${sIdx + 1}`,
+              parent_id: t.story_id || t.id,
+              parent_title: title,
+              title: subTitle,
+              description: sub.description || '',
+              story_points: subPts,
+              points: subPts,
+              estimated_hours: subHrs,
+              hours: subHrs,
+              status: sub.status || t.status || 'To Do',
+              priority: (sub.priority || sub.priority_tier || t.priority || 'MEDIUM').toUpperCase(),
+              priority_tier: (sub.priority_tier || sub.priority || t.priority_tier || 'MEDIUM').toUpperCase(),
+              domain: sub.domain || subDetected.domain,
+              required_domain: sub.required_domain || subDetected.required_domain,
+              skills: Array.isArray(sub.skills) && sub.skills.length > 0 ? sub.skills : subDetected.skills,
+              required_skills: Array.isArray(sub.required_skills) && sub.required_skills.length > 0 
+                ? sub.required_skills 
+                : (Array.isArray(sub.skills) && sub.skills.length > 0 ? sub.skills : subDetected.skills),
+              gherkin_criteria: sub.gherkin_criteria || ''
+            };
+          });
 
           return {
             ...t,
@@ -298,7 +361,8 @@ export default function ResourceManagementModule({
             domain: detected.domain,
             required_domain: detected.required_domain,
             skills: t.skills || detected.skills,
-            required_skills: t.skills || detected.skills
+            required_skills: t.skills || detected.skills,
+            sub_tasks: normalizedSubTasks
           };
         });
 
@@ -344,6 +408,13 @@ export default function ResourceManagementModule({
     loadProjectModulePlan();
     setAssignments([]);
     setViewMode('backlog');
+
+    // Live sync with Project Management Sprint Planning updates
+    const handleSprintsUpdated = () => {
+      loadProjectModulePlan();
+    };
+    window.addEventListener('sprints-updated', handleSprintsUpdated);
+    return () => window.removeEventListener('sprints-updated', handleSprintsUpdated);
   }, [selectedProject]);
 
   // ================= 5. FILTER TASKS FOR CURRENT SPRINT =================
