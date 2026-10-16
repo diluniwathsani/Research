@@ -40,7 +40,7 @@ function startService(service) {
 
   child.on('close', code => {
     console.log(`${service.color}[${service.name}]\x1b[0m Process exited with code ${code}`);
-    if (!isShuttingDown && service.name === 'EXPRESS-BACKEND' && code !== 0) {
+    if (!isShuttingDown && (service.name === 'EXPRESS-BACKEND' || service.name === 'FLASK-API') && code !== 0) {
       console.log(`${service.color}[${service.name}]\x1b[0m 🔄 Unexpected exit detected. Auto-restarting in 2s...`);
       setTimeout(() => startService(service), 2000);
     }

@@ -2430,8 +2430,8 @@ def api_apply_decomposition():
     global sprint_tasks, active_capacities
     try:
         data = request.json or {}
-        parent_id = data.get('parent_story_id')
-        sub_stories = data.get('sub_stories', [])
+        parent_id = data.get('parent_story_id') or data.get('story_id') or data.get('id')
+        sub_stories = data.get('sub_stories') or data.get('subtasks') or data.get('work_items', [])
         
         if not parent_id or not sub_stories:
             return jsonify({"status": "error", "message": "parent_story_id and sub_stories required"}), 400
@@ -2756,7 +2756,8 @@ if __name__ == '__main__':
     print("[OK] Starting API with Phase 4 Bridge, Jira Export & Gantt Timeline on port 8082...")
     try:
         from waitress import serve
-        print("[OK] Serving with production Waitress WSGI server on http://127.0.0.1:8082 ...")
-        serve(app, host='127.0.0.1', port=8082, threads=8)
-    except ImportError:
-        app.run(port=8082, debug=False, threaded=True)
+        print("[OK] Serving with production Waitress WSGI server on port 8082 (0.0.0.0:8082)...")
+        serve(app, host='0.0.0.0', port=8082, threads=8)
+    except Exception as e:
+        print(f"[WARN] Waitress serve notice ({e}), running with Werkzeug fallback on 0.0.0.0:8082...")
+        app.run(host='0.0.0.0', port=8082, debug=False, threaded=True)

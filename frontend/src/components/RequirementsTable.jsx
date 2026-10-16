@@ -57,7 +57,7 @@ export default function RequirementsTable({ requirements, onUpdate, onNavigateTo
       localStorage.setItem('active_requirements_batch', batchTitle);
       localStorage.setItem('active_project_name', batchTitle);
 
-      const res = await axios.post('http://localhost:8082/api/import-requirements', {
+      const payload = {
         project_name: batchTitle,
         batch_title: batchTitle,
         requirements: wizardBatchData.reqs,
@@ -65,28 +65,54 @@ export default function RequirementsTable({ requirements, onUpdate, onNavigateTo
           ...timelineSettings,
           project_name: batchTitle
         }
-      });
-      if (res.data.status === 'success') {
-        const finalSprintsCount = res.data.sprints_count || timelineSettings.target_sprint_count || 0;
-        localStorage.setItem(`planned_sprints_${email}`, String(finalSprintsCount));
-        localStorage.setItem('total_sprints_count', String(finalSprintsCount));
-        localStorage.setItem('target_sprint_count', String(finalSprintsCount));
-        localStorage.setItem(`planned_stories_${email}`, String(res.data.imported_count || wizardBatchData.reqs.length || 0));
-        window.dispatchEvent(new Event('sprints-updated'));
+      };
 
-        setIsWizardOpen(false);
-        setSyncAlert({
-          type: 'success',
-          msg: `🎉 Successfully planned ${res.data.imported_count} Requirements into ${res.data.sprints_count} Sprints (${res.data.total_points} Story Points) with custom ${timelineSettings.sprint_duration_weeks}-week Cadence & Gantt Schedule!`,
-          sprintsCount: res.data.sprints_count,
-          totalPoints: res.data.total_points
-        });
+      // Try multiple redundant endpoints: direct IPv4 (127.0.0.1:8082), localhost:8082, and Express proxy (:3000)
+      const endpoints = [
+        'http://127.0.0.1:8082/api/import-requirements',
+        'http://localhost:8082/api/import-requirements',
+        'http://localhost:3000/api/import-requirements'
+      ];
 
-        if (onNavigateToSprintPlan) {
-          onNavigateToSprintPlan();
+      let res = null;
+      let lastErr = null;
+      for (const endpoint of endpoints) {
+        try {
+          const attempt = await axios.post(endpoint, payload, { timeout: 25000 });
+          if (attempt?.data?.status === 'success') {
+            res = attempt;
+            break;
+          }
+        } catch (attemptErr) {
+          lastErr = attemptErr;
+          console.warn(`Bridge attempt to ${endpoint} failed:`, attemptErr.message);
         }
-      } else {
-        throw new Error(res.data.message || 'Import to sprint plan failed');
+      }
+
+      if (!res && lastErr) {
+        throw lastErr;
+      }
+      if (!res || res.data?.status !== 'success') {
+        throw new Error(res?.data?.message || 'Import to sprint plan failed across all available services');
+      }
+
+      const finalSprintsCount = res.data.sprints_count || timelineSettings.target_sprint_count || 0;
+      localStorage.setItem(`planned_sprints_${email}`, String(finalSprintsCount));
+      localStorage.setItem('total_sprints_count', String(finalSprintsCount));
+      localStorage.setItem('target_sprint_count', String(finalSprintsCount));
+      localStorage.setItem(`planned_stories_${email}`, String(res.data.imported_count || wizardBatchData.reqs.length || 0));
+      window.dispatchEvent(new Event('sprints-updated'));
+
+      setIsWizardOpen(false);
+      setSyncAlert({
+        type: 'success',
+        msg: `🎉 Successfully planned ${res.data.imported_count} Requirements into ${res.data.sprints_count} Sprints (${res.data.total_points} Story Points) with custom ${timelineSettings.sprint_duration_weeks}-week Cadence & Gantt Schedule!`,
+        sprintsCount: res.data.sprints_count,
+        totalPoints: res.data.total_points
+      });
+
+      if (onNavigateToSprintPlan) {
+        onNavigateToSprintPlan();
       }
     } catch (err) {
       console.error('Sprint Sync error:', err);

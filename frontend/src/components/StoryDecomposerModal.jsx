@@ -113,7 +113,7 @@ export default function StoryDecomposerModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          parent_story_id: story.story_id,
+          parent_story_id: story.story_id || story.id,
           sub_stories: subStories
         })
       });

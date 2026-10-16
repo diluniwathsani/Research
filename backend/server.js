@@ -12,6 +12,7 @@ const { initializeDatabase } = require('./models/database');
 require('dotenv').config();
 
 const multer = require('multer');
+const axios = require('axios');
 const xlsx = require('xlsx');
 const mammoth = require('mammoth');
 const pdfParseModule = require('pdf-parse');
@@ -1237,6 +1238,26 @@ app.put('/api/batches/:timestamp', async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: err.message });
+    }
+});
+
+// Bridge Proxy Endpoint for Phase 4 Sprint Planning (Port 8082 bridge)
+app.post('/api/import-requirements', async (req, res) => {
+    try {
+        const response = await axios.post('http://127.0.0.1:8082/api/import-requirements', req.body, { timeout: 45000 });
+        res.json(response.data);
+    } catch (err) {
+        console.error('Proxy error to port 8082 /api/import-requirements:', err.message);
+        res.status(err.response?.status || 502).json(err.response?.data || { error: 'Failed to communicate with Sprint Planning API (port 8082).' });
+    }
+});
+
+app.get('/api/sprint-plan', async (req, res) => {
+    try {
+        const response = await axios.get('http://127.0.0.1:8082/api/sprint-plan', { timeout: 15000 });
+        res.json(response.data);
+    } catch (err) {
+        res.status(err.response?.status || 502).json(err.response?.data || { error: 'Sprint planning service unavailable.' });
     }
 });
 
