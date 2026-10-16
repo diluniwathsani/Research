@@ -1,0 +1,10 @@
+{
+  "python.analysis.exclude": [
+    "**/__pyrefly_virtual__/**",
+    "**/node_modules",
+    "**/__pycache__"
+  ],
+  "pyrefly.exclude": [
+    "**/__pyrefly_virtual__/**"
+  ]
+}

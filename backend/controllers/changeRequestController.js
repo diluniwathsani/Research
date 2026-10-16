@@ -123,6 +123,7 @@ async function performSprintAllocation(sprintId, targetUserStoryId = null) {
             });
         } catch (e) {}
 
+        // STEP 1 — Process work items by priority (CRITICAL > HIGH > MEDIUM > LOW)
         const priorityOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
         const sortedTasks = [...tasks].sort((a, b) =>
             (priorityOrder[(a.priority || 'MEDIUM').toUpperCase()] ?? 2) - 
@@ -142,8 +143,7 @@ async function performSprintAllocation(sprintId, targetUserStoryId = null) {
                 capacity_hours: cap,
                 other_project_hours: otherProjectHours,
                 remaining: availableCap,
-                is_fully_allocated_elsewhere: otherProjectHours >= cap,
-                primary_domain: (dev.primary_domain || 'general').toLowerCase(),
+                primary_domain: (dev.primary_domain || 'backend').toLowerCase(),
                 languages: Array.isArray(dev.languages) ? dev.languages : (dev.languages ? String(dev.languages).split(',').map(s => s.trim()) : [])
             };
         });
@@ -152,77 +152,83 @@ async function performSprintAllocation(sprintId, targetUserStoryId = null) {
 
         for (const task of sortedTasks) {
             const estHours = Number(task.estimated_hours) || 16;
-            const rawNeededDomain = (task.required_domain || 'general').toLowerCase();
-            const neededDomain = rawNeededDomain.includes('qa') ? 'qa' : rawNeededDomain;
-            const requiredSkills = task.required_skills || [];
+            const taskDomainNorm = (task.required_domain || task.domain || 'backend').toLowerCase();
+            const requiredSkills = task.required_skills || task.skills || [];
 
-            const candidates = devs.map(dev => {
-                const devDomain = dev.primary_domain;
-                const domainOk = devDomain === neededDomain || 
-                                 neededDomain.includes(devDomain) || 
-                                 devDomain.includes(neededDomain) || 
-                                 neededDomain === 'general' || 
-                                 devDomain === 'general';
+            // ML Complexity Prediction (HIGH / MEDIUM / LOW)
+            let rawComplexity = task.predicted_complexity || task.complexity;
+            if (!rawComplexity) {
+                const hrs = Number(task.estimated_hours) || 0;
+                if (hrs >= 12) rawComplexity = 'HIGH';
+                else if (hrs >= 8) rawComplexity = 'MEDIUM';
+                else rawComplexity = 'LOW';
+            }
+            const predictedComplexity = String(rawComplexity).toUpperCase();
+
+            // STEP 2 — Check developer availability: Exclude developers with remaining capacity <= 0
+            const availableDevs = devs.filter(dev => dev.remaining > 0);
+
+            if (availableDevs.length === 0) {
+                continue;
+            }
+
+            // STEP 3, 4, 5 — Evaluate Candidates
+            const evaluatedCandidates = availableDevs.map(dev => {
+                const devDomainNorm = (dev.primary_domain || 'backend').toLowerCase();
+                
+                // Domain Match (Step 3): Exact domain match
+                const exactDomainMatch = devDomainNorm === taskDomainNorm;
+
+                // Required Skill Match (Step 4): skillMatchPercentage
+                const skillMatchPct = calculateSkillMatchScore(dev.languages, requiredSkills);
+
+                // Complexity & Seniority Suitability (Step 5)
+                const roleStr = (dev.role || '').toLowerCase();
+                const isSenior = roleStr.includes('senior') || roleStr.includes('lead') || roleStr.includes('architect');
+                const isJunior = roleStr.includes('junior') || roleStr.includes('intern');
+                let senioritySuitability = 1;
+                if (predictedComplexity === 'HIGH') {
+                    senioritySuitability = isSenior ? 3 : (isJunior ? 1 : 2);
+                } else if (predictedComplexity === 'LOW') {
+                    senioritySuitability = (isJunior || !isSenior) ? 2 : 1;
+                } else { // MEDIUM
+                    senioritySuitability = (isSenior || !isJunior) ? 2 : 1;
+                }
+
                 return {
                     ...dev,
-                    domainOk,
-                    skillScore: calculateSkillMatchScore(dev.languages, requiredSkills)
+                    exactDomainMatch,
+                    skillMatchPct,
+                    senioritySuitability
                 };
             });
 
-            let availableCandidates = candidates.filter(dev => !dev.is_fully_allocated_elsewhere && dev.remaining > 0);
-            if (availableCandidates.length === 0) availableCandidates = candidates.filter(dev => dev.remaining > 0);
-            if (availableCandidates.length === 0) availableCandidates = candidates.filter(dev => !dev.is_fully_allocated_elsewhere);
-            if (availableCandidates.length === 0) availableCandidates = [...candidates];
-
-            let validCandidates = availableCandidates.filter(dev => dev.domainOk && dev.remaining >= estHours);
-            if (validCandidates.length === 0) validCandidates = availableCandidates.filter(dev => dev.remaining >= estHours);
-            if (validCandidates.length === 0) validCandidates = availableCandidates.filter(dev => dev.domainOk && dev.remaining > 0);
-            if (validCandidates.length === 0) validCandidates = availableCandidates.filter(dev => dev.remaining > 0);
-            if (validCandidates.length === 0) validCandidates = [...availableCandidates];
-
-            const predictedComplexity = (task.predicted_complexity || 'MEDIUM').toUpperCase();
-
-            validCandidates.forEach(dev => {
-                const roleStr = (dev.role || '').toLowerCase();
-                const langCount = Array.isArray(dev.languages) ? dev.languages.length : 0;
-                const isSeniorOrSpecialist = roleStr.includes('senior') || roleStr.includes('lead') || roleStr.includes('principal') || roleStr.includes('architect') || langCount >= 3;
-                const isJunior = roleStr.includes('junior') || roleStr.includes('intern') || roleStr.includes('associate');
-
-                let complexityScore = 70;
-                if (predictedComplexity === 'HIGH') {
-                    complexityScore = isSeniorOrSpecialist ? 100 : (isJunior ? 30 : 60);
-                } else if (predictedComplexity === 'MEDIUM') {
-                    complexityScore = isSeniorOrSpecialist ? 85 : (isJunior ? 70 : 100);
-                } else if (predictedComplexity === 'LOW') {
-                    complexityScore = isJunior ? 100 : (!isSeniorOrSpecialist ? 90 : 70);
+            // STEP 6 — Select Best Candidate (Rule-Based Ranking)
+            // 1. Exact domain match
+            // 2. Higher skill-match percentage
+            // 3. Better complexity/seniority suitability
+            // 4. Higher remaining capacity
+            evaluatedCandidates.sort((a, b) => {
+                if (a.exactDomainMatch !== b.exactDomainMatch) {
+                    return (b.exactDomainMatch ? 1 : 0) - (a.exactDomainMatch ? 1 : 0);
                 }
-
-                const domainScore = dev.primary_domain === neededDomain ? 100 : (dev.domainOk ? 75 : 50);
-                const capScore = dev.capacity_hours > 0 ? Math.min(100, (dev.remaining / dev.capacity_hours) * 100) : 50;
-
-                dev.complexityScore = complexityScore;
-                dev.compositeScore = (
-                    (dev.skillScore * 0.35) + 
-                    (complexityScore * 0.30) + 
-                    (domainScore * 0.20) + 
-                    (capScore * 0.15)
-                );
+                if (b.skillMatchPct !== a.skillMatchPct) {
+                    return b.skillMatchPct - a.skillMatchPct;
+                }
+                if (b.senioritySuitability !== a.senioritySuitability) {
+                    return b.senioritySuitability - a.senioritySuitability;
+                }
+                return b.remaining - a.remaining;
             });
 
-            validCandidates.sort((a, b) => {
-                if (Math.abs(b.compositeScore - a.compositeScore) > 0.01) return b.compositeScore - a.compositeScore;
-                if (a.remaining !== b.remaining) return b.remaining - a.remaining;
-                return b.skillScore - a.skillScore;
-            });
+            const chosen = evaluatedCandidates[0];
 
-            const chosen = validCandidates[0];
-            const targetDevInMainList = devs.find(d => d.id === chosen.id);
-            const maxDevCap = targetDevInMainList ? targetDevInMainList.remaining : 40;
-            const allocHours = Math.min(estHours, maxDevCap > 0 ? maxDevCap : estHours);
+            // STEP 7 — Allocate Hours & Update Remaining Capacity
+            const allocHours = Math.min(estHours, chosen.remaining);
 
-            if (targetDevInMainList) {
-                targetDevInMainList.remaining = Math.max(0, targetDevInMainList.remaining - allocHours);
+            const masterDev = devs.find(d => d.id === chosen.id);
+            if (masterDev) {
+                masterDev.remaining -= allocHours;
             }
 
             assignments.push({
@@ -232,10 +238,10 @@ async function performSprintAllocation(sprintId, targetUserStoryId = null) {
                 developer_name: chosen.name,
                 allocated_hours: allocHours,
                 predicted_complexity: predictedComplexity,
-                matched_domain: neededDomain,
-                skill_match_score: chosen.skillScore,
-                complexity_suitability_score: Math.round(chosen.complexityScore),
-                composite_allocation_score: Math.round(chosen.compositeScore)
+                matched_domain: taskDomainNorm,
+                skill_match_score: Math.round(chosen.skillMatchPct),
+                complexity_suitability_score: Math.round((chosen.senioritySuitability / 3) * 100),
+                composite_allocation_score: Math.round(chosen.skillMatchPct)
             });
         }
 
@@ -281,39 +287,62 @@ async function getAllProjects(req, res) {
     try {
         const db = getDatabase();
 
-        // 1. Query local relational database for active projects
-        let activeProjects = await db.all(`
-            SELECT 
-                project_id, 
-                project_name, 
-                description, 
-                project_manager, 
-                team_size, 
-                progress_percent, 
-                budget_usd, 
-                risk_level, 
-                complexity_level, 
-                priority, 
-                status 
-            FROM public.projects 
-            WHERE UPPER(status) IN ('ACTIVE', 'IN_PROGRESS', 'PLANNING')
-            ORDER BY project_name ASC
-        `);
+        // Query relational database for active projects with exact requirement counts, newest first
+        let activeProjects = [];
+        try {
+            activeProjects = await db.all(`
+                SELECT 
+                    p.project_id, 
+                    p.project_name, 
+                    p.description, 
+                    p.project_manager, 
+                    p.team_size, 
+                    p.progress_percent, 
+                    p.budget_usd, 
+                    p.risk_level, 
+                    p.complexity_level, 
+                    p.priority, 
+                    p.status,
+                    p.created_at,
+                    COUNT(r.id)::int AS requirement_count,
+                    COUNT(CASE WHEN r.completeness_status = 'Complete' OR r.completeness_status = 'Completed by User' THEN 1 END)::int AS complete_count
+                FROM public.projects p
+                LEFT JOIN public.requirements r ON (r.project_id = p.project_id OR r.batch_name = p.project_name)
+                WHERE p.status IS NULL OR UPPER(p.status) IN ('ACTIVE', 'IN_PROGRESS', 'PLANNING')
+                GROUP BY p.project_id, p.project_name, p.description, p.project_manager, p.team_size, p.progress_percent, p.budget_usd, p.risk_level, p.complexity_level, p.priority, p.status, p.created_at
+                ORDER BY p.created_at DESC NULLS LAST, p.project_name ASC
+            `);
+        } catch (queryErr) {
+            console.warn('Notice in joined projects query, falling back to basic projects:', queryErr.message);
+            activeProjects = await db.all(`
+                SELECT * FROM public.projects 
+                WHERE status IS NULL OR UPPER(status) IN ('ACTIVE', 'IN_PROGRESS', 'PLANNING')
+                ORDER BY created_at DESC NULLS LAST, project_name ASC
+            `);
+        }
 
         if (!activeProjects || activeProjects.length === 0) {
             try {
-                activeProjects = await db.all(`SELECT * FROM public.projects ORDER BY project_name ASC`);
+                activeProjects = await db.all(`SELECT * FROM public.projects ORDER BY created_at DESC NULLS LAST, project_name ASC`);
             } catch (fallbackErr) {}
         }
 
-        if (!activeProjects) {
-            activeProjects = [];
-        }
+        const mapped = (activeProjects || []).map((p, idx) => ({
+            ...p,
+            id: p.project_id || `P${idx + 1}`,
+            project_id: p.project_id || `P${idx + 1}`,
+            name: p.project_name || `Project ${idx + 1}`,
+            project_name: p.project_name || `Project ${idx + 1}`,
+            requirement_count: Number(p.requirement_count) || 0,
+            complete_count: Number(p.complete_count) || 0,
+            status: p.status || 'ACTIVE'
+        }));
 
         return res.json({
             success: true,
-            count: activeProjects.length,
-            data: activeProjects
+            count: mapped.length,
+            data: mapped,
+            projects: mapped
         });
 
     } catch (error) {

@@ -9,3 +9,7 @@ __pycache__/
 .DS_Store
 backend/uploads/
 backend/Training/sprint-models/priority_model.pkl
+backend/ml_model/priority_model.pkl
+Research_Project.zip
+*.zip
+~$*

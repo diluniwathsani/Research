@@ -17,6 +17,17 @@ export default function RequirementsTable({ requirements, onUpdate, onNavigateTo
   const [editingBatchTimestamp, setEditingBatchTimestamp] = useState(null);
   const [batchNameValue, setBatchNameValue] = useState("");
 
+  const getQualityCategory = (req) => {
+    const s = (req?.completeness_status || 'Complete').trim();
+    const lower = s.toLowerCase();
+    if (lower.startsWith('ambiguous') || lower.includes('ambiguous')) return 'AMBIGUOUS';
+    if (lower.startsWith('inconsistent') || lower.includes('inconsistent')) return 'INCONSISTENT';
+    if (lower.startsWith('incomplete') || lower.includes('incomplete') || lower.includes('needs refinement')) return 'INCOMPLETE';
+    const text = (req?.requirement_sentence || '').trim();
+    if (text && (text.split(/\s+/).length < 5 || text.length < 15)) return 'INCOMPLETE';
+    return 'COMPLETE';
+  };
+
   // handleExportBatch: Triggers Excel download for a specific set of requirements
   const handleExportBatch = (timestamp, setTitle, projectId) => {
     const projParam = projectId ? `&project_id=${encodeURIComponent(projectId)}` : '';
@@ -433,7 +444,6 @@ export default function RequirementsTable({ requirements, onUpdate, onNavigateTo
                   });
                   const sectionId = `${batchKey}-${domain}`;
                   const isExpanded = expandedSections[sectionId] !== false; 
-                  const completeCount = sortedReqs.filter(r => r.completeness_status?.includes('Complete')).length;
                   
                   return (
                     <div 
@@ -460,7 +470,7 @@ export default function RequirementsTable({ requirements, onUpdate, onNavigateTo
                                 {sortedReqs.length}
                               </span>
                             </h3>
-                              <div className="flex items-center gap-4 mt-1.5">
+                            <div className="flex items-center gap-4 mt-1.5">
                               <div className="w-40 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                                 <div 
                                   className="h-full bg-gradient-to-r from-purple-400 to-indigo-600 transition-all duration-1000 ease-out" 
@@ -493,6 +503,9 @@ export default function RequirementsTable({ requirements, onUpdate, onNavigateTo
                               {sortedReqs.map((req, idx) => {
                                 const showOutcomes = expandedOutcomes[req.id] || false;
                                 const displaySeq = req.requirement_order !== undefined && req.requirement_order !== null ? req.requirement_order : (idx + 1);
+                                const statusStr = req.completeness_status || 'Complete';
+                                const cat = getQualityCategory(req);
+
                                 return (
                                   <React.Fragment key={req.id}>
                                     <tr className={`transition-colors ${showOutcomes ? 'bg-primary/[0.01]' : 'hover:bg-slate-50/50 dark:hover:bg-slate-700/10'}`}>
@@ -512,9 +525,42 @@ export default function RequirementsTable({ requirements, onUpdate, onNavigateTo
                                           </div>
                                         ) : (
                                           <div className="space-y-4">
-                                            <p className="text-base leading-relaxed font-medium tracking-tight text-slate-700 dark:text-slate-200">
-                                              {req.requirement_sentence}
-                                            </p>
+                                            <div className="flex items-start gap-3">
+                                              {/* Quality Status Pill directly in front of requirement ONLY when incomplete / ambiguous / inconsistent */}
+                                              {cat !== 'COMPLETE' && (
+                                                <span 
+                                                  className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-black border uppercase tracking-wider shadow-sm mt-0.5 ${
+                                                    cat === 'INCOMPLETE'
+                                                      ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30'
+                                                      : cat === 'AMBIGUOUS'
+                                                      ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30'
+                                                      : 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30'
+                                                  }`}
+                                                  title={statusStr}
+                                                >
+                                                  {cat === 'INCOMPLETE' ? (
+                                                    <AlertCircle size={13} className="text-rose-600 dark:text-rose-400" />
+                                                  ) : cat === 'AMBIGUOUS' ? (
+                                                    <AlertCircle size={13} className="text-amber-600 dark:text-amber-400" />
+                                                  ) : (
+                                                    <Shield size={13} className="text-purple-600 dark:text-purple-400" />
+                                                  )}
+                                                  <span>{cat === 'INCOMPLETE' ? 'Incomplete' : cat === 'AMBIGUOUS' ? 'Ambiguous' : 'Inconsistent'}</span>
+                                                </span>
+                                              )}
+
+                                              <div className="flex-1 space-y-1">
+                                                <p className="text-base leading-relaxed font-medium tracking-tight text-slate-700 dark:text-slate-200">
+                                                  {req.requirement_sentence}
+                                                </p>
+                                                {cat !== 'COMPLETE' && (
+                                                  <p className="text-xs font-semibold text-rose-500 dark:text-rose-400">
+                                                    Reason: {statusStr && statusStr !== 'Complete' ? statusStr : 'Incomplete: Needs refinement'}
+                                                  </p>
+                                                )}
+                                              </div>
+                                            </div>
+
                                             <div className="flex items-center gap-4">
                                               <span className="inline-flex items-center gap-2 px-3 py-1 rounded-lg text-[9px] font-black border uppercase tracking-widest shadow-sm bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-100 dark:border-purple-500/20">
                                                 <CheckCircle size={12} />

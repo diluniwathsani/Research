@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-export default function Header({ isDark, setIsDark, activeTab, reqCount, onRefresh, projects = [], selectedProjectId, onSelectProject }) {
+export default function Header({ isDark, setIsDark, activeTab, reqCount, onRefresh, projects = [], selectedProjectId, onSelectProject, isBackendOnline = true }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const { user, isAuthenticated, signOut, setIsAuthModalOpen, authNotice } = useAuth();
@@ -67,9 +67,13 @@ export default function Header({ isDark, setIsDark, activeTab, reqCount, onRefre
         <div className="flex items-center space-x-2 sm:space-x-3">
           
           {/* System Health Badge */}
-          <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-            <span>System Online</span>
+          <div className={`hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors ${
+            isBackendOnline 
+              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400' 
+              : 'bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400'
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${isBackendOnline ? 'bg-emerald-500 animate-ping' : 'bg-red-500'}`}></span>
+            <span>{isBackendOnline ? 'System Online' : 'System Offline'}</span>
           </div>
 
           {/* Sync / Refresh Button */}

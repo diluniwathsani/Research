@@ -13,6 +13,139 @@ require('dotenv').config();
 
 const multer = require('multer');
 const xlsx = require('xlsx');
+const mammoth = require('mammoth');
+const pdfParseModule = require('pdf-parse');
+
+/**
+ * Helper: Extract clean requirement sentences from raw text extracted from Word, PDF, or text files.
+ */
+function extractRequirementsFromText(rawText) {
+    if (!rawText || typeof rawText !== 'string') return [];
+
+    // 1. Normalize line endings and strip PDF/Word page markers & control chars
+    const cleaned = rawText
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n')
+        .replace(/--\s*\d+\s+of\s+\d+\s*--/gi, '')
+        .replace(/--\s*Page\s+\d+(?:\s+of\s+\d+)?\s*--/gi, '')
+        .replace(/Page\s+\d+\s+of\s+\d+/gi, '')
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+
+    const headerExcludeRegex = /^(?:table of contents|software requirement[s]? specification|system requirement[s]? specification|srs document|document revision history|functional requirement[s]?|non-functional requirement[s]?|system overview|project scope|introduction|scope|revision history|appendix\s*[a-z0-9]|confidential|all rights reserved|prepared by|approved by|version\s*\d+[\.\d]*)\s*$/i;
+    const headerNames = new Set([
+        'requirement', 'requirements', 'sentence', 'description', 'user story', 
+        'story', 'text', 'spec', 'specification', 'id', 'no', 's.no', 'req id', 
+        'req_id', '#', 'num', 'number', 'title', 'details', 'detail', 'priority', 
+        'status', 'epic', 'feature', 'acceptance criteria'
+    ]);
+
+    const reqModalOrActionVerb = /\b(shall|must|should|will|can|needs?|needs to|need to|is required to|are required to|allow[s]?|provide[s]?|support[s]?|enable[s]?|record[s]?|display[s]?|show[s]?|create[s]?|manage[s]?|update[s]?|edit[s]?|delete[s]?|remove[s]?|calculate[s]?|approve[s]?|reject[s]?|assign[s]?|search|filter|export|import|upload|download|notify|notifies|authenticate|verify|verifies|validat|track[s]?|log[s]?|generate[s]?|as a\b)/i;
+    const prefixRegex = /^(?:(?:REQ|FR|NFR|SR|US|CR|BR)[-\s_]?\d*[:.\-–—\s]+|\d+(?:\.\d+)*[\.\)\:\-–—]\s+|[-•*–—▪▫◦•]\s+|Requirement\s*\d*[:.\-–—\s]+)\s*/i;
+
+    const rawBlocks = cleaned.split(/\n+/);
+    const candidateSentences = [];
+
+    for (const rawBlock of rawBlocks) {
+        const trimmed = rawBlock.trim();
+        if (!trimmed) continue;
+
+        if (/^(?:[-•*–—▪▫◦•]|(?:REQ|FR|NFR|SR|US|CR|BR)[-\s_]?\d*|\d+(?:\.\d+)*[\.\)\:\-–—]|Requirement\s*\d*)/i.test(trimmed)) {
+            candidateSentences.push(trimmed);
+        } else {
+            const sentences = trimmed.split(/(?<=[.!?])\s+(?=[A-Z0-9])/);
+            for (const s of sentences) {
+                if (s && s.trim()) candidateSentences.push(s.trim());
+            }
+        }
+    }
+
+    const matchedRequirements = [];
+    const fallbackSentences = [];
+    const seen = new Set();
+
+    for (let sentence of candidateSentences) {
+        let clean = sentence.replace(prefixRegex, '').trim();
+        clean = clean.replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
+
+        if (clean.length < 15) continue;
+
+        const words = clean.split(/\s+/).filter(Boolean);
+        if (words.length < 4 && !/\b(shall|must|should|will|can|need|allow|user)\b/i.test(clean)) continue;
+
+        const lower = clean.toLowerCase();
+        if (headerExcludeRegex.test(lower)) continue;
+        if (headerNames.has(lower)) continue;
+        if (/^(?:section|chapter|module|part)\s+\d+[:.]?\s*$/i.test(lower)) continue;
+        if (/^[A-Z][a-z0-9/&]+(?:\s+[A-Z][a-z0-9/&]+){1,3}$/.test(clean) && !/\b(shall|must|should|will|can|is|are|to)\b/i.test(clean)) continue;
+
+        if (seen.has(lower)) continue;
+        seen.add(lower);
+
+        if (reqModalOrActionVerb.test(clean)) {
+            matchedRequirements.push(clean);
+        } else {
+            fallbackSentences.push(clean);
+        }
+    }
+
+    return matchedRequirements.length > 0 ? matchedRequirements : fallbackSentences;
+}
+
+/**
+ * Helper: Extract text from PDF buffer using pdf-parse (supports both v1 function & v2 class).
+ */
+async function parsePdfBuffer(buffer) {
+    if (!buffer) return '';
+    try {
+        if (pdfParseModule && pdfParseModule.PDFParse) {
+            const parser = new pdfParseModule.PDFParse({ data: buffer });
+            const res = await parser.getText();
+            if (typeof parser.destroy === 'function') {
+                try { await parser.destroy(); } catch (_) {}
+            }
+            return (res && res.text) ? res.text : '';
+        } else if (typeof pdfParseModule === 'function') {
+            const res = await pdfParseModule(buffer);
+            return (res && res.text) ? res.text : '';
+        }
+    } catch (err) {
+        console.error('PDF parsing error in parsePdfBuffer:', err.message);
+        throw err;
+    }
+    return '';
+}
+
+/**
+ * Helper: Extract text from Word document (.docx / .doc) using mammoth.
+ */
+async function parseWordDocument(filePath, buffer) {
+    let text = '';
+    try {
+        if (filePath && fs.existsSync(filePath)) {
+            const res = await mammoth.extractRawText({ path: filePath });
+            if (res && res.value) text = res.value;
+        }
+    } catch (_) {}
+
+    if (!text && buffer) {
+        try {
+            const res = await mammoth.extractRawText({ buffer: buffer });
+            if (res && res.value) text = res.value;
+        } catch (_) {}
+    }
+
+    // Fallback: If older binary .doc format or mammoth couldn't read ZIP XML, extract ASCII/UTF strings
+    if (!text && buffer && buffer.length > 0) {
+        try {
+            const asciiStrings = buffer.toString('utf-8').match(/[A-Za-z0-9\s.,;:'"()\-–—]{15,}/g) || [];
+            if (asciiStrings.length > 0) {
+                text = asciiStrings.join('\n');
+            }
+        } catch (_) {}
+    }
+
+    return text;
+}
 
 // Ensure uploads directory exists cleanly
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -91,7 +224,19 @@ function getPriorityRank(p, text = '') {
 function sortStoriesByDependencyTier(stories) {
     if (!Array.isArray(stories) || stories.length === 0) return stories;
     const sorted = [...stories];
+
+    // 1. Determine first appearance order (min requirement_order) for each Epic
+    const epicMinOrder = {};
     sorted.forEach((s, idx) => {
+        const epicName = (s.epic || 'General Epic').trim();
+        const order = s.requirement_order !== undefined && s.requirement_order !== null 
+            ? Number(s.requirement_order) 
+            : (parseInt(String(s.story_id || s.user_story_id || s.id || '').replace(/\D/g, '')) || (idx + 1));
+        
+        if (epicMinOrder[epicName] === undefined || order < epicMinOrder[epicName]) {
+            epicMinOrder[epicName] = order;
+        }
+
         const meta = analyzeProcessAndDependencyTier(s.title || s.user_story || s.requirement_sentence || '', s.description || s.acceptance_criteria || '');
         s.dependencyTier = meta.tier;
         s.dependency_tier = meta.tier;
@@ -101,14 +246,25 @@ function sortStoriesByDependencyTier(stories) {
         s.process_group = meta.group;
         s.priorityRank = getPriorityRank(s.priority, `${s.title || ''} ${s.description || ''}`);
         if (s.requirement_order === undefined || s.requirement_order === null) {
-            s.requirement_order = idx + 1;
+            s.requirement_order = order;
         }
     });
-    // REQUIREMENT 1: Maintain original Excel requirement order throughout system
+
+    // 2. Sort by Epic creation order first, then requirement_order / story_id within each Epic
     sorted.sort((a, b) => {
+        const epicA = (a.epic || 'General Epic').trim();
+        const epicB = (b.epic || 'General Epic').trim();
+        const epicOrderA = epicMinOrder[epicA] !== undefined ? epicMinOrder[epicA] : 999999;
+        const epicOrderB = epicMinOrder[epicB] !== undefined ? epicMinOrder[epicB] : 999999;
+
+        if (epicOrderA !== epicOrderB) {
+            return epicOrderA - epicOrderB;
+        }
+
         const orderA = a.requirement_order !== undefined && a.requirement_order !== null ? Number(a.requirement_order) : 999999;
         const orderB = b.requirement_order !== undefined && b.requirement_order !== null ? Number(b.requirement_order) : 999999;
         if (orderA !== orderB) return orderA - orderB;
+
         const idA = parseInt(String(a.story_id || a.user_story_id || a.id || '').replace(/\D/g, '')) || 0;
         const idB = parseInt(String(b.story_id || b.user_story_id || b.id || '').replace(/\D/g, '')) || 0;
         return idA - idB;
@@ -202,6 +358,134 @@ app.get('/api/sprints/:sprintId/tasks', async (req, res) => {
  * - Acceptance Criteria: Scenario-based Gherkin test specification (Given / When / Then)
  * - Completeness Status: RFC 2119 engineering rule check (length >= 15 & modal verbs)
  */
+/**
+ * Evaluates whether a requirement sentence is Complete, Incomplete, Inconsistent, or Ambiguous.
+ * Standards:
+ * - Incomplete: Missing Subject (Actor), Missing Action (Verb), Missing RFC 2119 Modal keyword (shall/must), or Too short / unfinished clause.
+ * - Inconsistent: Conflicting affirmative and negative directives (shall vs shall not), conflicting permissions, contradictory states/retention, or conflicting timing.
+ * - Ambiguous: Subjective non-verifiable quality terms (fast, user-friendly, robust), vague quantifiers (etc., and/or, various), weak modals (if possible, as needed).
+ * - Complete: Meets all syntactic and semantic quality criteria.
+ */
+function evaluateRequirementQuality(reqText) {
+    if (!reqText || typeof reqText !== 'string') return "Incomplete: Empty text";
+    const clean = reqText.trim();
+    const words = clean.split(/\s+/).filter(Boolean);
+    const lower = clean.toLowerCase();
+
+    // 1. INCOMPLETE CHECKS
+    if (words.length < 5 || clean.length < 15) {
+        return "Incomplete: Too short";
+    }
+
+    if (/\b(tbd|tba|todo|to be determined|to be decided|placeholder)\b/i.test(lower)) {
+        return "Incomplete: Contains unfinished placeholder (TBD/TODO)";
+    }
+
+    if (/(\.{3,}|…|\bsuch as\s*[.,;:]*$|\bincluding\s*[.,;:]*$|\be\.g\.?\s*[.,;:]*$|\bi\.e\.?\s*[.,;:]*$|\band\s*[.,;:]*$|\bor\s*[.,;:]*$|\bwith\s*[.,;:]*$|\bto\s*[.,;:]*$)/i.test(clean)) {
+        return "Incomplete: Trailing incomplete clause or ellipsis";
+    }
+
+    const hasModal = /\b(shall|should|must|will)\b/i.test(lower);
+    const hasActor = /\b(system|user|users|engineer|engineers|platform|application|admin|administrator|manager|supervisor|workshop|operator|analyst|patient|supervisor|personnel|api|service|module|portal|database|client|customer)\b/i.test(lower);
+    const hasActionVerb = /\b(create|creates|manage|manages|enter|enters|allow|allows|display|displays|show|shows|record|records|approve|approves|reject|rejects|update|updates|select|selects|assign|assigns|maintain|maintains|calculate|calculates|provide|provides|support|supports|store|stores|obtain|obtains|use|uses|view|views|export|exports|include|includes|restrict|restricts|send|sends|filter|filters|search|searches|validate|verify|track|log|capture|generate|authenticate)\b/i.test(lower);
+
+    if (!hasActor) {
+        return "Incomplete: Missing a subject (Who/What?)";
+    }
+    if (!hasActionVerb) {
+        return "Incomplete: Missing an action (Does what?)";
+    }
+    if (!hasModal) {
+        return "Incomplete: Missing a requirement keyword (shall/must)";
+    }
+
+    // 2. INCONSISTENT CHECKS (Direct Contradictions & Conflicts)
+    const negModalRegex = /\b(shall\s+not|must\s+not|cannot|can\s+not|shall\s+never|must\s+never|shall\s+under\s+no\s+circumstance)\b/i;
+    const hasNegModal = negModalRegex.test(lower);
+    const textWithoutNegModals = lower.replace(new RegExp(negModalRegex.source, 'gi'), '');
+    const hasPosModal = /\b(shall|must)\b/i.test(textWithoutNegModals);
+    if (hasPosModal && hasNegModal) {
+        return "Inconsistent: Conflicting affirmative and negative directives ('shall' vs 'shall not')";
+    }
+
+    const hasPublicAccess = /\b(without authentication|unauthenticated\s+access|anonymous\s+access|publicly accessible|all users without login|any user without credentials|open to everyone)\b/i.test(lower);
+    const hasRestrictedAccess = /\b(restricted to|only authorized|admin only|only administrators|requires login|confidential|private access|restricted access)\b/i.test(lower);
+    if (hasPublicAccess && hasRestrictedAccess) {
+        return "Inconsistent: Conflicting access rules (public/unauthenticated vs restricted access)";
+    }
+
+    const hasShallAllow = /\b(shall allow|must allow|shall permit|must permit|shall enable)\b/i.test(lower);
+    const hasShallProhibit = /\b(shall prohibit|must prohibit|shall disallow|must disallow|shall prevent|must prevent|shall disable)\b/i.test(lower);
+    if (hasShallAllow && hasShallProhibit) {
+        return "Inconsistent: Conflicting action directives (allow/permit vs prohibit/disallow)";
+    }
+
+    const hasDelete = /\b(permanently delete|permanently deleted|purge|purged|destroy|destroyed)\b/i.test(lower);
+    const hasRetain = /\b(retain indefinitely|keep forever|archive permanently|store permanently|retained forever)\b/i.test(lower);
+    if (hasDelete && hasRetain) {
+        return "Inconsistent: Conflicting data lifecycle rules (permanently delete vs retain indefinitely)";
+    }
+
+    const hasStorePlaintext = /\b(store in plain\s*text|save as plain\s*text|transmit in plain\s*text|stored unencrypted|transmitted unencrypted|as plain\s*text)\b/i.test(lower);
+    const hasEncrypt = /\b(encrypt|encrypted|encryption|hashed|hash)\b/i.test(lower);
+    const isNegatedPlaintext = /\b(never|not|no|prevent|prohibit|disallow)\s+(?:store in\s+|transmit in\s+|save as\s+|in\s+)?(?:plain\s*text|unencrypted)\b/i.test(lower);
+    if (hasStorePlaintext && hasEncrypt && !isNegatedPlaintext) {
+        return "Inconsistent: Conflicting security directives (plaintext vs encrypted)";
+    }
+
+    const hasRealtime = /\b(real-time|real time|instantaneously|immediately|zero latency)\b/i.test(lower);
+    const hasBatch = /\b(daily batch|overnight batch|end of day|end of month|monthly batch|delayed processing)\b/i.test(lower);
+    if (hasRealtime && hasBatch) {
+        return "Inconsistent: Conflicting timing constraints (real-time vs batch processing)";
+    }
+
+    const hasMandatory = /\b(mandatory|compulsory|strictly required)\b/i.test(lower);
+    const hasOptional = /\b(optional|discretionary|not required|if desired)\b/i.test(lower);
+    if (hasMandatory && hasOptional) {
+        return "Inconsistent: Conflicting requirement necessity (mandatory vs optional)";
+    }
+
+    // 3. AMBIGUOUS CHECKS (Vague / Non-verifiable Terms)
+    const ambiguousSubjectiveList = [
+        { regex: /\b(user-friendly|user friendly)\b/i, name: "user-friendly" },
+        { regex: /\b(easy to use|easy to learn|simple to use)\b/i, name: "easy to use" },
+        { regex: /\bfast(?!\s*-\s*forward)\b|\b(quickly|very quick|super fast)\b/i, name: "fast/quickly" },
+        { regex: /\b(high performance|high-performance|high quality|high-quality|state of the art|state-of-the-art)\b/i, name: "high performance/quality" },
+        { regex: /\b(optimal|optimally)\b/i, name: "optimal" },
+        { regex: /\b(seamless|seamlessly)\b/i, name: "seamless" },
+        { regex: /\b(robust|robustly)\b/i, name: "robust" },
+        { regex: /\b(efficient|efficiently)\b/i, name: "efficient" },
+        { regex: /\b(intuitive|intuitively)\b/i, name: "intuitive" },
+        { regex: /\b(sufficient|sufficiently|adequate|adequately|acceptable)\b/i, name: "sufficient/adequate" },
+        { regex: /\b(reasonable|reasonably|convenient|conveniently)\b/i, name: "reasonable/convenient" },
+        { regex: /\b(as much as possible|as soon as possible|as far as possible|asap)\b/i, name: "as soon/much as possible" },
+        { regex: /\b(best possible|highest possible|minimal delay|minimal effort)\b/i, name: "best/minimal possible" }
+    ];
+
+    for (const item of ambiguousSubjectiveList) {
+        if (item.regex.test(lower)) {
+            return `Ambiguous: Subjective term '${item.name}' lacks verifiable acceptance criteria`;
+        }
+    }
+
+    const ambiguousQuantifiers = [
+        { regex: /\b(etc\.?|and\/or|and or|so on|and so forth)\b/i, name: "etc/and-or" },
+        { regex: /\b(various|several|some|roughly|approximately|about\s+\d+|nearly|almost)\b/i, name: "vague quantifier" },
+        { regex: /\b(as needed|as required|as appropriate|if necessary|if possible|when appropriate)\b/i, name: "open-ended conditional" },
+        { regex: /\b(might|may perhaps|can perhaps|could possibly)\b/i, name: "non-committal modal" }
+    ];
+
+    for (const item of ambiguousQuantifiers) {
+        const m = lower.match(item.regex);
+        if (m) {
+            return `Ambiguous: Open-ended qualifier '${m[0]}' is non-verifiable`;
+        }
+    }
+
+    // 4. COMPLETE
+    return "Complete";
+}
+
 function generateDynamicArtifacts(reqText) {
     // 0. Clean and normalize input text & fix typos
     let cleanText = (reqText || '').trim().replace(/\.$/, '');
@@ -400,8 +684,8 @@ function generateDynamicArtifacts(reqText) {
         `3. Then the system must validate the input according to ${epic.toLowerCase()} rules\n` +
         `4. And the ${feature.toLowerCase()} records should be updated successfully.`;
 
-    // 5. RFC 2119 Engineering Completeness Rule Evaluation
-    const completenessStatus = cleanText.length >= 15 ? 'Complete' : 'Incomplete: Needs refinement';
+    // 5. Engineering Completeness, Ambiguity & Inconsistency Evaluation
+    const completenessStatus = evaluateRequirementQuality(reqText || cleanText);
 
     return {
         epic,
@@ -423,26 +707,257 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     let client = null;
     try {
         const { batch_name, project_name, project_id } = req.body;
-        
-        // Read uploaded Excel sheet using 'xlsx' parser
-        const workbook = xlsx.readFile(req.file.path);
-        if (!workbook || !workbook.SheetNames || workbook.SheetNames.length === 0) {
-            return res.status(400).json({ error: 'Invalid or empty Excel file' });
-        }
-        const sheetName = workbook.SheetNames[0];
-        const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
-
-        if (!Array.isArray(data) || data.length === 0) {
-            return res.status(400).json({ error: 'Spreadsheet contains no data rows' });
-        }
-
         const uploadTime = new Date().toISOString();
+        const originalName = req.file.originalname || '';
+        const ext = path.extname(originalName).toLowerCase();
+
+        // 1. File Format Validation: Allow Word (.docx, .doc), PDF (.pdf), and Excel/CSV
+        const allowedFormats = ['.docx', '.doc', '.pdf', '.xlsx', '.xls', '.csv'];
+        if (!allowedFormats.includes(ext)) {
+            if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+                try { fs.unlinkSync(req.file.path); } catch (_) {}
+            }
+            return res.status(400).json({ 
+                error: `Unsupported file format (${ext || 'unknown'}). Supported formats: Word (.docx, .doc), PDF (.pdf), Excel (.xlsx, .xls), or CSV (.csv).` 
+            });
+        }
+
+        // 2. Corrupted / Unreadable File Validation (Magic Header & Parser Check)
+        let fileBuffer;
+        try {
+            fileBuffer = fs.readFileSync(req.file.path);
+        } catch (readErr) {
+            if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+                try { fs.unlinkSync(req.file.path); } catch (_) {}
+            }
+            return res.status(400).json({ 
+                error: 'The uploaded file is corrupted or unreadable. Please check the file and try again.' 
+            });
+        }
+
+        // Validate 0-byte blank files
+        if (!fileBuffer || fileBuffer.length === 0) {
+            if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+                try { fs.unlinkSync(req.file.path); } catch (_) {}
+            }
+            return res.status(400).json({ 
+                error: 'Blank document detected. The uploaded file is empty (0 bytes). Please upload a valid requirements document.' 
+            });
+        }
+
+        // Validate Magic Headers:
+        // .pdf starts with %PDF- (0x25 0x50 0x44 0x46)
+        // .docx and .xlsx are ZIP archives (0x50 0x4B)
+        // .xls is OLE2 Compound Document (0xD0 0xCF)
+        if (ext === '.pdf') {
+            if (fileBuffer.length < 5 || fileBuffer.slice(0, 4).toString('ascii') !== '%PDF') {
+                if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+                    try { fs.unlinkSync(req.file.path); } catch (_) {}
+                }
+                return res.status(400).json({ 
+                    error: 'The uploaded PDF is invalid or corrupted. Please verify the document format.' 
+                });
+            }
+        } else if (ext === '.docx') {
+            if (fileBuffer.length < 4 || fileBuffer[0] !== 0x50 || fileBuffer[1] !== 0x4B) {
+                if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+                    try { fs.unlinkSync(req.file.path); } catch (_) {}
+                }
+                return res.status(400).json({ 
+                    error: 'The uploaded Word (.docx) file is invalid or corrupted. Please verify the document format.' 
+                });
+            }
+        } else if (ext === '.xlsx') {
+            if (fileBuffer.length < 4 || fileBuffer[0] !== 0x50 || fileBuffer[1] !== 0x4B) {
+                if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+                    try { fs.unlinkSync(req.file.path); } catch (_) {}
+                }
+                return res.status(400).json({ 
+                    error: 'The uploaded Excel (.xlsx) file is invalid or corrupted. Please verify the document format.' 
+                });
+            }
+        } else if (ext === '.xls') {
+            if (fileBuffer.length < 4 || fileBuffer[0] !== 0xD0 || fileBuffer[1] !== 0xCF) {
+                if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+                    try { fs.unlinkSync(req.file.path); } catch (_) {}
+                }
+                return res.status(400).json({ 
+                    error: 'The uploaded Excel (.xls) file is invalid or corrupted. Please verify the document format.' 
+                });
+            }
+        }
+
+        let reqSentences = [];
+
+        // 3. Document Content Parsing & Requirement Extraction
+        if (ext === '.docx' || ext === '.doc') {
+            let rawText = '';
+            try {
+                rawText = await parseWordDocument(req.file.path, fileBuffer);
+            } catch (docxErr) {
+                console.error('Word parse error:', docxErr.message);
+                if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+                    try { fs.unlinkSync(req.file.path); } catch (_) {}
+                }
+                return res.status(400).json({ 
+                    error: 'The uploaded Word document could not be read. Please check the file and try again.' 
+                });
+            }
+
+            if (!rawText || rawText.trim().length === 0) {
+                if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+                    try { fs.unlinkSync(req.file.path); } catch (_) {}
+                }
+                return res.status(400).json({ 
+                    error: 'The uploaded Word document is blank or contains no readable text. Please upload a document containing requirements.' 
+                });
+            }
+
+            reqSentences = extractRequirementsFromText(rawText);
+
+        } else if (ext === '.pdf') {
+            let rawText = '';
+            try {
+                rawText = await parsePdfBuffer(fileBuffer);
+            } catch (pdfErr) {
+                console.error('PDF parse error:', pdfErr.message);
+                if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+                    try { fs.unlinkSync(req.file.path); } catch (_) {}
+                }
+                return res.status(400).json({ 
+                    error: 'The uploaded PDF document could not be read. Please check the file and try again.' 
+                });
+            }
+
+            if (!rawText || rawText.trim().length === 0) {
+                if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+                    try { fs.unlinkSync(req.file.path); } catch (_) {}
+                }
+                return res.status(400).json({ 
+                    error: 'The uploaded PDF document is blank or contains no readable text. Please upload a document containing requirements.' 
+                });
+            }
+
+            reqSentences = extractRequirementsFromText(rawText);
+
+        } else if (ext === '.xlsx' || ext === '.xls' || ext === '.csv') {
+            let workbook;
+            try {
+                workbook = xlsx.readFile(req.file.path);
+                if (!workbook || !workbook.SheetNames || workbook.SheetNames.length === 0 || !workbook.Sheets || Object.keys(workbook.Sheets).length === 0) {
+                    if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+                        try { fs.unlinkSync(req.file.path); } catch (_) {}
+                    }
+                    return res.status(400).json({ 
+                        error: 'The uploaded spreadsheet is blank or contains no valid sheets. Please upload a spreadsheet containing requirements.' 
+                    });
+                }
+            } catch (parseErr) {
+                console.error('File parse error:', parseErr.message);
+                if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+                    try { fs.unlinkSync(req.file.path); } catch (_) {}
+                }
+                return res.status(400).json({ 
+                    error: 'The uploaded file is corrupted or unreadable. Please check the file and try again.' 
+                });
+            }
+
+            const sheetName = workbook.SheetNames[0];
+            const rawSheet = workbook.Sheets[sheetName];
+            if (!rawSheet || Object.keys(rawSheet).length === 0) {
+                if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+                    try { fs.unlinkSync(req.file.path); } catch (_) {}
+                }
+                return res.status(400).json({ 
+                    error: 'The uploaded spreadsheet sheet is blank. Please upload a spreadsheet containing requirements.' 
+                });
+            }
+
+            const data = xlsx.utils.sheet_to_json(rawSheet);
+            if (!Array.isArray(data) || data.length === 0) {
+                if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+                    try { fs.unlinkSync(req.file.path); } catch (_) {}
+                }
+                return res.status(400).json({ 
+                    error: 'The uploaded spreadsheet is blank or contains no data rows. Please upload a spreadsheet containing requirements.' 
+                });
+            }
+
+            const headerNames = new Set([
+                'requirement', 'requirements', 'sentence', 'description', 'user story', 
+                'story', 'text', 'spec', 'specification', 'id', 'no', 's.no', 'req id', 
+                'req_id', '#', 'num', 'number', 'title', 'details', 'detail'
+            ]);
+
+            for (const row of data) {
+                if (!row || typeof row !== 'object') continue;
+                let reqText = '';
+                
+                for (const key of Object.keys(row)) {
+                    const lowerKey = key.toLowerCase().trim();
+                    const val = row[key];
+                    if (val !== undefined && val !== null) {
+                        const strVal = String(val).trim();
+                        if (strVal.length > 0) {
+                            if (lowerKey.includes('sentence') || lowerKey.includes('description') || lowerKey.includes('requirement') || lowerKey.includes('user story') || lowerKey.includes('story') || lowerKey.includes('text') || lowerKey.includes('spec')) {
+                                reqText = strVal;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (!reqText) {
+                    const values = Object.values(row)
+                        .filter(v => v !== undefined && v !== null)
+                        .map(v => String(v).trim())
+                        .filter(v => v.length > 0);
+                    if (values.length > 0) {
+                        values.sort((a, b) => b.length - a.length);
+                        reqText = values[0];
+                    }
+                }
+
+                if (reqText && reqText.length > 0) {
+                    const lowerText = reqText.toLowerCase().trim();
+                    if (!headerNames.has(lowerText)) {
+                        reqSentences.push(reqText);
+                    }
+                }
+            }
+        }
+
+        if (!reqSentences || reqSentences.length === 0) {
+            if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+                try { fs.unlinkSync(req.file.path); } catch (_) {}
+            }
+            return res.status(400).json({ 
+                error: 'The uploaded document is blank or contains no valid requirements. Please upload a document containing requirements.' 
+            });
+        }
+
         client = await pool.connect();
-        const effectiveProjectName = (project_name || batch_name || 'Aurora ERP System').trim();
+        const effectiveProjectName = (project_name || batch_name || originalName.replace(/\.[^/.]+$/, '') || 'Aurora ERP System').trim();
         const effectiveProjectId = (project_id && String(project_id).trim()) ? String(project_id).trim() : `P${Date.now().toString().slice(-6)}`;
 
         // Step A: Register new Project in database
         try {
+            await pool.query(`
+                CREATE TABLE IF NOT EXISTS public.projects (
+                    project_id TEXT PRIMARY KEY,
+                    project_name TEXT NOT NULL,
+                    description TEXT,
+                    project_manager TEXT NOT NULL,
+                    team_size INTEGER DEFAULT 8,
+                    progress_percent INTEGER DEFAULT 0,
+                    budget_usd DECIMAL(15,2) DEFAULT 100000,
+                    risk_level TEXT DEFAULT 'Medium',
+                    complexity_level TEXT DEFAULT 'Medium',
+                    priority TEXT DEFAULT 'Medium',
+                    status TEXT NOT NULL DEFAULT 'ACTIVE',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            `);
             await pool.query(
                 `INSERT INTO public.projects (project_id, project_name, description, project_manager, team_size, progress_percent, status)
                  VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -470,37 +985,44 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
             // Step C: Begin database transaction for requirement batch ingestion
             await client.query('BEGIN');
 
-            // Step E: Loop over Excel data rows to extract requirement text and generate artifacts
+            // Step D: Defensive auto-creation check for requirements & user_stories tables
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS public.requirements (
+                    id SERIAL PRIMARY KEY,
+                    requirement_sentence TEXT NOT NULL,
+                    completeness_status TEXT DEFAULT 'Pending',
+                    epic TEXT,
+                    feature TEXT,
+                    user_story TEXT,
+                    acceptance_criteria TEXT,
+                    batch_name TEXT DEFAULT 'Untitled Batch',
+                    project_id TEXT DEFAULT 'P00001',
+                    requirement_order INTEGER DEFAULT 1,
+                    created_at TEXT
+                )
+            `);
+
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS public.user_stories (
+                    story_id TEXT PRIMARY KEY,
+                    user_story_id TEXT,
+                    project_id TEXT DEFAULT 'P00001',
+                    sprint_id TEXT DEFAULT 'SPR-01',
+                    title TEXT NOT NULL,
+                    description TEXT,
+                    story_points INTEGER DEFAULT 5,
+                    priority TEXT DEFAULT 'Medium',
+                    status TEXT DEFAULT 'IN_PROGRESS',
+                    assigned_to TEXT DEFAULT 'Unassigned',
+                    requirement_order INTEGER DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            `);
+
+            // Step E: Loop over extracted requirement sentences and generate artifacts
             const reqBatch = [];
             let rowSeq = 1;
-            for (const row of data) {
-                let reqText = '';
-                
-                // Inspect cell keys for requirement sentence text
-                for (const key of Object.keys(row)) {
-                    const lowerKey = key.toLowerCase();
-                    const val = row[key];
-                    if (val !== undefined && val !== null && String(val).trim().length > 0) {
-                        if (lowerKey.includes('sentence') || lowerKey.includes('description') || lowerKey.includes('requirement') || lowerKey.includes('user story') || lowerKey.includes('story') || lowerKey.includes('text') || lowerKey.includes('spec')) {
-                            reqText = String(val).trim();
-                            break;
-                        }
-                    }
-                }
-
-                // Fallback: Pick longest string cell if no standard column title matched
-                if (!reqText) {
-                    const values = Object.values(row)
-                        .filter(v => v !== undefined && v !== null)
-                        .map(v => String(v).trim())
-                        .filter(v => v.length > 0);
-                    if (values.length > 0) {
-                        values.sort((a, b) => b.length - a.length);
-                        reqText = values[0];
-                    }
-                }
-
-                // Generate artifacts if non-empty requirement sentence was found
+            for (const reqText of reqSentences) {
                 if (reqText && reqText.length > 0) {
                     const artifacts = generateDynamicArtifacts(reqText);
                     reqBatch.push({ reqText, artifacts, requirement_order: rowSeq++ });
@@ -630,7 +1152,12 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
                 try { fs.unlinkSync(req.file.path); } catch (e) {}
             }
 
-            res.json({ message: 'File uploaded and project created successfully', project_id: effectiveProjectId, project_name: effectiveProjectName });
+            res.json({ 
+                message: 'File uploaded and project created successfully', 
+                project_id: effectiveProjectId, 
+                project_name: effectiveProjectName,
+                count: reqBatch.length 
+            });
         } catch (dbErr) {
             // Rollback transaction on database error
             if (client) await client.query('ROLLBACK');
@@ -655,10 +1182,11 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 app.get('/api/requirements', async (req, res) => {
     const { project_id } = req.query;
     try {
-        if (project_id) {
+        if (project_id && project_id !== 'ALL') {
+            const cleanId = String(project_id).trim();
             const result = await pool.query(
-                "SELECT * FROM requirements WHERE project_id = $1 OR project_id = $2 OR $1 = '' ORDER BY requirement_order ASC, id ASC",
-                [project_id, `P${project_id}`]
+                "SELECT * FROM requirements WHERE project_id = $1 OR project_id = $2 OR batch_name = $1 ORDER BY requirement_order ASC, id ASC",
+                [cleanId, cleanId.startsWith('P') ? cleanId : `P${cleanId}`]
             );
             if (result.rows && result.rows.length > 0) {
                 return res.json(result.rows);
@@ -978,43 +1506,8 @@ function calculateSkillMatchScore(developerSkills, requiredSkills) {
 }
 
 // ================= PROJECTS =================
-
-app.get('/api/projects', async (req, res) => {
-    try {
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS public.projects (
-                project_id TEXT PRIMARY KEY,
-                project_name TEXT NOT NULL,
-                description TEXT,
-                project_manager TEXT NOT NULL,
-                team_size INTEGER DEFAULT 8,
-                progress_percent INTEGER DEFAULT 0,
-                budget_usd DECIMAL(15,2) DEFAULT 100000,
-                risk_level TEXT DEFAULT 'Medium',
-                complexity_level TEXT DEFAULT 'Medium',
-                priority TEXT DEFAULT 'Medium',
-                status TEXT NOT NULL DEFAULT 'ACTIVE',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
-        const result = await pool.query("SELECT project_id, project_name, description, project_manager, status FROM public.projects WHERE UPPER(status) IN ('ACTIVE', 'IN_PROGRESS', 'PLANNING') ORDER BY project_name ASC");
-        if (result.rows && result.rows.length > 0) {
-            const mapped = result.rows.map((p, idx) => ({
-                id: p.project_id || idx + 1,
-                project_id: p.project_id || `P0000${idx + 1}`,
-                name: p.project_name,
-                project_name: p.project_name,
-                description: p.description,
-                project_manager: p.project_manager,
-                status: p.status
-            }));
-            return res.json(mapped);
-        }
-    } catch (err) {
-        console.warn("⚠️ Projects DB fetch notice:", err.message);
-    }
-    res.json([]);
-});
+// Unified handler returning active projects with live requirement counts and timestamps
+app.get('/api/projects', changeRequestController.getAllProjects);
 
 // ================= SPRINTS =================
 
@@ -1261,34 +1754,133 @@ app.delete('/api/developers/:id', async (req, res) => {
     }
 });
 
-// ================= SIMPLIFIED ALLOCATION FUNCTION =================
+// ================= DETERMINISTIC RULE-BASED ALLOCATION ENGINE =================
+
+function getSeniorityRank(roleStr) {
+    const role = (roleStr || '').toLowerCase();
+    if (role.includes('senior') || role.includes('lead') || role.includes('principal') || role.includes('architect')) {
+        return 'SENIOR';
+    }
+    if (role.includes('junior') || role.includes('intern') || role.includes('associate')) {
+        return 'JUNIOR';
+    }
+    return 'MID';
+}
+
+function calculateComplexitySenioritySuitability(predictedComplexity, roleStr) {
+    const seniority = getSeniorityRank(roleStr);
+    const complexity = (predictedComplexity || 'MEDIUM').toUpperCase();
+
+    // Deterministic rules:
+    // HIGH complexity:
+    // 1. Senior or Lead developers (3)
+    // 2. Mid-level developers (2)
+    // 3. Junior developers (1)
+    // MEDIUM complexity:
+    // 1. Mid-level or Senior developers (2)
+    // 2. Junior developers (1)
+    // LOW complexity:
+    // 1. Junior or Mid-level developers (2)
+    // 2. Senior developers if needed (1)
+    if (complexity === 'HIGH') {
+        if (seniority === 'SENIOR') return 3;
+        if (seniority === 'MID') return 2;
+        return 1;
+    } else if (complexity === 'LOW') {
+        if (seniority === 'JUNIOR' || seniority === 'MID') return 2;
+        return 1;
+    } else { // MEDIUM (default fallback)
+        if (seniority === 'MID' || seniority === 'SENIOR') return 2;
+        return 1;
+    }
+}
+
+function extractSkillList(skills) {
+    if (!skills) return [];
+    if (Array.isArray(skills)) {
+        return skills.map(s => String(s).trim().toLowerCase()).filter(Boolean);
+    }
+    if (typeof skills === 'string') {
+        const trimmed = skills.trim();
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+            try {
+                const parsed = JSON.parse(trimmed);
+                if (Array.isArray(parsed)) {
+                    return parsed.map(s => String(s).trim().toLowerCase()).filter(Boolean);
+                }
+            } catch (e) {}
+        }
+        return trimmed.split(',').map(s => String(s).trim().toLowerCase()).filter(Boolean);
+    }
+    return [];
+}
+
+function calculateSkillMatchPercentage(devSkills, requiredSkills) {
+    const reqList = extractSkillList(requiredSkills);
+    // If a work item has no required skills, handle safely without division by zero with neutral 100%
+    if (reqList.length === 0) return 100;
+
+    const devSkillList = extractSkillList(devSkills);
+    if (devSkillList.length === 0) return 0;
+
+    let matched = 0;
+    for (const req of reqList) {
+        if (devSkillList.includes(req)) {
+            matched++;
+        }
+    }
+
+    return (matched / reqList.length) * 100;
+}
+
+function normalizeDomainString(d) {
+    if (!d) return 'backend';
+    if (Array.isArray(d)) {
+        d = d.join(' ');
+    }
+    const s = String(d).toLowerCase().trim();
+    if (s.includes('qa') || s.includes('testing')) return 'qa';
+    if (s.includes('front')) return 'frontend';
+    if (s.includes('back')) return 'backend';
+    if (s.includes('devops')) return 'devops';
+    if (s.includes('ai') || s.includes('ml')) return 'ai';
+    return s;
+}
 
 function allocateTasks(tasks, developers, currentProjectId) {
+    if (!tasks || !Array.isArray(tasks) || tasks.length === 0) return [];
+    if (!developers || !Array.isArray(developers) || developers.length === 0) return [];
+
+    // STEP 1 — Process work items by priority (CRITICAL → HIGH → MEDIUM → LOW)
     const priorityOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
 
-    // Sort tasks by priority
-    const sortedTasks = [...tasks].sort((a, b) =>
-        (priorityOrder[(a.priority || 'MEDIUM').toUpperCase()] ?? 2) - (priorityOrder[(b.priority || 'MEDIUM').toUpperCase()] ?? 2)
-    );
+    // Preserve relative order for items with same priority
+    const tasksWithIndex = tasks.map((task, idx) => ({ task, idx }));
+    tasksWithIndex.sort((a, b) => {
+        const pA = priorityOrder[(a.task.priority || 'MEDIUM').toUpperCase()] ?? 2;
+        const pB = priorityOrder[(b.task.priority || 'MEDIUM').toUpperCase()] ?? 2;
+        if (pA !== pB) return pA - pB;
+        return a.idx - b.idx;
+    });
+    const sortedTasks = tasksWithIndex.map(item => item.task);
 
-    // Prepare developers with capacity tracking & cross-project limits
+    // Initialize developer capacity tracking using existing cross-project load logic
     let devs = developers.map(dev => {
-        const capacity = Number(dev.capacity_hours) || 40;
+        const capacity = (dev.capacity_hours !== undefined && dev.capacity_hours !== null && !isNaN(Number(dev.capacity_hours))) ? Number(dev.capacity_hours) : 40;
         const commitments = dev.project_commitments || [];
         const otherProjectHours = commitments
             .filter(c => currentProjectId && String(c.project_id) !== String(currentProjectId))
             .reduce((sum, c) => sum + (Number(c.hours) || 0), 0);
 
-        const availableCrossProject = Math.max(0, capacity - otherProjectHours);
+        const availableCap = Math.max(0, capacity - otherProjectHours);
 
         return {
             ...dev,
             capacity_hours: capacity,
             other_project_hours: otherProjectHours,
-            remaining: availableCrossProject, // Available capacity for tasks in this project
-            is_fully_allocated_elsewhere: otherProjectHours >= capacity,
-            primary_domain: (dev.primary_domain || 'general').toLowerCase(),
-            languages: Array.isArray(dev.languages) ? dev.languages : (dev.languages ? String(dev.languages).split(',').map(s => s.trim()) : [])
+            remaining: availableCap,
+            primary_domain: normalizeDomainString(dev.primary_domain || dev.domain),
+            languages: dev.languages || dev.skills || []
         };
     });
 
@@ -1296,64 +1888,10 @@ function allocateTasks(tasks, developers, currentProjectId) {
 
     for (const task of sortedTasks) {
         const estHours = Number(task.estimated_hours) || (Number(task.story_points) ? Number(task.story_points) * 6 : 16);
-        const rawNeededDomain = (task.required_domain || task.domain || 'general').toLowerCase();
-        const neededDomain = rawNeededDomain.includes('qa') ? 'qa' : rawNeededDomain;
+        const taskDomainNorm = normalizeDomainString(task.required_domain || task.domain);
         const requiredSkills = task.required_skills || task.skills || [];
 
-        // Calculate Skill Match Score for all candidates
-        const candidates = devs.map(dev => {
-            const devDomain = dev.primary_domain;
-            const domainOk = devDomain === neededDomain || 
-                             neededDomain.includes(devDomain) || 
-                             devDomain.includes(neededDomain) || 
-                             neededDomain === 'general' || 
-                             devDomain === 'general';
-            return {
-                ...dev,
-                domainOk,
-                skillScore: calculateSkillMatchScore(dev.languages, requiredSkills)
-            };
-        });
-
-        // RULE: Exclude developers who are 100% fully allocated to another project!
-        let availableCandidates = candidates.filter(dev => !dev.is_fully_allocated_elsewhere && dev.remaining > 0);
-
-        if (availableCandidates.length === 0) {
-            availableCandidates = candidates.filter(dev => dev.remaining > 0);
-        }
-
-        if (availableCandidates.length === 0) {
-            availableCandidates = candidates.filter(dev => !dev.is_fully_allocated_elsewhere);
-        }
-
-        if (availableCandidates.length === 0) {
-            availableCandidates = [...candidates];
-        }
-
-        // Priority 1: Domain Match AND Enough Remaining Capacity for this task
-        let validCandidates = availableCandidates.filter(dev => dev.domainOk && dev.remaining >= estHours);
-
-        // Priority 2: Any Domain WITH Enough Remaining Capacity for this task
-        if (validCandidates.length === 0) {
-            validCandidates = availableCandidates.filter(dev => dev.remaining >= estHours);
-        }
-
-        // Priority 3: Domain Match WITH Partial Remaining Capacity
-        if (validCandidates.length === 0) {
-            validCandidates = availableCandidates.filter(dev => dev.domainOk && dev.remaining > 0);
-        }
-
-        // Priority 4: Any Developer WITH Partial Capacity
-        if (validCandidates.length === 0) {
-            validCandidates = availableCandidates.filter(dev => dev.remaining > 0);
-        }
-
-        if (validCandidates.length === 0) {
-            validCandidates = [...availableCandidates];
-        }
-
-        // ================= ML PREDICTED COMPLEXITY SCORING ENGINE =================
-        // Extract ML Predicted Complexity: HIGH, MEDIUM, or LOW
+        // ML Complexity Prediction (HIGH / MEDIUM / LOW)
         let rawComplexity = task.predicted_complexity || task.complexity;
         if (!rawComplexity) {
             const sp = Number(task.story_points) || 0;
@@ -1364,74 +1902,89 @@ function allocateTasks(tasks, developers, currentProjectId) {
         }
         const predictedComplexity = String(rawComplexity).toUpperCase();
 
-        // Calculate Complexity Suitability Score & Composite Score for candidates
-        validCandidates.forEach(dev => {
-            const roleStr = (dev.role || '').toLowerCase();
-            const langCount = Array.isArray(dev.languages) ? dev.languages.length : 0;
+        // STEP 2 — Filter Developers by Remaining Capacity: Exclude developers with remaining <= 0
+        const availableDevs = devs.filter(dev => dev.remaining > 0);
 
-            // Determine Developer Expertise / Specialization Level
-            const isSeniorOrSpecialist = roleStr.includes('senior') || roleStr.includes('lead') || roleStr.includes('principal') || roleStr.includes('architect') || langCount >= 3;
-            const isJunior = roleStr.includes('junior') || roleStr.includes('intern') || roleStr.includes('associate');
-
-            // 1. Complexity Suitability Score (0 - 100) based on ML predicted complexity
-            let complexityScore = 70; // default baseline score
-            if (predictedComplexity === 'HIGH') {
-                // HIGH complexity task: prefer Senior / Specialist developers for difficult tasks
-                complexityScore = isSeniorOrSpecialist ? 100 : (isJunior ? 30 : 60);
-            } else if (predictedComplexity === 'MEDIUM') {
-                // MEDIUM complexity task: prefer Standard / Mid-level developers
-                complexityScore = isSeniorOrSpecialist ? 85 : (isJunior ? 70 : 100);
-            } else if (predictedComplexity === 'LOW') {
-                // LOW complexity task: prefer Mid/Junior developers to preserve Senior capacity for difficult tasks
-                complexityScore = isJunior ? 100 : (!isSeniorOrSpecialist ? 90 : 70);
-            }
-
-            // 2. Domain Suitability Score (0 - 100)
-            const domainScore = dev.primary_domain === neededDomain ? 100 : (dev.domainOk ? 75 : 50);
-
-            // 3. Capacity Availability Score (0 - 100)
-            const capScore = dev.capacity_hours > 0 ? Math.min(100, (dev.remaining / dev.capacity_hours) * 100) : 50;
-
-            // 4. Weighted Final Composite Score:
-            // Formula: Skill Score (35%) + Complexity Suitability (30%) + Domain Match (20%) + Capacity (15%)
-            dev.complexityScore = complexityScore;
-            dev.compositeScore = (
-                (dev.skillScore * 0.35) + 
-                (complexityScore * 0.30) + 
-                (domainScore * 0.20) + 
-                (capScore * 0.15)
-            );
-        });
-
-        // Sort candidates: Highest Weighted Composite Score FIRST, then highest remaining capacity
-        validCandidates.sort((a, b) => {
-            if (Math.abs(b.compositeScore - a.compositeScore) > 0.01) {
-                return b.compositeScore - a.compositeScore;
-            }
-            if (a.remaining !== b.remaining) return b.remaining - a.remaining;
-            return b.skillScore - a.skillScore;
-        });
-
-        const chosen = validCandidates[0];
-        const targetDevInMainList = devs.find(d => d.id === chosen.id);
-        const maxDevCap = targetDevInMainList ? targetDevInMainList.remaining : 40;
-        const allocHours = Math.min(estHours, maxDevCap > 0 ? maxDevCap : estHours);
-
-        if (targetDevInMainList) {
-            targetDevInMainList.remaining = Math.max(0, targetDevInMainList.remaining - allocHours);
+        if (availableDevs.length === 0) {
+            continue; // Cannot assign work to a developer who has no available capacity
         }
 
+        // STEP 3, 4, 5 — Evaluate Candidates
+        const evaluatedCandidates = availableDevs.map(dev => {
+            const devDomainNorm = normalizeDomainString(dev.primary_domain);
+            
+            // Step 3 — Compare Domains: Exact domain match (higher ranking) vs no match (lower ranking)
+            const exactDomainMatch = devDomainNorm === taskDomainNorm;
+
+            // Step 4 — Calculate Required Skill-Match Percentage
+            const skillMatchPct = calculateSkillMatchPercentage(dev.languages, requiredSkills);
+
+            // Step 5 — Complexity & Seniority Suitability
+            const senioritySuitability = calculateComplexitySenioritySuitability(predictedComplexity, dev.role);
+
+            return {
+                ...dev,
+                exactDomainMatch,
+                skillMatchPct,
+                senioritySuitability
+            };
+        });
+
+        // STEP 6 — Rank All Eligible Developers
+        // Order of ranking:
+        // 1. Exact domain match first
+        // 2. Higher skill-match percentage first
+        // 3. Better complexity/seniority suitability first
+        // 4. Higher remaining capacity first
+        evaluatedCandidates.sort((a, b) => {
+            if (a.exactDomainMatch !== b.exactDomainMatch) {
+                return (b.exactDomainMatch ? 1 : 0) - (a.exactDomainMatch ? 1 : 0);
+            }
+            if (b.skillMatchPct !== a.skillMatchPct) {
+                return b.skillMatchPct - a.skillMatchPct;
+            }
+            if (b.senioritySuitability !== a.senioritySuitability) {
+                return b.senioritySuitability - a.senioritySuitability;
+            }
+            if (b.remaining !== a.remaining) {
+                return b.remaining - a.remaining;
+            }
+            return String(a.id).localeCompare(String(b.id));
+        });
+
+        const chosen = evaluatedCandidates[0];
+
+        // STEP 7 — Allocate Hours and Update Capacity
+        const allocHours = Math.min(estHours, chosen.remaining);
+
+        if (allocHours <= 0) {
+            continue;
+        }
+
+        // Immediately update developer remaining capacity
+        const masterDev = devs.find(d => d.id === chosen.id);
+        if (masterDev) {
+            masterDev.remaining -= allocHours;
+        }
+        chosen.remaining -= allocHours;
+
+        const maxSuitability = predictedComplexity === 'HIGH' ? 3 : 2;
+        const suitabilityScore = Math.round((chosen.senioritySuitability / maxSuitability) * 100);
+
         assignments.push({
-            story_id: task.story_id || task.id,
+            story_id: task.story_id || task.id || task.taskId,
+            taskId: task.story_id || task.id || task.taskId,
             title: task.title || task.user_story || 'User Story Requirement',
             developer_id: chosen.id,
+            developerId: chosen.id,
             developer_name: chosen.name,
             allocated_hours: allocHours,
+            allocatedHours: allocHours,
             predicted_complexity: predictedComplexity,
-            matched_domain: neededDomain,
-            skill_match_score: chosen.skillScore,
-            complexity_suitability_score: Math.round(chosen.complexityScore),
-            composite_allocation_score: Math.round(chosen.compositeScore)
+            matched_domain: taskDomainNorm,
+            skill_match_score: Math.round(chosen.skillMatchPct),
+            complexity_suitability_score: suitabilityScore,
+            composite_allocation_score: Math.round(chosen.skillMatchPct)
         });
     }
 
@@ -1644,7 +2197,7 @@ app.post('/api/user-stories/decompose-batch', async (req, res) => {
  */
 app.get('/api/work-items', async (req, res) => {
     try {
-        const { story_id, project_id, status, work_item_type } = req.query;
+        const { story_id, project_id, status, work_item_type, sprint_id } = req.query;
         let query = `
             SELECT 
                 w.*,
@@ -1663,9 +2216,13 @@ app.get('/api/work-items', async (req, res) => {
             params.push(story_id);
             query += ` AND (w.story_id = $${params.length} OR u.story_id = $${params.length})`;
         }
-        if (project_id) {
+        if (project_id && project_id !== 'ALL') {
             params.push(project_id);
-            query += ` AND (w.project_id = $${params.length} OR w.project_id = 'P00001')`;
+            query += ` AND (w.project_id = $${params.length} OR w.project_id = 'P00001' OR w.project_id = 'research')`;
+        }
+        if (sprint_id) {
+            params.push(sprint_id);
+            query += ` AND w.sprint_id = $${params.length}`;
         }
         if (status) {
             params.push(status);
@@ -2235,34 +2792,6 @@ async function generateWorkItemsForStory(story) {
 }
 
 // REST ENDPOINTS FOR WORK ITEMS
-app.get('/api/work-items', async (req, res) => {
-    try {
-        const { story_id, project_id, sprint_id } = req.query;
-        let sql = "SELECT * FROM public.work_items";
-        let params = [];
-        let conditions = [];
-        if (story_id) {
-            conditions.push(`story_id = $${conditions.length + 1}`);
-            params.push(story_id);
-        }
-        if (project_id && project_id !== 'ALL') {
-            conditions.push(`(project_id = $${conditions.length + 1} OR project_id = 'P00001' OR project_id = 'research')`);
-            params.push(project_id);
-        }
-        if (sprint_id) {
-            conditions.push(`sprint_id = $${conditions.length + 1}`);
-            params.push(sprint_id);
-        }
-        if (conditions.length > 0) {
-            sql += " WHERE " + conditions.join(" AND ");
-        }
-        sql += " ORDER BY work_item_id ASC";
-        const result = await pool.query(sql, params);
-        res.json({ success: true, count: result.rows.length, data: result.rows });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
 
 app.post('/api/work-items/generate', async (req, res) => {
     try {
@@ -2329,37 +2858,6 @@ app.get('/api/user-stories', async (req, res) => {
         
         // Auto-sync Change Requests from change_requests table into user_stories for Resource Management
         try {
-            await pool.query(`
-                CREATE TABLE IF NOT EXISTS public.change_requests (
-                    id SERIAL PRIMARY KEY,
-                    request_id TEXT UNIQUE NOT NULL,
-                    project_id TEXT NOT NULL,
-                    project_name TEXT NOT NULL,
-                    user_story_id TEXT NOT NULL,
-                    user_story_title TEXT,
-                    sprint_id TEXT NOT NULL,
-                    sprint_name TEXT,
-                    title TEXT NOT NULL,
-                    description TEXT NOT NULL,
-                    change_type TEXT NOT NULL,
-                    story_points INTEGER DEFAULT 5,
-                    urgency TEXT DEFAULT 'MEDIUM',
-                    status TEXT DEFAULT 'PENDING',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-                ALTER TABLE public.change_requests 
-                ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                ADD COLUMN IF NOT EXISTS resource_allocation_info TEXT,
-                ADD COLUMN IF NOT EXISTS reason TEXT,
-                ADD COLUMN IF NOT EXISTS team_size INTEGER DEFAULT 8,
-                ADD COLUMN IF NOT EXISTS progress_percent INTEGER DEFAULT 25,
-                ADD COLUMN IF NOT EXISTS project_manager TEXT,
-                ADD COLUMN IF NOT EXISTS impact_level TEXT DEFAULT 'MEDIUM',
-                ADD COLUMN IF NOT EXISTS confidence DECIMAL(5,2) DEFAULT 0.85,
-                ADD COLUMN IF NOT EXISTS recommendation TEXT,
-                ADD COLUMN IF NOT EXISTS probabilities TEXT;
-            `);
             const crRes = await pool.query("SELECT * FROM public.change_requests");
             for (const cr of (crRes.rows || [])) {
                 const crStoryId = `CR-US-${cr.request_id.split('-').pop() || cr.id}`;
@@ -2387,11 +2885,28 @@ app.get('/api/user-stories', async (req, res) => {
         }
 
         const { project_id } = req.query;
-        let query = "SELECT * FROM user_stories ORDER BY requirement_order ASC, story_id ASC";
+        let query = `
+            SELECT 
+                u.*,
+                COALESCE(u.epic, r.epic, 'General Epic') as epic,
+                COALESCE(u.feature, r.feature, 'General Feature') as feature
+            FROM user_stories u
+            LEFT JOIN requirements r ON (u.story_id = 'US-' || r.id OR u.user_story_id = 'US-' || r.id OR u.story_id = r.id::text OR u.title = r.user_story OR u.title = r.requirement_sentence)
+            ORDER BY u.requirement_order ASC, u.story_id ASC
+        `;
         let params = [];
 
         if (project_id && project_id !== 'ALL') {
-            query = "SELECT * FROM user_stories WHERE LOWER(project_id) = LOWER($1) OR LOWER($1) LIKE '%' || LOWER(project_id) || '%' OR LOWER(project_id) LIKE '%' || LOWER($1) || '%' ORDER BY requirement_order ASC, story_id ASC";
+            query = `
+                SELECT 
+                    u.*,
+                    COALESCE(u.epic, r.epic, 'General Epic') as epic,
+                    COALESCE(u.feature, r.feature, 'General Feature') as feature
+                FROM user_stories u
+                LEFT JOIN requirements r ON (u.story_id = 'US-' || r.id OR u.user_story_id = 'US-' || r.id OR u.story_id = r.id::text OR u.title = r.user_story OR u.title = r.requirement_sentence)
+                WHERE LOWER(u.project_id) = LOWER($1) OR LOWER($1) LIKE '%' || LOWER(u.project_id) || '%' OR LOWER(u.project_id) LIKE '%' || LOWER($1) || '%'
+                ORDER BY u.requirement_order ASC, u.story_id ASC
+            `;
             params = [project_id];
         }
 
@@ -2400,7 +2915,15 @@ app.get('/api/user-stories', async (req, res) => {
 
         // Fallback: If no stories matched the project filter, return all user stories
         if (rows.length === 0 && project_id) {
-            const allRes = await pool.query("SELECT * FROM user_stories ORDER BY requirement_order ASC, story_id ASC");
+            const allRes = await pool.query(`
+                SELECT 
+                    u.*,
+                    COALESCE(u.epic, r.epic, 'General Epic') as epic,
+                    COALESCE(u.feature, r.feature, 'General Feature') as feature
+                FROM user_stories u
+                LEFT JOIN requirements r ON (u.story_id = 'US-' || r.id OR u.user_story_id = 'US-' || r.id OR u.story_id = r.id::text OR u.title = r.user_story OR u.title = r.requirement_sentence)
+                ORDER BY u.requirement_order ASC, u.story_id ASC
+            `);
             rows = allRes.rows || [];
         }
 
@@ -2440,6 +2963,8 @@ app.get('/api/user-stories', async (req, res) => {
             sprint_id: 'SPR-01',
             title: r.user_story || r.requirement_sentence,
             description: r.acceptance_criteria || '',
+            epic: r.epic || 'General Epic',
+            feature: r.feature || 'General Feature',
             story_points: 3 + (idx % 5),
             priority: idx % 2 === 0 ? 'HIGH' : 'MEDIUM',
             status: 'IN_PROGRESS',
@@ -2605,37 +3130,6 @@ app.get('/api/sprint-plan', async (req, res) => {
 
         // 1. Auto-sync any APPROVED / ACCEPTED change requests from change_requests into user_stories
         try {
-            await pool.query(`
-                CREATE TABLE IF NOT EXISTS public.change_requests (
-                    id SERIAL PRIMARY KEY,
-                    request_id TEXT UNIQUE NOT NULL,
-                    project_id TEXT NOT NULL,
-                    project_name TEXT NOT NULL,
-                    user_story_id TEXT NOT NULL,
-                    user_story_title TEXT,
-                    sprint_id TEXT NOT NULL,
-                    sprint_name TEXT,
-                    title TEXT NOT NULL,
-                    description TEXT NOT NULL,
-                    change_type TEXT NOT NULL,
-                    story_points INTEGER DEFAULT 5,
-                    urgency TEXT DEFAULT 'MEDIUM',
-                    status TEXT DEFAULT 'PENDING',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-                ALTER TABLE public.change_requests 
-                ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                ADD COLUMN IF NOT EXISTS resource_allocation_info TEXT,
-                ADD COLUMN IF NOT EXISTS reason TEXT,
-                ADD COLUMN IF NOT EXISTS team_size INTEGER DEFAULT 8,
-                ADD COLUMN IF NOT EXISTS progress_percent INTEGER DEFAULT 25,
-                ADD COLUMN IF NOT EXISTS project_manager TEXT,
-                ADD COLUMN IF NOT EXISTS impact_level TEXT DEFAULT 'MEDIUM',
-                ADD COLUMN IF NOT EXISTS confidence DECIMAL(5,2) DEFAULT 0.85,
-                ADD COLUMN IF NOT EXISTS recommendation TEXT,
-                ADD COLUMN IF NOT EXISTS probabilities TEXT;
-            `);
             const approvedCRsRes = await pool.query(
                 "SELECT * FROM public.change_requests WHERE UPPER(status) IN ('APPROVED', 'ACCEPTED')"
             );
@@ -3329,6 +3823,20 @@ app.get('/api/resource-allocations/dashboard', async (req, res) => {
     }
 });
 
+// Clear all project management data (user_stories, work_items, allocations)
+app.delete('/api/project-management/clear', async (req, res) => {
+    try {
+        await pool.query('DELETE FROM user_stories');
+        await pool.query('DELETE FROM work_items');
+        await pool.query('DELETE FROM allocations');
+        await pool.query('DELETE FROM resource_allocations');
+        res.json({ success: true, message: 'All project management sample data cleared successfully.' });
+    } catch (err) {
+        console.error('Error clearing project management data:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Clear all allocation data endpoint
 app.delete('/api/resource-allocations/clear', async (req, res) => {
     try {
@@ -3345,31 +3853,34 @@ app.delete('/api/resource-allocations/clear', async (req, res) => {
     }
 });
 
-// Start Express server immediately so port 3000 is accessible without delay
-const server = app.listen(PORT, () => {
-    console.log('='.repeat(50));
-    console.log(`✅ Backend running on http://localhost:${PORT}`);
-    console.log('='.repeat(50));
-});
-
-server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-        console.error(`❌ Port ${PORT} is already in use by another process.`);
-        console.error(`👉 Please terminate any orphaned node process on port ${PORT} or update PORT in .env`);
-        process.exit(1);
-    } else {
-        console.error('❌ Server error:', err);
-    }
-});
-
-// Initialize models database asynchronously in the background
-initializeDatabase()
-    .then(() => {
-        console.log('✅ Models database initialized successfully');
-    })
-    .catch(err => {
-        console.warn('⚠️ Database initialization warning:', err.message);
+let server;
+if (require.main === module) {
+    // Start Express server immediately so port 3000 is accessible without delay
+    server = app.listen(PORT, () => {
+        console.log('='.repeat(50));
+        console.log(`✅ Backend running on http://localhost:${PORT}`);
+        console.log('='.repeat(50));
     });
+
+    server.on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+            console.error(`❌ Port ${PORT} is already in use by another process.`);
+            console.error(`👉 Please terminate any orphaned node process on port ${PORT} or update PORT in .env`);
+            process.exit(1);
+        } else {
+            console.error('❌ Server error:', err);
+        }
+    });
+
+    // Initialize models database asynchronously in the background
+    initializeDatabase()
+        .then(() => {
+            console.log('✅ Models database initialized successfully');
+        })
+        .catch(err => {
+            console.warn('⚠️ Database initialization warning:', err.message);
+        });
+}
 
 // Process resilience handlers for Neon serverless PostgreSQL connection resets
 process.on('uncaughtException', (err) => {
@@ -3379,6 +3890,18 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason) => {
     console.warn('⚠️ Process Notice (unhandledRejection):', reason?.message || reason);
 });
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        app,
+        allocateTasks,
+        calculateSkillMatchPercentage,
+        calculateComplexitySenioritySuitability,
+        getSeniorityRank,
+        normalizeDomainString
+    };
+}
+
 
 
 

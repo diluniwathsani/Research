@@ -16,8 +16,8 @@ const pool = new Pool({
         rejectUnauthorized: false
     },
     max: 10,
-    connectionTimeoutMillis: 10000,
-    idleTimeoutMillis: 10000,
+    connectionTimeoutMillis: 30000,
+    idleTimeoutMillis: 30000,
 });
 
 pool.on('error', (err) => {
@@ -178,7 +178,19 @@ pool.on('error', (err) => {
             `);
             await client.query(`ALTER TABLE public.user_stories ADD COLUMN IF NOT EXISTS requirement_order INTEGER DEFAULT 1`);
             await client.query(`ALTER TABLE public.user_stories ADD COLUMN IF NOT EXISTS assigned_to TEXT DEFAULT 'Unassigned'`);
-            console.log('✅ User Stories table created');
+            await client.query(`ALTER TABLE public.user_stories ADD COLUMN IF NOT EXISTS epic TEXT`);
+            await client.query(`ALTER TABLE public.user_stories ADD COLUMN IF NOT EXISTS feature TEXT`);
+
+            // Sync epic & feature from requirements table into user_stories table
+            await client.query(`
+                UPDATE public.user_stories u 
+                SET epic = COALESCE(u.epic, r.epic, 'General Epic'),
+                    feature = COALESCE(u.feature, r.feature, 'General Feature')
+                FROM public.requirements r 
+                WHERE (u.epic IS NULL OR u.feature IS NULL)
+                  AND (u.story_id = 'US-' || r.id OR u.user_story_id = 'US-' || r.id OR u.story_id = r.id::text)
+            `);
+            console.log('✅ User Stories table created and synced with Epics & Features');
         } catch (usErr) {
             console.warn('Notice creating user_stories table:', usErr.message);
         }

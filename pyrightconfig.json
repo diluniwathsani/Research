@@ -1,0 +1,14 @@
+{
+  "exclude": [
+    "**/__pyrefly_virtual__/**",
+    "**/node_modules",
+    "**/__pycache__",
+    "**/dist",
+    "**/build",
+    "**/Training"
+  ],
+  "reportMissingImports": false,
+  "reportMissingModuleSource": false,
+  "reportUndefinedVariable": false,
+  "reportGeneralTypeIssues": false
+}

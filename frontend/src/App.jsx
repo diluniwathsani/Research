@@ -25,6 +25,7 @@ function MainLayout() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [isDark, setIsDark] = useState(true);
+  const [isBackendOnline, setIsBackendOnline] = useState(true);
   
   // Navigation tab: 'artifacts', 'dashboard', 'resources', 'projects', 'changerequests'
   const [activeTab, setActiveTab] = useState('artifacts');
@@ -41,6 +42,7 @@ function MainLayout() {
       const list = Array.isArray(res.data) ? res.data : (res.data && res.data.data ? res.data.data : []);
       if (list.length > 0) {
         setProjects(list);
+        setIsBackendOnline(true);
         setSelectedProjectId(prevId => {
           if (targetProjectId) return targetProjectId;
           const exists = list.some(p => p.project_id === prevId || p.id === prevId);
@@ -75,13 +77,17 @@ function MainLayout() {
       const list = Array.isArray(res.data) ? res.data : (res.data && res.data.data ? res.data.data : []);
       setRequirements(list);
       setError(null);
+      setIsBackendOnline(true);
+      fetchProjects();
     } catch (err) {
       console.error('Fetch requirements error:', err);
+      setIsBackendOnline(false);
       setError("Failed to fetch requirements from backend.");
-      if (retryCount < 4) {
+      if (retryCount < 8) {
+        const delay = Math.min(2000 * Math.pow(1.2, retryCount), 5000);
         setTimeout(() => {
           fetchRequirements(retryCount + 1);
-        }, 2000);
+        }, delay);
       }
     }
   };
@@ -134,6 +140,7 @@ function MainLayout() {
         projects={projects}
         selectedProjectId={selectedProjectId}
         onSelectProject={setSelectedProjectId}
+        isBackendOnline={isBackendOnline}
       />
 
       {/* Main Body with Sidebar + View Container */}

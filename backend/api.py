@@ -601,6 +601,28 @@ def get_sprint_plan():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+@app.route('/api/sprint-plan/reset', methods=['POST', 'DELETE'])
+def reset_sprint_plan():
+    """Clears all sample data, sprint tasks, work items, and change requests."""
+    global sprint_tasks, active_capacities, last_ilp_res, last_replan_summary, all_user_stories
+    try:
+        sprint_tasks = []
+        all_user_stories = []
+        last_ilp_res = {}
+        last_replan_summary = None
+        
+        persisted_path = os.path.join(os.path.dirname(__file__), "persisted_sprint_tasks.json")
+        with open(persisted_path, "w", encoding="utf-8") as pf:
+            json.dump({"tasks": [], "capacities": [55, 55, 55, 55, 55], "config": {}}, pf, indent=2)
+
+        cr_path = os.path.join(os.path.dirname(__file__), "change_requests.json")
+        with open(cr_path, "w", encoding="utf-8") as f:
+            json.dump([], f, indent=2)
+
+        return jsonify({"status": "success", "message": "All sample project management data cleared successfully."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 @app.route('/api/sprint-plan/optimize-ilp', methods=['POST'])
 def optimize_sprint_plan_ilp():
     """Trigger Integer Linear Programming (ILP) optimizer with dynamic multi-sprint capacities and developer balancing."""

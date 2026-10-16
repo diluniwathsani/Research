@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
-  FileText, ShieldCheck, Layers, ArrowUpRight, LayoutDashboard, Calendar, FolderGit2 
+  FileText, ShieldCheck, Layers, ArrowUpRight, LayoutDashboard, Calendar, FolderGit2,
+  CheckCircle2, AlertTriangle, ShieldAlert, XCircle
 } from 'lucide-react';
 
 export default function DashboardView({ 
@@ -49,7 +50,10 @@ export default function DashboardView({
   };
 
   const total = requirements.length;
-  const completeCount = requirements.filter(r => r.completeness_status === 'Complete').length;
+  const completeCount = requirements.filter(r => r.completeness_status === 'Complete' || r.completeness_status === 'Completed by User' || !r.completeness_status).length;
+  const ambiguousCount = requirements.filter(r => r.completeness_status?.startsWith('Ambiguous')).length;
+  const inconsistentCount = requirements.filter(r => r.completeness_status?.startsWith('Inconsistent')).length;
+  const incompleteCount = requirements.filter(r => r.completeness_status?.startsWith('Incomplete')).length;
   const completenessRate = total > 0 ? Math.round((completeCount / total) * 100) : 0;
   const epicSet = new Set(requirements.map(r => r.epic).filter(Boolean));
 
@@ -122,7 +126,70 @@ export default function DashboardView({
 
       </div>
 
-      {/* System Modules Overview Card */}
+      {/* Requirement Quality & Verification Breakdown */}
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-200 dark:border-slate-700/80 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <ShieldCheck size={20} className="text-indigo-600 dark:text-indigo-400" />
+              <span>Requirement Quality & Verification Analysis</span>
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Automated NLP & rule-based validation of RFC 2119 completeness, syntactic ambiguity, and contradictory directives.
+            </p>
+          </div>
+          <button 
+            onClick={() => setActiveTab('artifacts')}
+            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 shrink-0"
+          >
+            Inspect in Requirements View <ArrowUpRight size={14} />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          
+          {/* Complete */}
+          <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/60">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">Complete</span>
+              <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <p className="text-2xl font-black text-emerald-700 dark:text-emerald-300 mt-2">{completeCount}</p>
+            <p className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 mt-0.5 font-medium">Actor, action & modal valid</p>
+          </div>
+
+          {/* Ambiguous */}
+          <div className="p-4 rounded-2xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/60">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">Ambiguous</span>
+              <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400" />
+            </div>
+            <p className="text-2xl font-black text-amber-800 dark:text-amber-300 mt-2">{ambiguousCount}</p>
+            <p className="text-[10px] text-amber-700/80 dark:text-amber-400/80 mt-0.5 font-medium">Subjective / vague terms</p>
+          </div>
+
+          {/* Inconsistent */}
+          <div className="p-4 rounded-2xl bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200/80 dark:border-purple-800/60">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-purple-800 dark:text-purple-300">Inconsistent</span>
+              <ShieldAlert size={16} className="text-purple-600 dark:text-purple-400" />
+            </div>
+            <p className="text-2xl font-black text-purple-800 dark:text-purple-300 mt-2">{inconsistentCount}</p>
+            <p className="text-[10px] text-purple-700/80 dark:text-purple-400/80 mt-0.5 font-medium">Contradictory directives</p>
+          </div>
+
+          {/* Incomplete */}
+          <div className="p-4 rounded-2xl bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200/80 dark:border-rose-800/60">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-800 dark:text-rose-300">Incomplete</span>
+              <XCircle size={16} className="text-rose-600 dark:text-rose-400" />
+            </div>
+            <p className="text-2xl font-black text-rose-800 dark:text-rose-300 mt-2">{incompleteCount}</p>
+            <p className="text-[10px] text-rose-700/80 dark:text-rose-400/80 mt-0.5 font-medium">Missing actor/verb or TBD</p>
+          </div>
+
+        </div>
+      </div>
       <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 border border-slate-200 dark:border-slate-700/80 shadow-sm space-y-6">
         <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
           <LayoutDashboard size={20} className="text-indigo-600 dark:text-indigo-400" />

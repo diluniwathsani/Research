@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Cpu, Download, RefreshCw, Layers, CheckCircle2, ShieldAlert, Sparkles } from 'lucide-react';
+import { FileText, Cpu, Download, RefreshCw, ShieldAlert, Sparkles } from 'lucide-react';
 import FileUpload from './Upload';
 import RequirementsTable from './RequirementsTable';
 
@@ -42,7 +42,7 @@ export default function DevelopmentArtifactModule({
           <div className="flex-1">
             <h2 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider mb-3 flex items-center gap-2">
               <FileText size={18} className="text-indigo-600 dark:text-indigo-400" /> 
-              Upload Requirement Spreadsheet (.xlsx, .csv)
+              Upload Requirement Document (.docx, .doc, .pdf, .xlsx, .csv)
             </h2>
             <FileUpload onUploadSuccess={onFetchRequirements} />
           </div>
@@ -76,9 +76,19 @@ export default function DevelopmentArtifactModule({
       </section>
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/40 text-red-600 dark:text-red-400 p-4 rounded-2xl text-xs flex items-center gap-2">
-          <ShieldAlert size={18} />
-          <span>{error}</span>
+        <div className="bg-red-500/10 border border-red-500/40 text-red-600 dark:text-red-400 p-4 rounded-2xl text-xs flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <ShieldAlert size={18} className="shrink-0" />
+            <span>{error}</span>
+          </div>
+          {onFetchRequirements && (
+            <button
+              onClick={() => onFetchRequirements()}
+              className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl text-xs transition-colors shadow-sm shrink-0"
+            >
+              Retry
+            </button>
+          )}
         </div>
       )}
 

@@ -1,6 +1,7 @@
 import sys
 import json
 import os
+import re
 import joblib
 import pandas as pd
 import warnings
@@ -41,28 +42,146 @@ except Exception as e:
 
 def check_completeness(text):
     """
-    Validates if a requirement sentence follows standard engineering rules.
-    Checks for: Length, Subject, Verb, and Modal Keywords (shall/must).
+    Validates if a requirement sentence is Complete, Incomplete, Inconsistent, or Ambiguous.
+    Standards:
+    - Incomplete: Missing Subject (Actor), Missing Action (Verb), Missing RFC 2119 Modal keyword (shall/must), or Too short / unfinished clause.
+    - Inconsistent: Conflicting affirmative and negative directives (shall vs shall not), conflicting permissions, contradictory states/retention, or conflicting timing.
+    - Ambiguous: Subjective non-verifiable quality terms (fast, user-friendly, robust), vague quantifiers (etc., and/or, various), weak modals (if possible, as needed).
+    - Complete: Meets all syntactic and semantic quality criteria.
     """
-    if not nlp:
-        return "Complete" # Fallback if spacy is missing
+    if not text or not isinstance(text, str):
+        return "Incomplete: Empty text"
     
-    doc = nlp(text)
-    if len(text.split()) < 5:
+    clean_text = text.strip()
+    words = clean_text.split()
+    lower_text = clean_text.lower()
+    
+    # -------------------------------------------------------------
+    # 1. INCOMPLETE CHECKS (Basic Structure & Placeholders)
+    # -------------------------------------------------------------
+    if len(words) < 5 or len(clean_text) < 15:
         return "Incomplete: Too short"
-    
-    # NLP Dependency Parsing to find subject and verb
-    has_subject = any(token.dep_ in ('nsubj', 'nsubjpass') for token in doc)
-    has_verb = any(token.pos_ in ('VERB', 'AUX') for token in doc)
-    # Check for mandatory language (RFC 2119)
-    has_modal = any(token.lemma_.lower() in ['shall', 'should', 'must', 'will'] for token in doc)
-    
-    if not has_subject:
-        return "Incomplete: Missing a subject (Who/What?)"
-    if not has_verb:
-        return "Incomplete: Missing an action (Does what?)"
-    if not has_modal:
-        return "Incomplete: Missing a requirement keyword (shall/must)"
+
+    # Check for placeholder tokens
+    if re.search(r'\b(tbd|tba|todo|to be determined|to be decided|placeholder)\b', lower_text):
+        return "Incomplete: Contains unfinished placeholder (TBD/TODO)"
+
+    # Check for truncated/dangling endings
+    if re.search(r'(\.{3,}|…|\bsuch as\s*[.,;:]*$|\bincluding\s*[.,;:]*$|\be\.g\.?\s*[.,;:]*$|\bi\.e\.?\s*[.,;:]*$|\band\s*[.,;:]*$|\bor\s*[.,;:]*$|\bwith\s*[.,;:]*$|\bto\s*[.,;:]*$)', clean_text, re.I):
+        return "Incomplete: Trailing incomplete clause or ellipsis"
+
+    # NLP Dependency Parsing (if spaCy is available)
+    if nlp:
+        doc = nlp(clean_text)
+        has_subject = any(token.dep_ in ('nsubj', 'nsubjpass') for token in doc)
+        # Require an actual action verb (not solely the modal auxiliary like 'shall')
+        has_verb = any(token.pos_ == 'VERB' for token in doc) or any(token.pos_ == 'AUX' and token.lemma_.lower() not in ['shall', 'should', 'must', 'will', 'can', 'may', 'could', 'might'] for token in doc)
+        has_modal = any(token.lemma_.lower() in ['shall', 'should', 'must', 'will'] for token in doc)
+
+        if not has_subject:
+            return "Incomplete: Missing a subject (Who/What?)"
+        if not has_verb:
+            return "Incomplete: Missing an action (Does what?)"
+        if not has_modal:
+            return "Incomplete: Missing a requirement keyword (shall/must)"
+    else:
+        # Fallback regex check if spaCy model is unavailable
+        has_modal = bool(re.search(r'\b(shall|should|must|will)\b', lower_text))
+        has_actor = bool(re.search(r'\b(system|user|users|engineer|engineers|platform|application|admin|administrator|manager|supervisor|api|service|module|portal|database|client|customer)\b', lower_text))
+        if not has_actor:
+            return "Incomplete: Missing a subject (Who/What?)"
+        if not has_modal:
+            return "Incomplete: Missing a requirement keyword (shall/must)"
+
+    # -------------------------------------------------------------
+    # 2. INCONSISTENT CHECKS (Direct Contradictions & Conflicts)
+    # -------------------------------------------------------------
+    # Contradiction A: Affirmative vs Negative Modals (e.g. "shall" AND "shall not", "must" AND "must not")
+    neg_modal_regex = r'\b(shall\s+not|must\s+not|cannot|can\s+not|shall\s+never|must\s+never|shall\s+under\s+no\s+circumstance)\b'
+    has_neg_modal = bool(re.search(neg_modal_regex, lower_text))
+    text_without_neg_modals = re.sub(neg_modal_regex, '', lower_text)
+    has_pos_modal = bool(re.search(r'\b(shall|must)\b', text_without_neg_modals))
+    if has_pos_modal and has_neg_modal:
+        return "Inconsistent: Conflicting affirmative and negative directives ('shall' vs 'shall not')"
+
+    # Contradiction B: Conflicting Permission / Access Control
+    has_public_access = bool(re.search(r'\b(without authentication|unauthenticated\s+access|anonymous\s+access|publicly accessible|all users without login|any user without credentials|open to everyone)\b', lower_text))
+    has_restricted_access = bool(re.search(r'\b(restricted to|only authorized|admin only|only administrators|requires login|confidential|private access|restricted access)\b', lower_text))
+    if has_public_access and has_restricted_access:
+        return "Inconsistent: Conflicting access rules (public/unauthenticated vs restricted access)"
+
+    # Contradiction C: Conflicting Directives (Allow vs Prohibit the action)
+    has_shall_allow = bool(re.search(r'\b(shall allow|must allow|shall permit|must permit|shall enable)\b', lower_text))
+    has_shall_prohibit = bool(re.search(r'\b(shall prohibit|must prohibit|shall disallow|must disallow|shall prevent|must prevent|shall disable)\b', lower_text))
+    if has_shall_allow and has_shall_prohibit:
+        return "Inconsistent: Conflicting action directives (allow/permit vs prohibit/disallow)"
+
+    # Contradiction D: Data Lifecycle (Permanently Delete vs Retain Indefinitely)
+    has_delete = bool(re.search(r'\b(permanently delete|permanently deleted|purge|purged|destroy|destroyed)\b', lower_text))
+    has_retain = bool(re.search(r'\b(retain indefinitely|keep forever|archive permanently|store permanently|retained forever)\b', lower_text))
+    if has_delete and has_retain:
+        return "Inconsistent: Conflicting data lifecycle rules (permanently delete vs retain indefinitely)"
+
+    # Contradiction E: Plaintext vs Encrypted
+    has_store_plaintext = bool(re.search(r'\b(store in plain\s*text|save as plain\s*text|transmit in plain\s*text|stored unencrypted|transmitted unencrypted|as plain\s*text)\b', lower_text))
+    has_encrypt = bool(re.search(r'\b(encrypt|encrypted|encryption|hashed|hash)\b', lower_text))
+    is_negated_plaintext = bool(re.search(r'\b(never|not|no|prevent|prohibit|disallow)\s+(?:store in\s+|transmit in\s+|save as\s+|in\s+)?(?:plain\s*text|unencrypted)\b', lower_text))
+    if has_store_plaintext and has_encrypt and not is_negated_plaintext:
+        return "Inconsistent: Conflicting security directives (plaintext vs encrypted)"
+
+    # Contradiction F: Real-time vs Batch Delay
+    has_realtime = bool(re.search(r'\b(real-time|real time|instantaneously|immediately|zero latency)\b', lower_text))
+    has_batch = bool(re.search(r'\b(daily batch|overnight batch|end of day|end of month|monthly batch|delayed processing)\b', lower_text))
+    if has_realtime and has_batch:
+        return "Inconsistent: Conflicting timing constraints (real-time vs batch processing)"
+
+    # Contradiction G: Mandatory vs Optional
+    has_mandatory = bool(re.search(r'\b(mandatory|compulsory|strictly required)\b', lower_text))
+    has_optional = bool(re.search(r'\b(optional|discretionary|not required|if desired)\b', lower_text))
+    if has_mandatory and has_optional:
+        return "Inconsistent: Conflicting requirement necessity (mandatory vs optional)"
+
+    # -------------------------------------------------------------
+    # 3. AMBIGUOUS CHECKS (Vague, Subjective, or Non-verifiable Terms)
+    # -------------------------------------------------------------
+    # Category A: Subjective Performance & Usability Adjectives
+    ambiguous_subjective_patterns = [
+        (r'\b(user-friendly|user friendly)\b', "user-friendly"),
+        (r'\b(easy to use|easy to learn|simple to use)\b', "easy to use"),
+        (r'\bfast(?!\s*-\s*forward)\b|\b(quickly|very quick|super fast)\b', "fast/quickly"),
+        (r'\b(high performance|high-performance|high quality|high-quality|state of the art|state-of-the-art)\b', "high performance/quality"),
+        (r'\b(optimal|optimally)\b', "optimal"),
+        (r'\b(seamless|seamlessly)\b', "seamless"),
+        (r'\b(robust|robustly)\b', "robust"),
+        (r'\b(efficient|efficiently)\b', "efficient"),
+        (r'\b(intuitive|intuitively)\b', "intuitive"),
+        (r'\b(sufficient|sufficiently|adequate|adequately|acceptable)\b', "sufficient/adequate"),
+        (r'\b(reasonable|reasonably|convenient|conveniently)\b', "reasonable/convenient"),
+        (r'\b(as much as possible|as soon as possible|as far as possible|asap)\b', "as soon/much as possible"),
+        (r'\b(best possible|highest possible|minimal delay|minimal effort)\b', "best/minimal possible"),
+    ]
+
+    for pattern, term in ambiguous_subjective_patterns:
+        if re.search(pattern, lower_text):
+            return f"Ambiguous: Subjective term '{term}' lacks verifiable acceptance criteria"
+
+    # Category B: Vague Quantifiers & Open-ended Qualifiers
+    ambiguous_quantifier_patterns = [
+        (r'\b(etc\.?|and/or|and or|so on|and so forth)\b', "etc/and-or"),
+        (r'\b(various|several|some|roughly|approximately|about\s+\d+|nearly|almost)\b', "vague quantifier"),
+        (r'\b(as needed|as required|as appropriate|if necessary|if possible|when appropriate)\b', "open-ended conditional"),
+        (r'\b(might|may perhaps|can perhaps|could possibly)\b', "non-committal modal"),
+    ]
+
+    for pattern, term in ambiguous_quantifier_patterns:
+        if re.search(pattern, lower_text):
+            match = re.search(pattern, lower_text)
+            matched_word = match.group(0) if match else term
+            return f"Ambiguous: Open-ended qualifier '{matched_word}' is non-verifiable"
+
+    # -------------------------------------------------------------
+    # 4. COMPLETE (All Quality Standards Satisfied)
+    # -------------------------------------------------------------
     return "Complete"
 
 # --- NLP FILTERING DICTIONARIES ---

@@ -1,0 +1,21 @@
+{
+  "name": "research-system-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Root configuration to run Express Node server, Flask API server, Flask ML service, and React frontend concurrently",
+  "scripts": {
+    "install:backend": "npm --prefix backend install",
+    "install:frontend": "npm --prefix frontend install",
+    "install:ml": "pip install -r ml-service/requirements.txt",
+    "install:all": "npm install && npm run install:backend && npm run install:frontend && npm run install:ml",
+    "start:backend": "node backend/server.js",
+    "start:api": "python backend/api.py",
+    "start:ml": "python ml-service/app.py",
+    "start:frontend": "npm --prefix frontend run dev",
+    "start": "concurrently -n \"BACKEND,FLASK-API,ML-SERVICE,FRONTEND\" -c \"blue,yellow,magenta,cyan\" \"node backend/server.js\" \"python backend/api.py\" \"python ml-service/app.py\" \"npm --prefix frontend run dev\"",
+    "dev": "npm start"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
