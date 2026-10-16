@@ -417,21 +417,101 @@ export default function ResourceManagementModule({
     return () => window.removeEventListener('sprints-updated', handleSprintsUpdated);
   }, [selectedProject]);
 
-  // ================= 5. FILTER TASKS FOR CURRENT SPRINT =================
+  // ================= 5. FILTER STORIES & DERIVE SPRINT WORK ITEMS =================
+  const currentSprintNum = selectedSprint ? (Number(selectedSprint.sprint_number) || 1) : 1;
+
+  const sprintStories = useMemo(() => {
+    if (!allSprintPlanTasks || allSprintPlanTasks.length === 0) return [];
+    const filtered = allSprintPlanTasks.filter(t => (Number(t.sprint_number) || 1) === currentSprintNum);
+    return filtered.length > 0 ? filtered : allSprintPlanTasks;
+  }, [allSprintPlanTasks, currentSprintNum]);
+
+  // Extract work items (sub-tasks decomposed by Project Management Module) for the active sprint
+  const sprintWorkItems = useMemo(() => {
+    if (!sprintStories || sprintStories.length === 0) return [];
+
+    return sprintStories.flatMap((story, storyIdx) => {
+      const parentId = story.story_id || story.id || `US00${storyIdx + 1}`;
+      const parentTitle = story.title || 'User Story';
+      const parentEpic = story.epic || '';
+      const parentFeature = story.feature || '';
+
+      if (Array.isArray(story.sub_tasks) && story.sub_tasks.length > 0) {
+        return story.sub_tasks.map((sub, sIdx) => {
+          const subId = sub.id || sub.story_id || sub.work_item_id || `${parentId}.${sIdx + 1}`;
+          const subPts = Number(sub.story_points) || Number(sub.points) || 2;
+          const subHrs = Number(sub.estimated_hours) || Number(sub.hours) || (subPts * 8);
+
+          return {
+            ...sub,
+            id: subId,
+            work_item_id: subId,
+            story_id: subId,
+            parent_story_id: parentId,
+            parent_story_title: parentTitle,
+            parent_epic: parentEpic,
+            parent_feature: parentFeature,
+            sprint_number: currentSprintNum,
+            title: sub.title || `Deliverable for ${parentId}`,
+            description: sub.description || '',
+            story_points: subPts,
+            points: subPts,
+            estimated_hours: subHrs,
+            hours: subHrs,
+            priority: (sub.priority || sub.priority_tier || story.priority || 'MEDIUM').toUpperCase(),
+            priority_tier: (sub.priority_tier || sub.priority || story.priority_tier || 'MEDIUM').toUpperCase(),
+            domain: sub.domain || sub.required_domain || story.domain || 'Backend',
+            required_domain: sub.required_domain || sub.domain || story.domain || 'Backend',
+            skills: Array.isArray(sub.skills) && sub.skills.length > 0 ? sub.skills : (sub.required_skills || story.skills || ['JavaScript']),
+            required_skills: Array.isArray(sub.required_skills) && sub.required_skills.length > 0 ? sub.required_skills : (sub.skills || story.required_skills || ['JavaScript']),
+            status: sub.status || 'To Do',
+            gherkin_criteria: sub.gherkin_criteria || ''
+          };
+        });
+      }
+
+      // If story was not decomposed into subtasks, story itself is the atomic work item
+      const pts = Number(story.story_points) || Number(story.points) || 5;
+      const hrs = Number(story.estimated_hours) || Number(story.hours) || (pts * 8);
+
+      return [{
+        ...story,
+        id: parentId,
+        work_item_id: parentId,
+        story_id: parentId,
+        parent_story_id: parentId,
+        parent_story_title: parentTitle,
+        parent_epic: parentEpic,
+        parent_feature: parentFeature,
+        sprint_number: currentSprintNum,
+        title: parentTitle,
+        description: story.description || '',
+        story_points: pts,
+        points: pts,
+        estimated_hours: hrs,
+        hours: hrs,
+        priority: (story.priority || story.priority_tier || 'MEDIUM').toUpperCase(),
+        priority_tier: (story.priority_tier || story.priority || 'MEDIUM').toUpperCase(),
+        domain: story.domain || 'Backend',
+        required_domain: story.required_domain || story.domain || 'Backend',
+        skills: story.skills || ['JavaScript'],
+        required_skills: story.required_skills || story.skills || ['JavaScript'],
+        status: story.status || 'To Do'
+      }];
+    });
+  }, [sprintStories, currentSprintNum]);
+
+  // Keep backward compatibility for sprintTasks
   useEffect(() => {
-    if (!selectedSprint) {
-      setSprintTasks(allSprintPlanTasks);
-      return;
-    }
-    const currentSprintNum = selectedSprint.sprint_number || 1;
-    const filtered = allSprintPlanTasks.filter(t => t.sprint_number === currentSprintNum);
-    setSprintTasks(filtered.length > 0 ? filtered : allSprintPlanTasks);
-  }, [selectedSprint, allSprintPlanTasks]);
+    setSprintTasks(sprintStories);
+  }, [sprintStories]);
 
   // ================= 6. SKILL-BASED RESOURCE ALLOCATION TRIGGER =================
   const runSkillBasedAllocation = async () => {
-    if (sprintTasks.length === 0) {
-      alert('No user stories found in this sprint to allocate.');
+    const itemsToAllocate = sprintWorkItems.length > 0 ? sprintWorkItems : sprintStories;
+
+    if (itemsToAllocate.length === 0) {
+      alert('No work items found in this sprint to allocate.');
       return;
     }
 
@@ -441,8 +521,8 @@ export default function ResourceManagementModule({
       let allocResult = null;
       try {
         const resp = await axios.post(`${EXPRESS_API}/allocate`, {
-          tasks: sprintTasks,
-          sprint_id: selectedSprint?.sprint_id || `SPR-0${selectedSprint?.sprint_number || 1}`,
+          tasks: itemsToAllocate,
+          sprint_id: selectedSprint?.sprint_id || `SPR-0${currentSprintNum}`,
           project_id: selectedProject?.project_id || 'P00001'
         });
         allocResult = resp.data?.assignments || resp.data?.data || null;
@@ -458,48 +538,67 @@ export default function ResourceManagementModule({
         return;
       }
 
-      // 3. Client-side Skill-Based Allocation algorithm using Project Module Developer assignments
+      // 3. Client-side Skill-Based Allocation algorithm for sprint work items
       const developerPool = developers.length > 0 ? developers : [
-        { id: 1, name: 'Alice', role: 'Senior', capacity_hours: 40, primary_domain: 'backend', languages: ['JavaScript', 'Python', 'SQL'] },
-        { id: 2, name: 'Bob', role: 'Senior', capacity_hours: 40, primary_domain: 'frontend', languages: ['JavaScript', 'React', 'Tailwind'] },
-        { id: 3, name: 'Charlie', role: 'Junior', capacity_hours: 40, primary_domain: 'frontend', languages: ['HTML', 'CSS', 'JavaScript'] },
-        { id: 4, name: 'David', role: 'Senior', capacity_hours: 40, primary_domain: 'backend', languages: ['Python', 'SQL', 'PostgreSQL'] },
-        { id: 5, name: 'Kasun Perera', role: 'Lead Architect', capacity_hours: 40, primary_domain: 'backend', languages: ['Python', 'OAuth', 'Security'] }
+        { id: 1, name: 'Alice', role: 'Senior Backend Developer', capacity_hours: 40, primary_domain: 'backend', languages: ['JavaScript', 'Python', 'SQL', 'Node.js'] },
+        { id: 2, name: 'Bob', role: 'Senior Frontend Developer', capacity_hours: 40, primary_domain: 'frontend', languages: ['JavaScript', 'React', 'HTML/CSS', 'Tailwind'] },
+        { id: 3, name: 'Charlie', role: 'Junior Frontend Developer', capacity_hours: 40, primary_domain: 'frontend', languages: ['HTML', 'CSS', 'JavaScript', 'React'] },
+        { id: 4, name: 'David', role: 'Senior Database Engineer', capacity_hours: 40, primary_domain: 'backend', languages: ['Python', 'SQL', 'PostgreSQL', 'Database'] },
+        { id: 5, name: 'Kasun Perera', role: 'Lead Architect & Security', capacity_hours: 40, primary_domain: 'backend', languages: ['Python', 'OAuth', 'Security', 'Architecture'] }
       ];
 
       const devHoursUsed = {};
       developerPool.forEach(d => { devHoursUsed[d.id] = 0; });
 
-      const generatedAssignments = sprintTasks.map(task => {
-        const taskHours = Number(task.estimated_hours) || 24;
-        const taskDomain = (task.domain || 'backend').toLowerCase();
-        const taskSkills = Array.isArray(task.required_skills) ? task.required_skills : ['JavaScript'];
+      const generatedAssignments = itemsToAllocate.map(item => {
+        const itemHours = Number(item.estimated_hours) || Number(item.hours) || 16;
+        const itemDomain = (item.domain || item.required_domain || 'backend').toLowerCase();
+        const itemSkills = Array.isArray(item.required_skills) && item.required_skills.length > 0
+          ? item.required_skills 
+          : (Array.isArray(item.skills) && item.skills.length > 0 ? item.skills : ['JavaScript']);
 
-        // Find developer matching primary domain with available capacity
-        let bestDev = developerPool.find(d => 
-          (d.primary_domain || '').toLowerCase() === taskDomain && 
-          ((devHoursUsed[d.id] || 0) + taskHours <= (Number(d.capacity_hours) || 40))
-        );
+        // A. Match developer by primary domain with available capacity
+        let bestDev = developerPool.find(d => {
+          const dDomain = (d.primary_domain || '').toLowerCase();
+          const matchesDomain = dDomain.includes(itemDomain) || itemDomain.includes(dDomain);
+          const hasCap = ((devHoursUsed[d.id] || 0) + itemHours) <= (Number(d.capacity_hours) || 40);
+          return matchesDomain && hasCap;
+        });
 
-        // Fallback: Developer with lowest current workload
+        // B. Match developer by technical skills with available capacity
+        if (!bestDev) {
+          bestDev = developerPool.find(d => {
+            const devLangs = (Array.isArray(d.languages) ? d.languages : (d.skills || [])).map(s => String(s).toLowerCase());
+            const hasSkillMatch = itemSkills.some(sk => devLangs.includes(String(sk).toLowerCase()));
+            const hasCap = ((devHoursUsed[d.id] || 0) + itemHours) <= (Number(d.capacity_hours) || 40);
+            return hasSkillMatch && hasCap;
+          });
+        }
+
+        // C. Fallback: Developer with lowest current workload
         if (!bestDev) {
           bestDev = [...developerPool].sort((a, b) => (devHoursUsed[a.id] || 0) - (devHoursUsed[b.id] || 0))[0];
         }
 
         if (bestDev) {
-          devHoursUsed[bestDev.id] = (devHoursUsed[bestDev.id] || 0) + taskHours;
+          devHoursUsed[bestDev.id] = (devHoursUsed[bestDev.id] || 0) + itemHours;
         }
 
+        const workItemId = item.work_item_id || item.id || item.story_id;
+        const parentId = item.parent_story_id || item.story_id || workItemId;
+
         return {
-          story_id: task.story_id,
-          user_story_id: task.story_id,
-          title: task.title,
-          allocated_hours: taskHours,
+          id: workItemId,
+          story_id: workItemId,
+          user_story_id: parentId,
+          parent_story_id: parentId,
+          title: item.title,
+          allocated_hours: itemHours,
           developer_id: bestDev?.id || 1,
           developer_name: bestDev?.name || 'Unassigned',
-          predicted_complexity: task.priority_tier === 'CRITICAL' ? 'High' : (task.priority === 'HIGH' ? 'High' : 'Medium'),
-          matched_domain: bestDev?.primary_domain || taskDomain,
-          skills: taskSkills
+          predicted_complexity: item.priority_tier === 'CRITICAL' ? 'High' : (item.priority === 'HIGH' ? 'High' : 'Medium'),
+          matched_domain: bestDev?.primary_domain || itemDomain,
+          skills: itemSkills
         };
       });
 
@@ -629,10 +728,11 @@ export default function ResourceManagementModule({
           </div>
         </div>
 
-        {/* VIEW MODE 1: SPRINT STORIES & RESOURCE ALLOCATION TRIGGER */}
+        {/* VIEW MODE 1: SPRINT WORK ITEMS & RESOURCE ALLOCATION TRIGGER */}
         {viewMode === 'backlog' && selectedProject && (
           <TaskPreview
-            tasks={sprintTasks}
+            tasks={sprintStories}
+            workItems={sprintWorkItems}
             sprintDetails={selectedSprint}
             onRunAllocation={runSkillBasedAllocation}
             hasAssignments={assignments.length > 0}
@@ -649,7 +749,7 @@ export default function ResourceManagementModule({
           <AllocationResults
             assignments={assignments}
             developers={developers}
-            tasks={sprintTasks}
+            tasks={sprintWorkItems}
             selectedProject={selectedProject}
             selectedSprint={selectedSprint}
             onRebalance={handleRebalance}
