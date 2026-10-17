@@ -2166,8 +2166,97 @@
         "suitability_reason": "High skill alignment: Story requirements contain tokens [audit], directly matching Tharushi Jayasuriya's QA / Testing profile (95% Fit)."
       },
       "is_manual_assigned": false,
-      "sub_tasks": [],
-      "is_decomposed": false
+      "sub_tasks": [
+        {
+          "id": "US001.1",
+          "story_id": "US001.1",
+          "parent_id": "US003",
+          "title": "To implement Database Schema & Backend REST API for View engineering records based on their assigned permissions",
+          "description": "Backend persistence layer, database schemas, and REST endpoints for View engineering records based on their assigned permissions.",
+          "points": 2,
+          "story_points": 2,
+          "estimated_hours": 16,
+          "hours": 16,
+          "status": "To Do",
+          "priority_tier": "MEDIUM",
+          "assigned_developer": {
+            "id": "DEV04",
+            "name": "Tharushi Jayasuriya",
+            "role": "QA & Automation Test Lead",
+            "primary_domain": "QA / Testing",
+            "avatar_bg": "bg-purple-500",
+            "initials": "TJ",
+            "skill_match_pct": 95,
+            "matched_skills": [
+              "audit"
+            ],
+            "suitability_reason": "High skill alignment: Story requirements contain tokens [audit], directly matching Tharushi Jayasuriya's QA / Testing profile (95% Fit)."
+          },
+          "gherkin_criteria": "Feature: To implement Database Schema & Backend REST API for View engineering records based on their assigned permissions\n  As a Platform User\n  I want \"To implement Database Schema & Backend REST API for View engineering records based on their assigned permissions\" functionality implemented reliably\n  So that business deliverables are achieved with high quality.\n\n  Scenario: Primary Happy Path Execution\n    Given the user is on the target interface and system services are healthy\n    When the user inputs valid operational data and confirms submission\n    Then the server processes the transaction with sub-second response time\n    And updates the persistent storage with complete audit tracking.\n\n  Scenario: Boundary Validation & Error Recovery\n    Given required input fields are empty or exceed boundary constraints\n    When the user clicks the submit action\n    Then client-side and server-side validation flags the invalid fields\n    And highlights actionable remediation tips without losing form state.",
+          "dependencies": []
+        },
+        {
+          "id": "US001.2",
+          "story_id": "US001.2",
+          "parent_id": "US003",
+          "title": "To build Interactive UI Components & State Management for View engineering records based on their assigned permissions",
+          "description": "Responsive user interface, real-time client state binding, and interactive UX for View engineering records based on their assigned permissions.",
+          "points": 2,
+          "story_points": 2,
+          "estimated_hours": 16,
+          "hours": 16,
+          "status": "To Do",
+          "priority_tier": "MEDIUM",
+          "assigned_developer": {
+            "id": "DEV04",
+            "name": "Tharushi Jayasuriya",
+            "role": "QA & Automation Test Lead",
+            "primary_domain": "QA / Testing",
+            "avatar_bg": "bg-purple-500",
+            "initials": "TJ",
+            "skill_match_pct": 95,
+            "matched_skills": [
+              "audit"
+            ],
+            "suitability_reason": "High skill alignment: Story requirements contain tokens [audit], directly matching Tharushi Jayasuriya's QA / Testing profile (95% Fit)."
+          },
+          "gherkin_criteria": "Feature: To build Interactive UI Components & State Management for View engineering records based on their assigned permissions\n  As a Platform User\n  I want \"To build Interactive UI Components & State Management for View engineering records based on their assigned permissions\" functionality implemented reliably\n  So that business deliverables are achieved with high quality.\n\n  Scenario: Primary Happy Path Execution\n    Given the user is on the target interface and system services are healthy\n    When the user inputs valid operational data and confirms submission\n    Then the server processes the transaction with sub-second response time\n    And updates the persistent storage with complete audit tracking.\n\n  Scenario: Boundary Validation & Error Recovery\n    Given required input fields are empty or exceed boundary constraints\n    When the user clicks the submit action\n    Then client-side and server-side validation flags the invalid fields\n    And highlights actionable remediation tips without losing form state.",
+          "dependencies": [
+            "US001.1"
+          ]
+        },
+        {
+          "id": "US001.3",
+          "story_id": "US001.3",
+          "parent_id": "US003",
+          "title": "To implement Validation, Error Handling & Automated Tests for View engineering records based on their assigned permissions",
+          "description": "Security verification, exception handling, automated tests, and edge case coverage for View engineering records based on their assigned permissions.",
+          "points": 1,
+          "story_points": 1,
+          "estimated_hours": 8,
+          "hours": 8,
+          "status": "To Do",
+          "priority_tier": "MEDIUM",
+          "assigned_developer": {
+            "id": "DEV04",
+            "name": "Tharushi Jayasuriya",
+            "role": "QA & Automation Test Lead",
+            "primary_domain": "QA / Testing",
+            "avatar_bg": "bg-purple-500",
+            "initials": "TJ",
+            "skill_match_pct": 95,
+            "matched_skills": [
+              "audit"
+            ],
+            "suitability_reason": "High skill alignment: Story requirements contain tokens [audit], directly matching Tharushi Jayasuriya's QA / Testing profile (95% Fit)."
+          },
+          "gherkin_criteria": "Feature: To implement Validation, Error Handling & Automated Tests for View engineering records based on their assigned permissions\n  As a Platform User\n  I want \"To implement Validation, Error Handling & Automated Tests for View engineering records based on their assigned permissions\" functionality implemented reliably\n  So that business deliverables are achieved with high quality.\n\n  Scenario: Primary Happy Path Execution\n    Given the user is on the target interface and system services are healthy\n    When the user inputs valid operational data and confirms submission\n    Then the server processes the transaction with sub-second response time\n    And updates the persistent storage with complete audit tracking.\n\n  Scenario: Boundary Validation & Error Recovery\n    Given required input fields are empty or exceed boundary constraints\n    When the user clicks the submit action\n    Then client-side and server-side validation flags the invalid fields\n    And highlights actionable remediation tips without losing form state.",
+          "dependencies": [
+            "US001.2"
+          ]
+        }
+      ],
+      "is_decomposed": true
     },
     {
       "story_id": "US011",
