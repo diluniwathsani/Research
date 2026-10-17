@@ -59,8 +59,13 @@ const DraggableTask = ({ task }) => {
       <div className="text-sm text-slate-600 dark:text-slate-300 mb-1.5 font-medium leading-snug">
         {task.title || task.story_id}
       </div>
-      <div className="text-xs uppercase tracking-wide font-semibold text-slate-400 dark:text-slate-400">
-        {task.predicted_complexity || 'MEDIUM'} • {task.matched_domain || 'general'}
+      <div className="flex justify-between items-center text-xs uppercase tracking-wide font-semibold text-slate-400 dark:text-slate-400">
+        <span>{task.predicted_complexity || 'MEDIUM'} • {task.matched_domain || 'general'}</span>
+        {task.developer_remaining_after !== undefined && task.developer_remaining_after !== null && (
+          <span className="text-emerald-600 dark:text-emerald-400 font-bold normal-case text-[11px]">
+            {task.developer_remaining_after}h remaining
+          </span>
+        )}
       </div>
     </div>
   );
@@ -120,21 +125,34 @@ const DeveloperColumn = ({ developer, tasks, onDrop, theme }) => {
           </div>
         </div>
 
-        {/* Cross-Project Capacity Allocation Status Badge */}
-        {isFullyAllocatedElseWhere ? (
-          <div className="mb-3 px-2.5 py-1 rounded-lg bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-[11px] font-bold flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-            <span>🔴 100% Fully Allocated on Other Project</span>
+        {/* Real-Time Remaining Capacity Status Badge */}
+        {remainingAvailable === 0 ? (
+          <div className="mb-3 px-2.5 py-1.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-[11px] font-bold flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+              <span>🔴 0h Remaining Capacity (100% Utilized)</span>
+            </span>
           </div>
         ) : otherProjectHours > 0 ? (
-          <div className="mb-3 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-[11px] font-bold flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-            <span>🟡 {Math.round((otherProjectHours/capacity)*100)}% Allocated Elsewhere ({remainingAvailable}h Available)</span>
+          <div className="mb-3 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-[11px] font-bold flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+              <span>🟡 {remainingAvailable}h Remaining Capacity ({otherProjectHours}h on other projects{currentSprintUsed > 0 ? ` + ${currentSprintUsed}h sprint` : ''})</span>
+            </span>
+          </div>
+        ) : currentSprintUsed > 0 ? (
+          <div className="mb-3 px-2.5 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-indigo-600 dark:text-indigo-400 text-[11px] font-bold flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+              <span>🔵 {remainingAvailable}h Remaining Capacity ({currentSprintUsed}h Allocated)</span>
+            </span>
           </div>
         ) : (
-          <div className="mb-3 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            <span>🟢 100% Available ({capacity}h)</span>
+          <div className="mb-3 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span>🟢 {remainingAvailable}h Remaining Capacity (100% Available)</span>
+            </span>
           </div>
         )}
 
@@ -172,9 +190,9 @@ const DeveloperColumn = ({ developer, tasks, onDrop, theme }) => {
             </div>
           </div>
           <div className="text-right">
-            <div className="text-slate-500 dark:text-slate-400 mb-0.5 font-medium">Capacity / Avail</div>
-            <div className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
-              {remainingAvailable}h <span className="text-[10px] text-slate-400">/ {capacity}h</span>
+            <div className="text-slate-500 dark:text-slate-400 mb-0.5 font-bold uppercase text-[10px] tracking-wider text-emerald-600 dark:text-emerald-400">Remaining Capacity</div>
+            <div className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
+              {remainingAvailable}h <span className="text-[10px] text-slate-400 font-normal">/ {capacity}h</span>
             </div>
           </div>
         </div>
@@ -185,8 +203,9 @@ const DeveloperColumn = ({ developer, tasks, onDrop, theme }) => {
         <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden mb-2">
           <div className={`h-full rounded-full transition-all ${getUtilizationBar()}`} style={{ width: `${Math.min(utilizationPercent, 100)}%` }} />
         </div>
-        <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
-          {utilizationPercent}% utilized across projects · {remainingAvailable}h available
+        <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex justify-between items-center">
+          <span>{utilizationPercent}% utilized across projects</span>
+          <span className="font-bold text-emerald-600 dark:text-emerald-400">{remainingAvailable}h remaining</span>
         </div>
       </div>
 

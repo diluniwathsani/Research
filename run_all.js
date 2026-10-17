@@ -7,7 +7,7 @@ const services = [
   { name: 'EXPRESS-BACKEND', color: '\x1b[36m', command: 'node', args: ['backend/server.js'] },
   { name: 'FLASK-API',       color: '\x1b[33m', command: 'python', args: ['backend/api.py'] },
   { name: 'ML-SERVICE',      color: '\x1b[35m', command: 'python', args: ['ml-service/app.py'] },
-  { name: 'FRONTEND',        color: '\x1b[32m', command: isWin ? 'cmd.exe' : 'npm', args: isWin ? ['/c', 'npm', '--prefix', 'frontend', 'run', 'dev'] : ['--prefix', 'frontend', 'run', 'dev'] }
+  { name: 'FRONTEND',        color: '\x1b[32m', cwd: path.join(__dirname, 'frontend'), command: isWin ? 'cmd.exe' : 'npm', args: isWin ? ['/c', 'npm', 'run', 'dev'] : ['run', 'dev'] }
 ];
 
 const children = [];
@@ -30,9 +30,9 @@ let isShuttingDown = false;
 function startService(service) {
   if (isShuttingDown) return;
   const child = spawn(service.command, service.args, {
-    cwd: __dirname,
+    cwd: service.cwd || __dirname,
     shell: service.shell || false,
-    env: { ...process.env, FORCE_COLOR: 'true' }
+    env: { ...process.env, FORCE_COLOR: 'true', PYTHONUNBUFFERED: '1' }
   });
 
   child.stdout.on('data', data => log(service, data));

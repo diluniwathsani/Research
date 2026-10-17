@@ -1915,53 +1915,16 @@ function allocateTasks(tasks, developers, currentProjectId) {
     if (!tasks || !Array.isArray(tasks) || tasks.length === 0) return [];
     if (!developers || !Array.isArray(developers) || developers.length === 0) return [];
 
-    // STEP 1 — Process work items by priority (CRITICAL → HIGH → MEDIUM → LOW)
-    //           Within the same priority tier, apply MRV (Minimum Remaining Values):
-    //           tasks with fewer eligible developers go first to avoid leaving them
-    //           unassigned because a greedy earlier task consumed their only candidate.
+    // Step 1: The system sorts tasks based on priority (CRITICAL -> HIGH -> MEDIUM -> LOW)
     const priorityOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
-
-    // Build a temporary snapshot of developer remaining capacities for pre-sort eligibility count.
-    // NOTE: This snapshot is used ONLY for ordering. Actual deductions happen in the main loop.
-    const snapRemaining = {};
-    developers.forEach(dev => {
-        const capacity = (dev.capacity_hours !== undefined && dev.capacity_hours !== null && !isNaN(Number(dev.capacity_hours))) ? Number(dev.capacity_hours) : 40;
-        const commitments = dev.project_commitments || [];
-        const otherProjectHours = commitments
-            .filter(c => currentProjectId && String(c.project_id) !== String(currentProjectId))
-            .reduce((sum, c) => sum + (Number(c.hours) || 0), 0);
-        snapRemaining[String(dev.id)] = Math.max(0, capacity - otherProjectHours);
+    const sortedTasks = [...tasks].sort((a, b) => {
+        const pA = priorityOrder[String(a.priority || 'MEDIUM').toUpperCase()] ?? 2;
+        const pB = priorityOrder[String(b.priority || 'MEDIUM').toUpperCase()] ?? 2;
+        return pA - pB;
     });
 
-    // Count how many developers are eligible for each task (domain match + capacity fit)
-    function countEligibleDevs(task) {
-        const estHrs = Number(task.estimated_hours) || (Number(task.story_points) ? Number(task.story_points) * 6 : 16);
-        const domain = normalizeDomainString(task.required_domain || task.domain);
-        return developers.filter(dev => {
-            const devDomain = normalizeDomainString(dev.primary_domain || dev.domain);
-            const devRemaining = snapRemaining[String(dev.id)] ?? 0;
-            return devDomain === domain && devRemaining >= estHrs;
-        }).length;
-    }
-
-    const tasksWithIndex = tasks.map((task, idx) => ({ task, idx, eligibleCount: countEligibleDevs(task) }));
-    tasksWithIndex.sort((a, b) => {
-        const pA = priorityOrder[(a.task.priority || 'MEDIUM').toUpperCase()] ?? 2;
-        const pB = priorityOrder[(b.task.priority || 'MEDIUM').toUpperCase()] ?? 2;
-        if (pA !== pB) return pA - pB;
-        // MRV: fewer eligible developers → schedule earlier within the same priority
-        if (a.eligibleCount !== b.eligibleCount) return a.eligibleCount - b.eligibleCount;
-        // Larger tasks consume capacity faster — schedule them while capacity is plentiful
-        const hA = Number(a.task.estimated_hours) || 16;
-        const hB = Number(b.task.estimated_hours) || 16;
-        if (hA !== hB) return hB - hA;
-        // Stable index tie-breaker
-        return a.idx - b.idx;
-    });
-    const sortedTasks = tasksWithIndex.map(item => item.task);
-
-    // Initialize developer capacity tracking using existing cross-project load logic
-    let devs = developers.map(dev => {
+    // Initialize developer capacity tracking
+    const devs = developers.map(dev => {
         const capacity = (dev.capacity_hours !== undefined && dev.capacity_hours !== null && !isNaN(Number(dev.capacity_hours))) ? Number(dev.capacity_hours) : 40;
         const commitments = dev.project_commitments || [];
         const otherProjectHours = commitments
@@ -1982,12 +1945,12 @@ function allocateTasks(tasks, developers, currentProjectId) {
 
     const assignments = [];
 
+    // Step 2: For each task
     for (const task of sortedTasks) {
         const estHours = Number(task.estimated_hours) || (Number(task.story_points) ? Number(task.story_points) * 6 : 16);
         const taskDomainNorm = normalizeDomainString(task.required_domain || task.domain);
         const requiredSkills = task.required_skills || task.skills || [];
 
-        // ML Complexity Prediction (HIGH / MEDIUM / LOW)
         let rawComplexity = task.predicted_complexity || task.complexity;
         if (!rawComplexity) {
             const sp = Number(task.story_points) || 0;
@@ -1998,9 +1961,27 @@ function allocateTasks(tasks, developers, currentProjectId) {
         }
         const predictedComplexity = String(rawComplexity).toUpperCase();
 
-        // STEP 1 — Filter Developers by Strict Domain Matching
-        const domainMatchedDevs = devs.filter(dev => normalizeDomainString(dev.primary_domain) === taskDomainNorm);
-        if (domainMatchedDevs.length === 0) {
+        // Check developers who match the required domain and have enough available capacity
+        const domainMatchingDevs = devs.filter(dev => 
+            normalizeDomainString(dev.primary_domain) === taskDomainNorm && dev.remaining >= estHours
+        );
+
+        let candidatePool = [];
+        let isFallback = false;
+
+        if (domainMatchingDevs.length > 0) {
+            candidatePool = domainMatchingDevs;
+        } else {
+            // Fallback: If no domain-matching developer is available, select an available developer with enough capacity
+            const availableFallbackDevs = devs.filter(dev => dev.remaining >= estHours);
+            if (availableFallbackDevs.length > 0) {
+                candidatePool = availableFallbackDevs;
+                isFallback = true;
+            }
+        }
+
+        // If no developer has enough capacity even with fallback
+        if (candidatePool.length === 0) {
             assignments.push({
                 story_id: task.story_id || task.id || task.taskId,
                 taskId: task.story_id || task.id || task.taskId,
@@ -2012,54 +1993,28 @@ function allocateTasks(tasks, developers, currentProjectId) {
                 allocatedHours: 0,
                 predicted_complexity: predictedComplexity,
                 matched_domain: taskDomainNorm,
+                domain_match: false,
+                is_fallback: false,
                 skill_match_score: 0,
                 complexity_suitability_score: 0,
                 composite_allocation_score: 0,
-                unassigned_reason: `No developers found in domain '${taskDomainNorm}'`
+                unassigned_reason: `No available developer with sufficient capacity (${estHours}h required)`
             });
             continue;
         }
 
-        // STEP 2 — Filter by Capacity: Verify that the FULL task estimate fits before assigning
-        const capableDevs = domainMatchedDevs.filter(dev => dev.remaining >= estHours);
-        if (capableDevs.length === 0) {
-            assignments.push({
-                story_id: task.story_id || task.id || task.taskId,
-                taskId: task.story_id || task.id || task.taskId,
-                title: task.title || task.user_story || 'User Story Requirement',
-                developer_id: null,
-                developerId: null,
-                developer_name: null,
-                allocated_hours: 0,
-                allocatedHours: 0,
-                predicted_complexity: predictedComplexity,
-                matched_domain: taskDomainNorm,
-                skill_match_score: 0,
-                complexity_suitability_score: 0,
-                composite_allocation_score: 0,
-                unassigned_reason: `No ${taskDomainNorm} developer with sufficient capacity (${estHours}h required)`
-            });
-            continue;
-        }
-
-        // STEP 3 — Evaluate Eligible Domain & Capacity-Matched Candidates
-        const evaluatedCandidates = capableDevs.map(dev => {
+        // Calculate the percentage of required skills that each developer has
+        const evaluatedCandidates = candidatePool.map(dev => {
             const skillMatchPct = calculateSkillMatchPercentage(dev.languages, requiredSkills);
             const senioritySuitability = calculateComplexitySenioritySuitability(predictedComplexity, dev.role);
             return {
                 ...dev,
-                exactDomainMatch: true,
                 skillMatchPct,
                 senioritySuitability
             };
         });
 
-        // STEP 4 — Rank Candidates
-        // Order of ranking:
-        // 1. Higher skill-match percentage first
-        // 2. Better complexity/seniority suitability first
-        // 3. Higher remaining capacity first
-        // 4. Deterministic tie-breaker by developer ID
+        // The developer with the highest skill match is selected
         evaluatedCandidates.sort((a, b) => {
             if (b.skillMatchPct !== a.skillMatchPct) {
                 return b.skillMatchPct - a.skillMatchPct;
@@ -2075,17 +2030,15 @@ function allocateTasks(tasks, developers, currentProjectId) {
 
         const chosen = evaluatedCandidates[0];
 
-        // STEP 5 — Allocate Full Task Hours and Immediately Deduct from Remaining Capacity
-        const allocHours = estHours;
-
+        // Their remaining capacity is updated after assignment
+        chosen.remaining -= estHours;
         const masterDev = devs.find(d => String(d.id) === String(chosen.id));
         if (masterDev) {
-            masterDev.remaining -= allocHours;
+            masterDev.remaining -= estHours;
         }
-        chosen.remaining -= allocHours;
 
         const maxSuitability = predictedComplexity === 'HIGH' ? 3 : 2;
-        const suitabilityScore = Math.round((chosen.senioritySuitability / maxSuitability) * 100);
+        const suitabilityScore = Math.round(((chosen.senioritySuitability || 2) / maxSuitability) * 100);
 
         assignments.push({
             story_id: task.story_id || task.id || task.taskId,
@@ -2094,10 +2047,15 @@ function allocateTasks(tasks, developers, currentProjectId) {
             developer_id: chosen.id,
             developerId: chosen.id,
             developer_name: chosen.name,
-            allocated_hours: allocHours,
-            allocatedHours: allocHours,
+            allocated_hours: estHours,
+            allocatedHours: estHours,
+            developer_capacity: chosen.capacity_hours,
+            developer_remaining_after: chosen.remaining,
+            remaining_capacity: chosen.remaining,
             predicted_complexity: predictedComplexity,
-            matched_domain: taskDomainNorm,
+            matched_domain: chosen.primary_domain,
+            domain_match: !isFallback,
+            is_fallback: isFallback,
             skill_match_score: Math.round(chosen.skillMatchPct),
             complexity_suitability_score: suitabilityScore,
             composite_allocation_score: Math.round(chosen.skillMatchPct)

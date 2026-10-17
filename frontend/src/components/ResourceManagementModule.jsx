@@ -723,7 +723,7 @@ export default function ResourceManagementModule({
             developer_domain: normDomain(dev?.primary_domain || dev?.domain),
             developer_skills: dev?.languages || dev?.skills || [],
             developer_capacity: Number(dev?.capacity_hours) || 40,
-            developer_remaining_after: null,
+            developer_remaining_after: a.developer_remaining_after ?? (dev ? Math.max(0, (Number(dev.capacity_hours) || 40) - (Number(dev.other_project_hours) || 0) - (a.allocated_hours || 0)) : null),
             allocated_hours: a.allocated_hours || 0,
             // Scoring
             domain_match: !!(a.developer_id),
@@ -750,31 +750,13 @@ export default function ResourceManagementModule({
       const hoursUsed = {};
       devPool.forEach(d => { hoursUsed[d.id] = 0; });
 
-      // Build snapRemaining for MRV eligibility counts
-      const snapRemaining = {};
-      devPool.forEach(d => { snapRemaining[d.id] = d.remaining; });
-
-      function countEligible(task) {
-        const estHrs  = Number(task.estimated_hours) || 16;
-        const domain  = normDomain(task.required_domain || task.domain);
-        return devPool.filter(d => d.primary_domain === domain && (snapRemaining[d.id] ?? 0) >= estHrs).length;
-      }
-
-      // Sort: priority first, then MRV (fewer eligible → earlier), then larger tasks, then index
+      // Step 1: The system sorts tasks based on priority (CRITICAL -> HIGH -> MEDIUM -> LOW)
       const priorityOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
-      const sorted = workItems
-        .map((item, idx) => ({ item, idx, eligibleCount: countEligible(item) }))
-        .sort((a, b) => {
-          const pA = priorityOrder[(a.item.priority || 'MEDIUM').toUpperCase()] ?? 2;
-          const pB = priorityOrder[(b.item.priority || 'MEDIUM').toUpperCase()] ?? 2;
-          if (pA !== pB) return pA - pB;
-          if (a.eligibleCount !== b.eligibleCount) return a.eligibleCount - b.eligibleCount;
-          const hA = Number(a.item.estimated_hours) || 16;
-          const hB = Number(b.item.estimated_hours) || 16;
-          if (hA !== hB) return hB - hA;
-          return a.idx - b.idx;
-        })
-        .map(x => x.item);
+      const sorted = [...workItems].sort((a, b) => {
+        const pA = priorityOrder[(a.priority || 'MEDIUM').toUpperCase()] ?? 2;
+        const pB = priorityOrder[(b.priority || 'MEDIUM').toUpperCase()] ?? 2;
+        return pA - pB;
+      });
 
       const results = sorted.map(item => {
         const itemHrs   = Number(item.estimated_hours) || 16;
@@ -792,9 +774,29 @@ export default function ResourceManagementModule({
         }
         complexity = complexity.toUpperCase();
 
-        // Strict domain filter
-        const domainDevs = devPool.filter(d => d.primary_domain === itemDomain);
-        if (domainDevs.length === 0) {
+        // Check developers who match the required domain and have enough available capacity
+        const domainMatchingDevs = devPool.filter(d => 
+          d.primary_domain === itemDomain && ((d.remaining - (hoursUsed[d.id] || 0)) >= itemHrs)
+        );
+
+        let candidatePool = [];
+        let isFallback = false;
+
+        if (domainMatchingDevs.length > 0) {
+          candidatePool = domainMatchingDevs;
+        } else {
+          // Fallback: If no domain-matching developer is available, select an available developer with enough capacity
+          const availableFallbackDevs = devPool.filter(d => 
+            (d.remaining - (hoursUsed[d.id] || 0)) >= itemHrs
+          );
+          if (availableFallbackDevs.length > 0) {
+            candidatePool = availableFallbackDevs;
+            isFallback = true;
+          }
+        }
+
+        // If no developer has enough capacity even with fallback
+        if (candidatePool.length === 0) {
           return {
             story_id: item.story_id || item.id, title: item.title,
             parent_story_id: item.parent_story_id, parent_story_title: item.parent_story_title,
@@ -805,49 +807,34 @@ export default function ResourceManagementModule({
             developer_id: null, developer_name: null, developer_role: null, developer_domain: null,
             developer_skills: [], developer_capacity: 0, developer_remaining_after: 0, allocated_hours: 0,
             domain_match: false, skill_match_pct: 0, seniority_suitability_score: 0, seniority_rank: 0,
-            unassigned_reason: `No developers found in domain '${itemDomain}'`
+            unassigned_reason: `No available developer with sufficient capacity (${itemHrs}h required)`
           };
         }
 
-        // Capacity filter
-        const capableDevs = domainDevs
-          .filter(d => (d.remaining - (hoursUsed[d.id] || 0)) >= itemHrs)
-          .map(d => {
-            const available = d.remaining - (hoursUsed[d.id] || 0);
-            const skillPct  = calcSkillMatch(d.languages, reqSkills);
-            const seniority = calcSenioritySuitability(complexity, d.role);
-            return { ...d, available, skillPct, seniority };
-          });
+        // Calculate the percentage of required skills that each developer has
+        const evaluatedCandidates = candidatePool.map(d => {
+          const available = d.remaining - (hoursUsed[d.id] || 0);
+          const skillPct  = calcSkillMatch(d.languages, reqSkills);
+          const seniority = calcSenioritySuitability(complexity, d.role);
+          return { ...d, available, skillPct, seniority };
+        });
 
-        if (capableDevs.length === 0) {
-          return {
-            story_id: item.story_id || item.id, title: item.title,
-            parent_story_id: item.parent_story_id, parent_story_title: item.parent_story_title,
-            story_points: item.story_points || 2, estimated_hours: itemHrs,
-            priority: item.priority, domain: item.domain, required_domain: itemDomain,
-            required_skills: reqSkills, predicted_complexity: complexity,
-            status: item.status || 'To Do', start_date: item.start_date || null, end_date: item.end_date || null,
-            developer_id: null, developer_name: null, developer_role: null, developer_domain: null,
-            developer_skills: [], developer_capacity: 0, developer_remaining_after: 0, allocated_hours: 0,
-            domain_match: false, skill_match_pct: 0, seniority_suitability_score: 0, seniority_rank: 0,
-            unassigned_reason: `No ${itemDomain} developer with sufficient capacity (${itemHrs}h required)`
-          };
-        }
-
-        // Rank candidates
-        const candidates = [...capableDevs].sort((a, b) => {
+        // The developer with the highest skill match is selected
+        evaluatedCandidates.sort((a, b) => {
           if (b.skillPct  !== a.skillPct)  return b.skillPct  - a.skillPct;
           if (b.seniority !== a.seniority) return b.seniority - a.seniority;
           if (b.available !== a.available) return b.available - a.available;
           return String(a.id).localeCompare(String(b.id));
         });
 
-        const best = candidates[0];
+        const best = evaluatedCandidates[0];
         const allocHrs = itemHrs;
+
+        // Remaining capacity is updated after assignment
         hoursUsed[best.id] = (hoursUsed[best.id] || 0) + allocHrs;
 
         const maxSuit  = complexity === 'HIGH' ? 3 : 2;
-        const suitScore = Math.round((best.seniority / maxSuit) * 100);
+        const suitScore = Math.round(((best.seniority || 2) / maxSuit) * 100);
 
         return {
           story_id: item.story_id || item.id, title: item.title,
@@ -858,9 +845,9 @@ export default function ResourceManagementModule({
           status: item.status || 'To Do', start_date: item.start_date || null, end_date: item.end_date || null,
           developer_id: best.id, developer_name: best.name,
           developer_role: best.role, developer_domain: best.primary_domain,
-          developer_skills: best.languages, developer_capacity: Number(best.remaining) + allocHrs,
+          developer_skills: best.languages, developer_capacity: Number(best.remaining),
           developer_remaining_after: best.available - allocHrs, allocated_hours: allocHrs,
-          domain_match: true, skill_match_pct: best.skillPct,
+          domain_match: !isFallback, skill_match_pct: best.skillPct,
           seniority_suitability_score: suitScore, seniority_rank: getSeniorityRank(best.role),
           unassigned_reason: null
         };
