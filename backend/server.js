@@ -1966,17 +1966,9 @@ function allocateTasks(tasks, developers, currentProjectId) {
         }
         const predictedComplexity = String(rawComplexity).toUpperCase();
 
-        // STEP 2 — Filter Developers by Remaining Capacity: Exclude developers with remaining <= 0
-        // STEP 2 — Filter Developers by Remaining Capacity: Exclude developers with remaining <= 0
-        const availableDevs = devs.filter(dev => dev.remaining > 0);
-        if (availableDevs.length === 0) {
-            continue; // Cannot assign work to a developer who has no available capacity
-        }
-
-                // STEP 3 — Filter Developers by Exact Domain Match
-        const domainMatchedDevs = availableDevs.filter(dev => normalizeDomainString(dev.primary_domain) === taskDomainNorm);
+        // STEP 1 — Filter Developers by Strict Domain Matching
+        const domainMatchedDevs = devs.filter(dev => normalizeDomainString(dev.primary_domain) === taskDomainNorm);
         if (domainMatchedDevs.length === 0) {
-            // No matching domain developers; leave task unassigned with a clear reason
             assignments.push({
                 story_id: task.story_id || task.id || task.taskId,
                 taskId: task.story_id || task.id || task.taskId,
@@ -1991,13 +1983,35 @@ function allocateTasks(tasks, developers, currentProjectId) {
                 skill_match_score: 0,
                 complexity_suitability_score: 0,
                 composite_allocation_score: 0,
-                unassigned_reason: 'No developers with matching domain and capacity'
+                unassigned_reason: `No developers found in domain '${taskDomainNorm}'`
             });
-            continue; // Skip further processing for this task
+            continue;
         }
 
-        // STEP 4,5 — Evaluate Candidates (only domain‑matched developers)
-        const evaluatedCandidates = domainMatchedDevs.map(dev => {
+        // STEP 2 — Filter by Capacity: Verify that the FULL task estimate fits before assigning
+        const capableDevs = domainMatchedDevs.filter(dev => dev.remaining >= estHours);
+        if (capableDevs.length === 0) {
+            assignments.push({
+                story_id: task.story_id || task.id || task.taskId,
+                taskId: task.story_id || task.id || task.taskId,
+                title: task.title || task.user_story || 'User Story Requirement',
+                developer_id: null,
+                developerId: null,
+                developer_name: null,
+                allocated_hours: 0,
+                allocatedHours: 0,
+                predicted_complexity: predictedComplexity,
+                matched_domain: taskDomainNorm,
+                skill_match_score: 0,
+                complexity_suitability_score: 0,
+                composite_allocation_score: 0,
+                unassigned_reason: `No ${taskDomainNorm} developer with sufficient capacity (${estHours}h required)`
+            });
+            continue;
+        }
+
+        // STEP 3 — Evaluate Eligible Domain & Capacity-Matched Candidates
+        const evaluatedCandidates = capableDevs.map(dev => {
             const skillMatchPct = calculateSkillMatchPercentage(dev.languages, requiredSkills);
             const senioritySuitability = calculateComplexitySenioritySuitability(predictedComplexity, dev.role);
             return {
@@ -2008,16 +2022,13 @@ function allocateTasks(tasks, developers, currentProjectId) {
             };
         });
 
-        // STEP 6 — Rank All Eligible Developers
+        // STEP 4 — Rank Candidates
         // Order of ranking:
-        // 1. Exact domain match first
-        // 2. Higher skill-match percentage first
-        // 3. Better complexity/seniority suitability first
-        // 4. Higher remaining capacity first
+        // 1. Higher skill-match percentage first
+        // 2. Better complexity/seniority suitability first
+        // 3. Higher remaining capacity first
+        // 4. Deterministic tie-breaker by developer ID
         evaluatedCandidates.sort((a, b) => {
-            if (a.exactDomainMatch !== b.exactDomainMatch) {
-                return (b.exactDomainMatch ? 1 : 0) - (a.exactDomainMatch ? 1 : 0);
-            }
             if (b.skillMatchPct !== a.skillMatchPct) {
                 return b.skillMatchPct - a.skillMatchPct;
             }
@@ -2032,15 +2043,10 @@ function allocateTasks(tasks, developers, currentProjectId) {
 
         const chosen = evaluatedCandidates[0];
 
-        // STEP 7 — Allocate Hours and Update Capacity
-        const allocHours = Math.min(estHours, chosen.remaining);
+        // STEP 5 — Allocate Full Task Hours and Immediately Deduct from Remaining Capacity
+        const allocHours = estHours;
 
-        if (allocHours <= 0) {
-            continue;
-        }
-
-        // Immediately update developer remaining capacity
-        const masterDev = devs.find(d => d.id === chosen.id);
+        const masterDev = devs.find(d => String(d.id) === String(chosen.id));
         if (masterDev) {
             masterDev.remaining -= allocHours;
         }
@@ -3655,23 +3661,40 @@ app.post('/api/task-assignments', async (req, res) => {
             devMap[String(d.id)] = d;
         });
 
-        // Map and validate assignments that have a valid developer_id and story_id
-        const validAssignments = (assignments || []).filter(a => {
-            if (!a || (!a.story_id && !a.id)) return false;
+        // Map and validate assignments with strict domain matching
+        const validAssignments = [];
+        const devAllocatedHours = {};
+
+        for (const a of (assignments || [])) {
+            if (!a || (!a.story_id && !a.id)) continue;
             const devId = a.developer_id !== undefined && a.developer_id !== null ? String(a.developer_id) : null;
-            return devId && devId !== '0' && devId !== 'null' && devId !== 'undefined';
-        }).map(a => {
-            const devIdStr = String(a.developer_id);
-            const matchedDev = devMap[devIdStr] || {};
-            return {
+            if (!devId || devId === '0' || devId === 'null' || devId === 'undefined') continue;
+
+            const matchedDev = devMap[devId];
+            if (!matchedDev) continue;
+
+            const devDomain = normalizeDomainString(matchedDev.primary_domain);
+            const taskDomain = normalizeDomainString(a.matched_domain || a.required_domain || a.domain || (extractDomainAndSkills(a.title || '')?.domain));
+
+            // STRICT DOMAIN MATCH: Only save if developer domain matches task domain!
+            if (devDomain !== taskDomain) {
+                console.warn(`[Save Filtered] Domain mismatch: Task ${a.story_id} (${taskDomain}) cannot be saved to developer ${matchedDev.name} (${devDomain})`);
+                continue;
+            }
+
+            const hrs = Number(a.allocated_hours) || 16;
+            const currentTotal = (devAllocatedHours[devId] || 0) + hrs;
+            devAllocatedHours[devId] = currentTotal;
+
+            validAssignments.push({
                 story_id: a.story_id || a.id,
-                developer_id: a.developer_id,
+                developer_id: matchedDev.id,
                 developer_name: a.developer_name || matchedDev.name || 'Software Engineer',
                 developer_role: a.developer_role || matchedDev.role || 'Software Engineer',
-                allocated_hours: Number(a.allocated_hours) || 35,
+                allocated_hours: hrs,
                 predicted_complexity: a.predicted_complexity || 'MEDIUM'
-            };
-        });
+            });
+        }
 
         if (validAssignments.length === 0) {
             return res.status(400).json({ error: 'No active task assignments provided to save.' });
@@ -3976,7 +3999,8 @@ if (typeof module !== 'undefined' && module.exports) {
         calculateSkillMatchPercentage,
         calculateComplexitySenioritySuitability,
         getSeniorityRank,
-        normalizeDomainString
+        normalizeDomainString,
+        extractDomainAndSkills
     };
 }
 

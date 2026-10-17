@@ -73,8 +73,10 @@ runTest('Work items are strictly processed in CRITICAL -> HIGH -> MEDIUM -> LOW 
 
     // Solo Dev only has 10 hours, so only the first processed item will get allocated
     const assignments = allocateTasks(tasks, dev, 'P01');
-    assert.strictEqual(assignments.length, 1);
-    assert.strictEqual(assignments[0].story_id, 'CRIT-1', 'CRITICAL task must be allocated first and consume capacity');
+    const assigned = assignments.filter(a => a.developer_id !== null);
+    assert.strictEqual(assigned.length, 1);
+    assert.strictEqual(assigned[0].story_id, 'CRIT-1', 'CRITICAL task must be allocated first and consume capacity');
+    assert.strictEqual(assignments.length, 4, 'Remaining 3 tasks should be returned as unassigned');
 });
 
 runTest('Tasks with identical priority preserve their relative order', () => {
@@ -88,8 +90,10 @@ runTest('Tasks with identical priority preserve their relative order', () => {
     ];
 
     const assignments = allocateTasks(tasks, devs, 'P01');
-    assert.strictEqual(assignments.length, 1);
-    assert.strictEqual(assignments[0].story_id, 'CRIT-FIRST');
+    const assigned = assignments.filter(a => a.developer_id !== null);
+    assert.strictEqual(assigned.length, 1);
+    assert.strictEqual(assigned[0].story_id, 'CRIT-FIRST');
+    assert.strictEqual(assignments.length, 2, 'Second task should be returned as unassigned due to capacity');
 });
 
 // -------------------------------------------------------------
@@ -207,19 +211,35 @@ runTest('Developer capacity is updated immediately after each allocation and bou
 
     const tasks = [
         { story_id: 'T1', priority: 'CRITICAL', estimated_hours: 20, required_domain: 'backend', required_skills: ['Node.js'] },
-        { story_id: 'T2', priority: 'HIGH', estimated_hours: 20, required_domain: 'backend', required_skills: ['Node.js'] },
+        { story_id: 'T2', priority: 'HIGH', estimated_hours: 10, required_domain: 'backend', required_skills: ['Node.js'] },
         { story_id: 'T3', priority: 'MEDIUM', estimated_hours: 10, required_domain: 'backend', required_skills: ['Node.js'] }
     ];
 
     const assignments = allocateTasks(tasks, devs, 'P01');
     // T1 gets 20h (D1 has 10h remaining)
-    // T2 gets Math.min(20, 10) = 10h (D1 has 0h remaining)
+    // T2 gets 10h (D1 has 0h remaining)
     // T3 cannot be allocated because D1 has 0h remaining
-    assert.strictEqual(assignments.length, 2);
+    assert.strictEqual(assignments.length, 3);
     assert.strictEqual(assignments[0].story_id, 'T1');
     assert.strictEqual(assignments[0].allocated_hours, 20);
     assert.strictEqual(assignments[1].story_id, 'T2');
     assert.strictEqual(assignments[1].allocated_hours, 10);
+    assert.strictEqual(assignments[2].story_id, 'T3');
+    assert.strictEqual(assignments[2].developer_id, null, 'T3 must be unassigned due to insufficient capacity');
+});
+
+runTest('Do not assign tasks to developers with insufficient remaining capacity for full estimate', () => {
+    const devs = [
+        { id: 'D1', name: 'Dev 10h', capacity_hours: 10, primary_domain: 'backend', languages: ['Node.js'], role: 'Senior' }
+    ];
+    const tasks = [
+        { story_id: 'T1', priority: 'HIGH', estimated_hours: 25, required_domain: 'backend', required_skills: ['Node.js'] }
+    ];
+
+    const assignments = allocateTasks(tasks, devs, 'P01');
+    assert.strictEqual(assignments.length, 1);
+    assert.strictEqual(assignments[0].developer_id, null, '25h task cannot fit in 10h developer');
+    assert.ok(assignments[0].unassigned_reason.includes('capacity'));
 });
 
 // -------------------------------------------------------------

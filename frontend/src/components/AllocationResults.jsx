@@ -205,6 +205,57 @@ const DeveloperColumn = ({ developer, tasks, onDrop, theme }) => {
           </div>
         )}
       </div>
+const UnassignedColumn = ({ tasks, onDrop }) => {
+  const [{ isOver }, drop] = useDrop(() => ({
+    accept: ItemTypes.TASK,
+    drop: (item) => onDrop(item.task, item.originalDevId, 'unassigned'),
+    collect: (monitor) => ({ isOver: !!monitor.isOver() }),
+  }));
+
+  return (
+    <div
+      ref={drop}
+      className={`rounded-2xl bg-amber-500/[0.04] dark:bg-amber-950/20 border-2 border-dashed transition-colors overflow-hidden ${
+        isOver
+          ? 'border-amber-500 ring-2 ring-amber-500/20'
+          : 'border-amber-300 dark:border-amber-700/60'
+      }`}
+    >
+      <div className="p-4 border-b border-amber-200/60 dark:border-amber-700/40 bg-amber-500/10">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center font-bold text-amber-700 dark:text-amber-300 text-lg shrink-0 bg-amber-500/20 border border-amber-500/30">
+            ⚠️
+          </div>
+          <div className="min-w-0">
+            <strong className="text-[15px] font-bold text-amber-900 dark:text-amber-200 block truncate">
+              Unassigned Tasks
+            </strong>
+            <div className="text-xs text-amber-700 dark:text-amber-400 font-medium">
+              {tasks.length} task{tasks.length === 1 ? '' : 's'} awaiting eligible capacity
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-3 pb-3 pt-2.5 min-h-[150px] max-h-[380px] overflow-y-auto">
+        {tasks.length === 0 ? (
+          <div className="text-center py-8 text-amber-600/60 dark:text-amber-400/50">
+            <span className="text-2xl block mb-1">🎉</span>
+            <p className="text-xs font-semibold">All tasks allocated!</p>
+          </div>
+        ) : (
+          tasks.map(task => (
+            <div key={task.story_id}>
+              <DraggableTask task={{ ...task, allocated_hours: task.estimated_hours || task.allocated_hours || 0 }} />
+              {task.unassigned_reason && (
+                <div className="text-[10px] -mt-1.5 mb-2.5 px-2 py-1 rounded bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 font-medium leading-tight">
+                  ℹ️ {task.unassigned_reason}
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 };
@@ -223,16 +274,41 @@ const AllocationResults = ({ assignments = [], developers = [], tasks = [], sele
     grouped[key].push(a);
   });
 
+  const normDomainStr = (d) => {
+    const s = String(d || '').toLowerCase();
+    if (s.includes('front')) return 'frontend';
+    if (s.includes('qa') || s.includes('test')) return 'qa';
+    if (s.includes('devops')) return 'devops';
+    if (s.includes('ai') || s.includes('ml')) return 'ai';
+    return 'backend';
+  };
+
   const handleDrop = (task, fromDevId, toDevId) => {
     if (String(fromDevId) === String(toDevId)) return;
+
+    // Handle moving task to Unassigned
+    if (!toDevId || toDevId === 'unassigned' || toDevId === 'null') {
+      onTaskMove(task, fromDevId, 'unassigned');
+      return;
+    }
+
     const targetDev = safeDevelopers.find(d => String(d.id) === String(toDevId));
     if (!targetDev) return;
+
+    // RULE 0: STRICT DOMAIN MATCHING
+    const taskDomain = normDomainStr(task.matched_domain || task.required_domain || task.domain);
+    const targetDomain = normDomainStr(targetDev.primary_domain || targetDev.domain);
+
+    if (taskDomain !== targetDomain) {
+      alert(`⛔ Domain Mismatch for ${targetDev.name}!\n\nThis task requires a "${taskDomain.toUpperCase()}" developer, but ${targetDev.name} is a "${targetDomain.toUpperCase()}" developer.\n\nStrict domain matching is enforced: tasks cannot be assigned across domains.`);
+      return;
+    }
 
     const capacity = Number(targetDev.capacity_hours) || 40;
     const otherProjectHours = Number(targetDev.other_project_hours) || 0;
     const targetAssignedTasks = grouped[String(toDevId)] || [];
     const currentSprintUsed = targetAssignedTasks.reduce((sum, t) => sum + (t.allocated_hours || 0), 0);
-    const taskHours = Number(task.allocated_hours) || 8;
+    const taskHours = Number(task.estimated_hours) || Number(task.allocated_hours) || 16;
 
     // RULE 1: If developer is 100% fully allocated to another project, block assignment completely!
     if (targetDev.is_fully_allocated || otherProjectHours >= capacity) {
@@ -320,17 +396,28 @@ const AllocationResults = ({ assignments = [], developers = [], tasks = [], sele
             </div>
           </div>
 
-          <div className="grid gap-5 mb-5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))' }}>
-            {safeDevelopers.map((dev, i) => (
-              <DeveloperColumn
-                key={dev.id}
-                developer={dev}
-                tasks={grouped[String(dev.id)] || grouped[dev.id] || []}
-                onDrop={handleDrop}
-                theme={AVATAR_THEMES[i % AVATAR_THEMES.length]}
-              />
-            ))}
-          </div>
+          {(() => {
+            const unassignedTasks = safeAssignments.filter(a => !a.developer_id || a.developer_id === 'null' || a.developer_name === 'Unassigned');
+            return (
+              <div className="grid gap-5 mb-5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))' }}>
+                {unassignedTasks.length > 0 && (
+                  <UnassignedColumn
+                    tasks={unassignedTasks}
+                    onDrop={handleDrop}
+                  />
+                )}
+                {safeDevelopers.map((dev, i) => (
+                  <DeveloperColumn
+                    key={dev.id}
+                    developer={dev}
+                    tasks={grouped[String(dev.id)] || grouped[dev.id] || []}
+                    onDrop={handleDrop}
+                    theme={AVATAR_THEMES[i % AVATAR_THEMES.length]}
+                  />
+                ))}
+              </div>
+            );
+          })()}
 
           {/* Summary */}
           <div className="pt-5 border-t border-slate-100 dark:border-slate-800">
