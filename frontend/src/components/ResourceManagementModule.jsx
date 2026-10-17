@@ -23,72 +23,171 @@ const PROJECT_ENGINE_API = 'http://localhost:8082/api';
 // Dynamically extracts technical domain and required developer skills from
 // sub-task and user story requirement titles using regular expression keyword matching.
 // ==============================================================================
-function extractDomainAndSkills(titleOrText) {
-  const text = (titleOrText || '').toLowerCase();
+function extractDomainAndSkills(titleOrText, description = '') {
+  // Extract unified text from title and description (supports both string and task object)
+  let fullText = '';
+  if (titleOrText && typeof titleOrText === 'object') {
+    fullText = (titleOrText.title || titleOrText.name || '') + ' ' + (titleOrText.description || '') + ' ' + (titleOrText.user_story || '') + ' ' + (description || '');
+  } else {
+    fullText = (titleOrText || '') + ' ' + (description || '');
+  }
+  const text = fullText.toLowerCase();
 
   // --------------------------------------------------------------------------
-  // 1. AI & Machine Learning Domain Identification
-  // Keywords: machine learning, nlp, deep learning, models, spacy, neural network
-  // Associated Skills: Python, ML, NLP, Scikit-Learn
+  // 1. AI / Machine Learning Domain Identification
+  // Keywords: machine learning, nlp, spacy, scikit-learn, svm, deep learning,
+  //           neural network, tensorflow, pytorch, classifier, ai service,
+  //           ml model, training dataset, prediction, predict, model training,
+  //           feature extraction, classification, inference, model integration,
+  //           data preprocessing, pandas, random forest
+  // Associated Skills: Python, ML, NLP, Scikit-Learn, TensorFlow, PyTorch, Pandas
   // --------------------------------------------------------------------------
-  if (/\b(machine learning|nlp|spacy|scikit|svm|deep learning|neural network|tensorflow|pytorch|classifier|ai service|ml model|training dataset)\b/i.test(text) || (/\b(ml|ai)\b/i.test(text) && !text.includes('email') && !text.includes('detail') && !text.includes('main'))) {
-    let skills = ['Python', 'ML'];
-    if (text.includes('nlp') || text.includes('spacy')) skills.push('NLP');
-    if (text.includes('svm') || text.includes('scikit')) skills.push('Scikit-Learn');
+  const isAi = /\b(machine learning|nlp|spacy|scikit-learn|scikit|svm|deep learning|neural network|tensorflow|pytorch|classifier|ai service|ml model|training dataset|prediction|predict|model training|feature extraction|classification|inference|model integration|data preprocessing|pandas|random forest)\b/i.test(text)
+    || (/\b(ml|ai)\b/i.test(text) && !text.includes('email') && !text.includes('detail') && !text.includes('main') && !text.includes('gain') && !text.includes('chain'));
+
+  if (isAi) {
+    const skillsSet = new Set(['Python']);
+    if (/\b(machine learning|ml|ml model|model training|training dataset|inference|model integration|prediction|predict)\b/i.test(text)) {
+      skillsSet.add('ML');
+    }
+    if (/\b(nlp|spacy)\b/i.test(text)) {
+      skillsSet.add('NLP');
+    }
+    if (/\b(scikit|scikit-learn|svm|random forest|classifier|classification)\b/i.test(text)) {
+      skillsSet.add('Scikit-Learn');
+    }
+    if (/\btensorflow\b/i.test(text)) {
+      skillsSet.add('TensorFlow');
+    }
+    if (/\bpytorch\b/i.test(text)) {
+      skillsSet.add('PyTorch');
+    }
+    if (/\b(pandas|data preprocessing|feature extraction)\b/i.test(text)) {
+      skillsSet.add('Pandas');
+    }
+    if (skillsSet.size === 1) {
+      skillsSet.add('ML');
+    }
+    const skills = Array.from(skillsSet);
     return { domain: 'ai', required_domain: 'ai', skills, required_skills: skills };
   }
 
   // --------------------------------------------------------------------------
-  // 2. Frontend Domain Identification (UI / UX / Forms / Views)
-  // Keywords: enter, input, form, ui, ux, frontend, react, dashboard, dark mode,
-  //           css, tailwind, export, pdf, excel, component, screen, button, render
-  // Associated Skills: JavaScript, React, Tailwind CSS, jsPDF, HTML/CSS
+  // 2. DevOps & Infrastructure Domain Identification
+  // Keywords: devops, github actions, workflow, build, continuous integration,
+  //           continuous deployment, ci/cd, environment variables, docker,
+  //           container, kubernetes, deployment, hosting, aws, nginx, pipeline
+  // Associated Skills: Docker, DevOps, CI/CD, AWS
   // --------------------------------------------------------------------------
-  if (/\b(enter|input|form|ui|ux|frontend|react|dashboard|dark mode|css|tailwind|export|pdf|excel|component|layout|view|display|screen|button|render)\b/i.test(text)) {
-    let skills = ['JavaScript', 'React'];
-    if (text.includes('dark mode') || text.includes('css') || text.includes('tailwind')) skills.push('Tailwind');
-    if (text.includes('pdf') || text.includes('excel') || text.includes('export') || text.includes('print')) skills.push('jsPDF');
-    if (text.includes('enter') || text.includes('input') || text.includes('form')) skills.push('HTML/CSS');
-    return { domain: 'frontend', required_domain: 'frontend', skills, required_skills: skills };
-  }
+  const isDevOps = /\b(devops|github actions|continuous integration|continuous deployment|ci\/cd|environment variables|docker|container|kubernetes|deployment|hosting|aws|nginx|dockerfile)\b/i.test(text)
+    || (/\b(pipeline|workflow|build)\b/i.test(text) && /\b(deploy|ci|cd|release|infra|cloud|docker|git|env)\b/i.test(text));
 
-  // --------------------------------------------------------------------------
-  // 3. QA & Quality Assurance Domain Identification (Testing & Verification)
-  // Keywords: test, qa, cypress, selenium, unit test, jest, verification, validation
-  // Associated Skills: QA Automation, Cypress
-  // --------------------------------------------------------------------------
-  if (/\b(test|qa|cypress|selenium|unit test|jest|audit check|verification|verify|validation|validate)\b/i.test(text)) {
-    const skills = ['QA Automation', 'Cypress'];
-    return { domain: 'qa', required_domain: 'qa', skills, required_skills: skills };
-  }
-
-  // --------------------------------------------------------------------------
-  // 4. DevOps & Cloud Infrastructure Domain Identification
-  // Keywords: devops, docker, kubernetes, aws, cloud, ci/cd, pipeline, deploy, nginx
-  // Associated Skills: Docker, DevOps
-  // --------------------------------------------------------------------------
-  if (/\b(devops|docker|kubernetes|aws|cloud|ci\/cd|pipeline|deploy|nginx|dockerfile)\b/i.test(text)) {
-    const skills = ['Docker', 'DevOps'];
+  if (isDevOps) {
+    const skillsSet = new Set(['DevOps']);
+    if (/\b(docker|container|dockerfile)\b/i.test(text)) {
+      skillsSet.add('Docker');
+    }
+    if (/\b(ci\/cd|github actions|continuous integration|continuous deployment|workflow|pipeline|build)\b/i.test(text)) {
+      skillsSet.add('CI/CD');
+    }
+    if (/\b(aws|cloud|hosting|kubernetes|nginx|environment variables)\b/i.test(text)) {
+      skillsSet.add('AWS');
+    }
+    const skills = Array.from(skillsSet);
     return { domain: 'devops', required_domain: 'devops', skills, required_skills: skills };
   }
 
   // --------------------------------------------------------------------------
-  // 5. Backend Domain Identification (APIs / Database / Transactions / Auth)
-  // Keywords: api, backend, server, database, sql, postgres, defect, repair,
-  //           login, auth, permission, role, approve, reject, status, costing
-  // Associated Skills: JavaScript, SQL, Node.js, OAuth, PostgreSQL
+  // 3. QA / Testing Domain Identification
+  // Keywords: qa, test case, test scenario, testing, regression testing,
+  //           integration testing, unit testing, end-to-end, bug report,
+  //           test automation, cypress, jest, selenium, assertion, verification, validation
+  // Associated Skills: Manual Testing, QA Automation, Cypress, Jest, Selenium
   // --------------------------------------------------------------------------
-  if (/\b(defect|repair|vessel|equipment|overtime|labor|labour|history|audit|version|status|approve|reject|permission|role|user|login|auth|database|sql|postgres|backend|api|server|crud|link|assign|cost|costing)\b/i.test(text)) {
-    let skills = ['JavaScript', 'SQL'];
-    if (text.includes('login') || text.includes('auth') || text.includes('permission') || text.includes('role')) skills.push('OAuth');
-    if (text.includes('database') || text.includes('sql') || text.includes('postgres') || text.includes('history') || text.includes('audit') || text.includes('version')) skills.push('PostgreSQL');
-    if (text.includes('api') || text.includes('backend') || text.includes('defect') || text.includes('repair') || text.includes('approve') || text.includes('reject')) skills.push('Node.js');
+  const isQA = /\b(test case|test scenario|regression testing|integration testing|unit testing|unit test|end-to-end|bug report|test automation|cypress|jest|selenium|assertion|audit check)\b/i.test(text)
+    || (/\b(qa|testing|test|verification|verify|validation|validate)\b/i.test(text) && !/\b(input validation|form validation)\b/i.test(text));
+
+  if (isQA) {
+    const skillsSet = new Set();
+    if (/\bcypress\b/i.test(text)) {
+      skillsSet.add('Cypress');
+    }
+    if (/\b(jest|unit testing|unit test|assertion)\b/i.test(text)) {
+      skillsSet.add('Jest');
+    }
+    if (/\bselenium\b/i.test(text)) {
+      skillsSet.add('Selenium');
+    }
+    if (/\b(test automation|automation|regression testing|integration testing|end-to-end)\b/i.test(text)) {
+      skillsSet.add('QA Automation');
+    }
+    if (/\b(test case|test scenario|bug report|verification|validation|verify|validate|manual)\b/i.test(text)) {
+      skillsSet.add('Manual Testing');
+    }
+    if (skillsSet.size === 0) {
+      skillsSet.add('QA Automation');
+      skillsSet.add('Cypress');
+    }
+    const skills = Array.from(skillsSet);
+    return { domain: 'qa', required_domain: 'qa', skills, required_skills: skills };
+  }
+
+  // --------------------------------------------------------------------------
+  // 4. Frontend Domain Identification (UI / UX / Views / Forms)
+  // Keywords: frontend, react, jsx, ui, ux, dashboard, dark mode, css,
+  //           tailwind css, responsive, navigation, modal, dropdown, table,
+  //           chart, progress bar, drag and drop, form validation,
+  //           react component, layout, button, screen, render
+  // Associated Skills: JavaScript, React, HTML/CSS, Tailwind CSS
+  // --------------------------------------------------------------------------
+  const isFrontend = /\b(frontend|react|jsx|ui|ux|dashboard|dark mode|css|tailwind css|tailwind|responsive|navigation|modal|dropdown|table|chart|progress bar|drag and drop|form validation|react component|layout|button|screen|render|component|display|view|export|pdf|excel|input|enter|form)\b/i.test(text);
+
+  if (isFrontend) {
+    const skillsSet = new Set(['JavaScript', 'React']);
+    if (/\b(css|html|responsive|form validation|layout|modal|dropdown|navigation|screen|render)\b/i.test(text)) {
+      skillsSet.add('HTML/CSS');
+    }
+    if (/\b(tailwind|tailwind css|dark mode)\b/i.test(text)) {
+      skillsSet.add('Tailwind CSS');
+    }
+    const skills = Array.from(skillsSet);
+    return { domain: 'frontend', required_domain: 'frontend', skills, required_skills: skills };
+  }
+
+  // --------------------------------------------------------------------------
+  // 5. Backend Domain Identification (APIs / Database / Transactions / Auth)
+  // Keywords: backend, rest api, api endpoint, express, middleware, request,
+  //           response, crud, database, sql, postgresql, neon postgresql, schema,
+  //           migration, jwt, bcrypt, authentication, authorization,
+  //           data persistence, server, query, node.js
+  // Also captures business transactional workflows: defect, repair, vessel,
+  // equipment, overtime, labor, labour, history, audit, version, status,
+  // approve, reject, permission, role, user, login, auth, cost, costing
+  // Associated Skills: JavaScript, Node.js, SQL, PostgreSQL, Express
+  // --------------------------------------------------------------------------
+  const isBackend = /\b(backend|rest api|api endpoint|express|middleware|request|response|crud|database|sql|postgresql|neon postgresql|schema|migration|jwt|bcrypt|authentication|authorization|data persistence|server|query|node\.js|api|endpoint|oauth|defect|repair|vessel|equipment|overtime|labor|labour|history|audit|version|status|approve|reject|permission|role|user|login|auth|cost|costing)\b/i.test(text);
+
+  if (isBackend) {
+    const skillsSet = new Set(['JavaScript', 'Node.js']);
+    if (/\b(database|sql|crud|query|schema)\b/i.test(text)) {
+      skillsSet.add('SQL');
+    }
+    if (/\b(postgresql|postgres|neon postgresql|neon|migration|data persistence)\b/i.test(text)) {
+      skillsSet.add('PostgreSQL');
+    }
+    if (/\b(express|middleware|rest api|api endpoint|api|endpoint|request|response)\b/i.test(text)) {
+      skillsSet.add('Express');
+    }
+    if (!skillsSet.has('SQL') && !skillsSet.has('PostgreSQL') && !skillsSet.has('Express')) {
+      skillsSet.add('SQL');
+    }
+    const skills = Array.from(skillsSet);
     return { domain: 'backend', required_domain: 'backend', skills, required_skills: skills };
   }
 
   // --------------------------------------------------------------------------
   // 6. Default Fallback Domain & Skills
-  // Assigned when task title does not match specific specialized keywords
+  // Assigned when work item does not match specific specialized keywords
   // Associated Skills: Core Full-Stack / Backend (JavaScript, SQL, Node.js)
   // --------------------------------------------------------------------------
   const defaultSkills = ['JavaScript', 'SQL', 'Node.js'];
