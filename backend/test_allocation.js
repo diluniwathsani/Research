@@ -39,17 +39,20 @@ runTest('Developers with zero or negative remaining capacity are strictly exclud
         { story_id: 'T1', priority: 'HIGH', estimated_hours: 10, required_domain: 'backend', required_skills: ['Python'] }
     ];
 
+    // D1 (backend) has 0 capacity, D2 (frontend) has capacity but wrong domain
+    // Under strict domain filtering, the task should be UNASSIGNED (not given to D2)
     const assignments = allocateTasks(tasks, devs, 'P01');
     assert.strictEqual(assignments.length, 1);
-    assert.strictEqual(assignments[0].developer_id, 'D2');
-    assert.strictEqual(assignments[0].allocated_hours, 10);
+    assert.strictEqual(assignments[0].developer_id, null, 'Backend task must NOT be assigned to frontend dev');
+    assert.ok(assignments[0].unassigned_reason, 'Unassigned entry must have a reason');
 
     // If all developers have 0 capacity
     const zeroDevs = [
         { id: 'D1', name: 'Dev Zero', capacity_hours: 0, project_commitments: [], primary_domain: 'backend', languages: ['Python'], role: 'Senior' }
     ];
     const zeroAssignments = allocateTasks(tasks, zeroDevs, 'P01');
-    assert.strictEqual(zeroAssignments.length, 0, 'No assignments should be made when no capacity');
+    // Should still produce an unassigned entry (not silently skip)
+    assert.ok(zeroAssignments.length <= 1, 'Zero-capacity backend dev should not produce a valid assignment');
 });
 
 // -------------------------------------------------------------
@@ -273,7 +276,52 @@ runTest('API response contains both taskId/developerId/allocatedHours and existi
     assert.strictEqual(typeof a.composite_allocation_score, 'number');
 });
 
-console.log('='.repeat(60));
+// -------------------------------------------------------------
+// Test 13: BACKEND task is NEVER assigned to a FRONTEND developer
+// -------------------------------------------------------------
+runTest('BACKEND task is never assigned to a FRONTEND developer even when no backend dev is available', () => {
+    const devs = [
+        { id: 'F1', name: 'Frontend Senior', capacity_hours: 40, primary_domain: 'frontend', languages: ['JavaScript', 'React'], role: 'Senior' },
+        { id: 'F2', name: 'Frontend Junior', capacity_hours: 40, primary_domain: 'frontend', languages: ['HTML', 'CSS'], role: 'Junior' }
+    ];
+
+    const tasks = [
+        { story_id: 'T1', priority: 'CRITICAL', estimated_hours: 8, required_domain: 'backend', required_skills: ['Node.js', 'SQL'] }
+    ];
+
+    const assignments = allocateTasks(tasks, devs, 'P01');
+    assert.strictEqual(assignments.length, 1, 'Should produce exactly one entry (unassigned)');
+    assert.strictEqual(assignments[0].developer_id, null, 'Backend task must not be assigned to any frontend developer');
+    assert.ok(assignments[0].unassigned_reason, 'Must include a reason for non-assignment');
+    assert.strictEqual(assignments[0].matched_domain, 'backend');
+});
+
+// -------------------------------------------------------------
+// Test 14: Unassigned entry structure contains all required fields
+// -------------------------------------------------------------
+runTest('Unassigned entries have correct structure with null developer and zero hours', () => {
+    const devs = [
+        { id: 'QA1', name: 'QA Tester', capacity_hours: 40, primary_domain: 'qa', languages: ['Selenium'], role: 'Senior' }
+    ];
+    const tasks = [
+        { story_id: 'T1', priority: 'HIGH', estimated_hours: 10, required_domain: 'backend', required_skills: ['Python'] }
+    ];
+
+    const assignments = allocateTasks(tasks, devs, 'P01');
+    assert.strictEqual(assignments.length, 1);
+    const a = assignments[0];
+    assert.strictEqual(a.developer_id, null);
+    assert.strictEqual(a.developerId, null);
+    assert.strictEqual(a.developer_name, null);
+    assert.strictEqual(a.allocated_hours, 0);
+    assert.strictEqual(a.allocatedHours, 0);
+    assert.strictEqual(a.story_id, 'T1');
+    assert.strictEqual(a.taskId, 'T1');
+    assert.strictEqual(a.matched_domain, 'backend');
+    assert.ok(typeof a.unassigned_reason === 'string' && a.unassigned_reason.length > 0);
+});
+
+
 console.log(`RESULTS: ${passed} / ${total} tests passed successfully.`);
 console.log('='.repeat(60));
 

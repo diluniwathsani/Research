@@ -1,15 +1,61 @@
 story_id,title,sprint_number,story_points,estimated_hours,priority_tier,assigned_developer,developer_id,required_skills,status,subtasks_count
-US001,To create and manage IT Services Company | Requirements baseline and implementation tracker so that the core functional feature is executed correctly.,1,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
-US002,To create and manage Register overview so that the core functional feature is executed correctly.,1,3,24,LOW,Unassigned Lead,DEV01,Fullstack,To Do,0
-US003,To create and manage Total requirements so that the core functional feature is executed correctly.,1,3,24,LOW,Unassigned Lead,DEV01,Fullstack,To Do,0
-US006,To create and manage Approved / in progress / implemented so that the core functional feature is executed correctly.,1,5,40,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,2
-US008,To create and manage 1. Review the requirements with process owners and confirm applicability so that the core functional feature is executed correctly.,1,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
-US009,To 3. Update Owner and Status for accountability and delivery tracking so that the core functional feature is executed correctly.,1,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
-US010,"To create and manage 4. Define company-specific acceptance tests, targets, legal/tax needs, and integrations so that the core functional feature is executed correctly.",1,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
-US004,To create and manage Must-have requirements so that the core functional feature is executed correctly.,2,5,40,LOW,Unassigned Lead,DEV01,Fullstack,To Do,0
-US005,To create and manage Proposed status so that the core functional feature is executed correctly.,2,3,24,LOW,Unassigned Lead,DEV01,Fullstack,To Do,0
-US007,To how to use this workbook so that the core functional feature is executed correctly.,2,3,24,LOW,Unassigned Lead,DEV01,Fullstack,To Do,0
-US011,"To 5. Use the unique Requirement ID to trace each requirement through design, testing, and sign-off so that the core functional feature is executed correctly.",2,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
-US012,"To create and manage 6. Add, remove, or split requirements as needed; preserve IDs once referenced by test cases so that the core functional feature is executed correctly.",2,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
-US013,To create and manage Document status so that the core functional feature is executed correctly.,2,3,24,LOW,Unassigned Lead,DEV01,Fullstack,To Do,0
-US014,"To create and manage 2. Change Priority using the dropdown: Must, Should, Could, or Won’t have now so that the repair priority & severity management is executed correctly.",2,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US001,To restrict users from performing actions that are not permitted for their assigned role so that the role permission & action restriction is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,2
+US002,To allow status changes only when the user has the required permission so that the role permission & action restriction is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,2
+US006,To provide search functionality for engineering records so that the engineering search & filter querying is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,3
+US007,To provide engineering reports based on the available engineering data so that the engineering reporting & data analytics is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,3
+US008,To allow applicable engineering reports to be filtered based on selected criteria so that the engineering reporting & data analytics is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,3
+US009,To allow applicable engineering reports to be exported in the required format so that the engineering reporting & data analytics is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,3
+US020,To create and manage defect records so that the defect logging & record management is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,3
+US023,To create and manage repair records so that the defect logging & record management is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,3
+US030,"To filter engineering records based on relevant criteria such as vessel, equipment, status, priority, severity, engineer, and date so that the repair priority & severity management is executed correctly.",1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,3
+US033,To update the status of a work order based on the defined workflow so that the work order data modification & updates is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,2
+US034,To supervisors shall approve or reject work orders based on their assigned permissions so that the work order approval workflow is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,2
+US035,To approve the work orders so that the work order approval workflow is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,2
+US037,To enter estimated working hours for a work order so that the work order approval workflow is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,2
+US038,To record the actual working hours spent on a work order so that the work order approval workflow is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,2
+US054,To generate a job card for the relevant work order so that the job card export & communication is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,2
+US055,To print or export the job card so that the job card export & communication is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,2
+US056,To send notifications for relevant engineering workflow activities so that the email notification management is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,3
+US057,To provide an emails to notify field to identify users who should receive engineering-related notifications so that the email notification management is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,3
+US058,To support adding relevant users to the cc/notification list for applicable emails so that the email notification management is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,3
+US029,"To display the current status of work orders, defects, and repairs so that the defect status & repair tracking is executed correctly.",1,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US044,To maintain the hourly overhead rate for applicable labour resources so that the labour rate & cost calculation is executed correctly.,1,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US003,To view engineering records based on their assigned permissions so that the engineering activity tracking is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US011,To maintain the relevant history of engineering activities for tracking and audit purposes so that the audit trail & version history tracking is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US012,To select the relevant vessel when creating or viewing engineering activities so that the vessel & equipment maintenance log is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US013,To display the equipment allocated to the selected vessel so that the equipment & material allocation display is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US015,To display vessel-wise allocated equipment and materials for offshore engineering activities so that the equipment & material allocation display is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US016,To add materials required for a work order so that the asset & equipment management is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US017,To display only workshop and warehouse materials when adding materials to a work order so that the equipment & material allocation display is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US018,To the field name specifications and power ratings shall be changed to capacity so that the equipment & field naming configuration is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US019,To the stock category field shall not be required when adding materials to a work order so that the equipment & field naming configuration is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US022,To update the status of defects so that the defect status & repair tracking is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US025,To link defects with relevant work orders or repair activities so that the defect & repair management is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US031,To view existing work orders so that the work order core processing is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US036,To record the start date and time when a work order is started so that the work order schedule & time entry is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US041,To record the user and date/time associated with applicable record changes so that the work order schedule & time entry is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US042,To assign engineers or labour resources to work orders so that the labour resource management is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US043,To maintain the hourly labour rate for applicable labour resources so that the labour rate & cost calculation is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US047,To consider weekday working hours exceeding 9 hours when calculating overtime so that the overtime rules & calculation is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US048,To consider saturday working hours when calculating overtime so that the overtime rules & calculation is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US051,To enter third-party vessel costs in the applicable job costing calculations so that the labour rate & cost calculation is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US053,"To include relevant work order, vessel, equipment, labour, material, and costing information in the job card so that the labour rate & cost calculation is executed correctly.",2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US059,To obtain template confirmation from the relevant soc team before using applicable templates so that the email template approval is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US004,To view engineering records based on their assigned permissions so that the engineering activity tracking is executed correctly.,3,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US005,To use the approved templates for applicable engineering communications so that the engineering activity tracking is executed correctly.,3,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US010,To maintain an audit trail for relevant changes made to engineering records so that the audit trail & version history tracking is executed correctly.,3,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US014,To display the materials allocated to the selected vessel where applicable so that the equipment & material allocation display is executed correctly.,3,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US021,To assign a priority and severity to each defect so that the repair priority & severity management is executed correctly.,3,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US024,To assign priority and severity to repair activities so that the repair priority & severity management is executed correctly.,3,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US026,To link repair activities with relevant defects and work orders so that the defect & repair management is executed correctly.,3,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US027,"To enter the required work order details, including vessel, equipment, work description, priority, severity, estimated hours, start date, end date, and assigned engineer so that the repair priority & severity management is executed correctly.",3,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US028,"To display the current status of work orders, defects, and repairs so that the defect status & repair tracking is executed correctly.",3,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US032,To edit work order details so that the work order data modification & updates is executed correctly.,3,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US039,To record the end date and time when a work order is completed so that the work order schedule & time entry is executed correctly.,3,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US040,To maintain the version history of work order descriptions and other applicable changes so that the work order core processing is executed correctly.,3,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US045,To calculate overtime based on the defined overtime business rules so that the overtime rules & calculation is executed correctly.,3,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US046,To consider sunday working hours when calculating overtime so that the overtime rules & calculation is executed correctly.,3,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US049,To calculate overtime at 1.5 times the applicable hourly rate so that the overtime rules & calculation is executed correctly.,3,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US050,To calculate labour costs based on the assigned labour resources and applicable hourly labour rates so that the labour rate & cost calculation is executed correctly.,3,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US052,To calculate the estimated cost of a work order based on applicable material and labour costs so that the labour rate & cost calculation is executed correctly.,3,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US060,To support exporting job cards in excel/pdf format so that the core functional feature is executed correctly.,3,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0

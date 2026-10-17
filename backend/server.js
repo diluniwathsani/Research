@@ -251,20 +251,28 @@ function sortStoriesByDependencyTier(stories) {
         }
     });
 
-    // 2. Sort by Epic creation order first, then requirement_order / story_id within each Epic
+    // 2. Sort by Priority (CRITICAL -> HIGH -> MEDIUM -> LOW) first, then Dependency Tier, then Epic / Story Order
+    const priorityWeights = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
     sorted.sort((a, b) => {
+        const pA = priorityWeights[(a.priority || 'MEDIUM').toUpperCase()] ?? (a.priorityRank ?? 2);
+        const pB = priorityWeights[(b.priority || 'MEDIUM').toUpperCase()] ?? (b.priorityRank ?? 2);
+        if (pA !== pB) return pA - pB;
+
+        // Next by Dependency Tier (Tier 1: Backend/DB before Tier 2: Logic before Tier 3: Frontend before Tier 4: QA)
+        const tA = Number(a.dependency_tier ?? a.dependencyTier ?? 2);
+        const tB = Number(b.dependency_tier ?? b.dependencyTier ?? 2);
+        if (tA !== tB) return tA - tB;
+
+        // Next by story points / hours (larger tasks scheduled first)
+        const spA = Number(a.story_points ?? a.points ?? 0);
+        const spB = Number(b.story_points ?? b.points ?? 0);
+        if (spA !== spB) return spB - spA;
+
         const epicA = (a.epic || 'General Epic').trim();
         const epicB = (b.epic || 'General Epic').trim();
         const epicOrderA = epicMinOrder[epicA] !== undefined ? epicMinOrder[epicA] : 999999;
         const epicOrderB = epicMinOrder[epicB] !== undefined ? epicMinOrder[epicB] : 999999;
-
-        if (epicOrderA !== epicOrderB) {
-            return epicOrderA - epicOrderB;
-        }
-
-        const orderA = a.requirement_order !== undefined && a.requirement_order !== null ? Number(a.requirement_order) : 999999;
-        const orderB = b.requirement_order !== undefined && b.requirement_order !== null ? Number(b.requirement_order) : 999999;
-        if (orderA !== orderB) return orderA - orderB;
+        if (epicOrderA !== epicOrderB) return epicOrderA - epicOrderB;
 
         const idA = parseInt(String(a.story_id || a.user_story_id || a.id || '').replace(/\D/g, '')) || 0;
         const idB = parseInt(String(b.story_id || b.user_story_id || b.id || '').replace(/\D/g, '')) || 0;
@@ -313,16 +321,51 @@ app.get('/api/sprints/:sprintId/tasks', async (req, res) => {
             }
         }
 
+        function formatSubTaskDeliverableTitle(rawTitle, domainHint) {
+            if (!rawTitle) return '';
+            let str = String(rawTitle).trim();
+            if (/^To (implement|build|conduct|configure|develop|integrate)\b/i.test(str) && !/As a\s+/i.test(str)) {
+                return str;
+            }
+            let clean = str.replace(/\[Part\s*\d+[^\]]*\]/gi, '').trim();
+            clean = clean.replace(/^(?:as\s+(?:an?|the)\s+[^,]+,\s*)?i\s+want\s+(?:to\s+)?/i, '').trim();
+            clean = clean.replace(/^the\s+system\s+(?:shall|should|must)\s+(?:allow\s+[^,]+\s+to\s+)?/i, '').trim();
+            clean = clean.replace(/^the\s+system\s+(?:shall|should|must)\s+/i, '').trim();
+            clean = clean.replace(/^to\s+/i, '').trim();
+
+            const coreAction = clean.split(/\s+so\s+that\s+|\s+in\s+order\s+to\s+/i)[0].trim();
+            const capAction = coreAction ? (coreAction.charAt(0).toUpperCase() + coreAction.slice(1)) : 'Core Capability';
+
+            const lower = str.toLowerCase();
+            const d = (domainHint || '').toLowerCase();
+
+            if (d.includes('front') || /\b(view|display|ui|ux|frontend|react|screen|dashboard|form|input|button|render|dark mode|export|pdf|excel)\b/i.test(lower)) {
+                return `To build Frontend UI View, Input Validation & Testing for ${capAction}`;
+            }
+            if (d.includes('qa') || /\b(test|qa|cypress|selenium|jest|unit test|audit check|verification|verify|validation|validate)\b/i.test(lower)) {
+                return `To conduct Security, Edge Case Testing & QA Verification for ${capAction}`;
+            }
+            if (d.includes('devops') || /\b(devops|docker|kubernetes|aws|cloud|ci\/cd|pipeline|deploy|nginx)\b/i.test(lower)) {
+                return `To configure DevOps Pipeline, Docker & Infrastructure for ${capAction}`;
+            }
+            if (d.includes('ai') || /\b(machine learning|ml|ai|nlp|spacy|scikit|svm|deep learning|neural network|tensorflow|pytorch)\b/i.test(lower)) {
+                return `To develop Machine Learning Model & AI Inference Service for ${capAction}`;
+            }
+
+            return `To implement Core Business API & Database Logic for ${capAction}`;
+        }
+
         const sortedStories = sortStoriesByDependencyTier(tasks);
 
         const mappedTasks = sortedStories.map((t, idx) => {
-            const taskTitle = t.title || t.user_story || 'User Story Requirement';
-            const parsed = extractDomainAndSkills(taskTitle);
+            const rawTitle = t.title || t.user_story || 'User Story Requirement';
+            const subTaskTitle = formatSubTaskDeliverableTitle(rawTitle, t.domain || t.required_domain);
+            const parsed = extractDomainAndSkills(subTaskTitle);
             return {
                 id: t.story_id || t.user_story_id || `US-${idx + 1}`,
                 story_id: t.story_id || t.user_story_id || `US-${idx + 1}`,
-                title: taskTitle,
-                user_story: taskTitle,
+                title: subTaskTitle,
+                user_story: rawTitle,
                 description: t.description || t.acceptance_criteria || '',
                 priority: (t.priority || 'MEDIUM').toUpperCase(),
                 hours: (Number(t.story_points) || 5) * 6,
@@ -1924,28 +1967,42 @@ function allocateTasks(tasks, developers, currentProjectId) {
         const predictedComplexity = String(rawComplexity).toUpperCase();
 
         // STEP 2 — Filter Developers by Remaining Capacity: Exclude developers with remaining <= 0
+        // STEP 2 — Filter Developers by Remaining Capacity: Exclude developers with remaining <= 0
         const availableDevs = devs.filter(dev => dev.remaining > 0);
-
         if (availableDevs.length === 0) {
             continue; // Cannot assign work to a developer who has no available capacity
         }
 
-        // STEP 3, 4, 5 — Evaluate Candidates
-        const evaluatedCandidates = availableDevs.map(dev => {
-            const devDomainNorm = normalizeDomainString(dev.primary_domain);
-            
-            // Step 3 — Compare Domains: Exact domain match (higher ranking) vs no match (lower ranking)
-            const exactDomainMatch = devDomainNorm === taskDomainNorm;
+                // STEP 3 — Filter Developers by Exact Domain Match
+        const domainMatchedDevs = availableDevs.filter(dev => normalizeDomainString(dev.primary_domain) === taskDomainNorm);
+        if (domainMatchedDevs.length === 0) {
+            // No matching domain developers; leave task unassigned with a clear reason
+            assignments.push({
+                story_id: task.story_id || task.id || task.taskId,
+                taskId: task.story_id || task.id || task.taskId,
+                title: task.title || task.user_story || 'User Story Requirement',
+                developer_id: null,
+                developerId: null,
+                developer_name: null,
+                allocated_hours: 0,
+                allocatedHours: 0,
+                predicted_complexity: predictedComplexity,
+                matched_domain: taskDomainNorm,
+                skill_match_score: 0,
+                complexity_suitability_score: 0,
+                composite_allocation_score: 0,
+                unassigned_reason: 'No developers with matching domain and capacity'
+            });
+            continue; // Skip further processing for this task
+        }
 
-            // Step 4 — Calculate Required Skill-Match Percentage
+        // STEP 4,5 — Evaluate Candidates (only domain‑matched developers)
+        const evaluatedCandidates = domainMatchedDevs.map(dev => {
             const skillMatchPct = calculateSkillMatchPercentage(dev.languages, requiredSkills);
-
-            // Step 5 — Complexity & Seniority Suitability
             const senioritySuitability = calculateComplexitySenioritySuitability(predictedComplexity, dev.role);
-
             return {
                 ...dev,
-                exactDomainMatch,
+                exactDomainMatch: true,
                 skillMatchPct,
                 senioritySuitability
             };
