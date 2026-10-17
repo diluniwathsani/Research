@@ -1916,14 +1916,46 @@ function allocateTasks(tasks, developers, currentProjectId) {
     if (!developers || !Array.isArray(developers) || developers.length === 0) return [];
 
     // STEP 1 — Process work items by priority (CRITICAL → HIGH → MEDIUM → LOW)
+    //           Within the same priority tier, apply MRV (Minimum Remaining Values):
+    //           tasks with fewer eligible developers go first to avoid leaving them
+    //           unassigned because a greedy earlier task consumed their only candidate.
     const priorityOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
 
-    // Preserve relative order for items with same priority
-    const tasksWithIndex = tasks.map((task, idx) => ({ task, idx }));
+    // Build a temporary snapshot of developer remaining capacities for pre-sort eligibility count.
+    // NOTE: This snapshot is used ONLY for ordering. Actual deductions happen in the main loop.
+    const snapRemaining = {};
+    developers.forEach(dev => {
+        const capacity = (dev.capacity_hours !== undefined && dev.capacity_hours !== null && !isNaN(Number(dev.capacity_hours))) ? Number(dev.capacity_hours) : 40;
+        const commitments = dev.project_commitments || [];
+        const otherProjectHours = commitments
+            .filter(c => currentProjectId && String(c.project_id) !== String(currentProjectId))
+            .reduce((sum, c) => sum + (Number(c.hours) || 0), 0);
+        snapRemaining[String(dev.id)] = Math.max(0, capacity - otherProjectHours);
+    });
+
+    // Count how many developers are eligible for each task (domain match + capacity fit)
+    function countEligibleDevs(task) {
+        const estHrs = Number(task.estimated_hours) || (Number(task.story_points) ? Number(task.story_points) * 6 : 16);
+        const domain = normalizeDomainString(task.required_domain || task.domain);
+        return developers.filter(dev => {
+            const devDomain = normalizeDomainString(dev.primary_domain || dev.domain);
+            const devRemaining = snapRemaining[String(dev.id)] ?? 0;
+            return devDomain === domain && devRemaining >= estHrs;
+        }).length;
+    }
+
+    const tasksWithIndex = tasks.map((task, idx) => ({ task, idx, eligibleCount: countEligibleDevs(task) }));
     tasksWithIndex.sort((a, b) => {
         const pA = priorityOrder[(a.task.priority || 'MEDIUM').toUpperCase()] ?? 2;
         const pB = priorityOrder[(b.task.priority || 'MEDIUM').toUpperCase()] ?? 2;
         if (pA !== pB) return pA - pB;
+        // MRV: fewer eligible developers → schedule earlier within the same priority
+        if (a.eligibleCount !== b.eligibleCount) return a.eligibleCount - b.eligibleCount;
+        // Larger tasks consume capacity faster — schedule them while capacity is plentiful
+        const hA = Number(a.task.estimated_hours) || 16;
+        const hB = Number(b.task.estimated_hours) || 16;
+        if (hA !== hB) return hB - hA;
+        // Stable index tie-breaker
         return a.idx - b.idx;
     });
     const sortedTasks = tasksWithIndex.map(item => item.task);
@@ -3872,6 +3904,93 @@ app.post('/api/task-assignments', async (req, res) => {
         });
     } catch (error) {
         console.error('Save error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ================= GET TASK ASSIGNMENTS (Load Saved Allocations) =================
+// Returns previously saved allocations for a given sprint + project so the frontend
+// can restore the allocation board without re-running the algorithm.
+app.get('/api/task-assignments', async (req, res) => {
+    try {
+        const { sprint_id, project_id } = req.query;
+        if (!sprint_id) {
+            return res.status(400).json({ error: 'sprint_id is required' });
+        }
+
+        const sprintIdStr = String(sprint_id).startsWith('SPR-') ? String(sprint_id) : `SPR-0${sprint_id}`;
+
+        // Load all saved allocations for this sprint, joined with developer, story, and work_item data
+        let sql = `
+            SELECT
+                a.story_id,
+                a.story_id        AS "taskId",
+                COALESCE(w.title, u.title, a.story_id) AS title,
+                a.developer_id,
+                a.developer_id    AS "developerId",
+                COALESCE(d.name, 'Unassigned')  AS developer_name,
+                COALESCE(d.role, 'Software Engineer') AS developer_role,
+                COALESCE(d.primary_domain, 'backend') AS developer_domain,
+                COALESCE(d.capacity_hours, 40)  AS developer_capacity,
+                COALESCE(d.languages, '[]')     AS developer_skills,
+                a.allocated_hours,
+                a.allocated_hours AS "allocatedHours",
+                COALESCE(a.predicted_complexity, w.predicted_complexity, 'MEDIUM') AS predicted_complexity,
+                COALESCE(w.priority, u.priority, 'MEDIUM')  AS priority,
+                COALESCE(w.story_points, u.story_points, 5) AS story_points,
+                COALESCE(w.estimated_hours, a.allocated_hours, 16) AS estimated_hours,
+                COALESCE(w.required_domain, w.domain, d.primary_domain, 'backend') AS required_domain,
+                COALESCE(w.required_skills, ARRAY[]::text[]) AS required_skills,
+                COALESCE(w.story_id, u.story_id) AS parent_story_id,
+                COALESCE(w.project_id, u.project_id) AS project_id
+            FROM allocations a
+            LEFT JOIN developers d ON CAST(a.developer_id AS TEXT) = CAST(d.id AS TEXT)
+            LEFT JOIN user_stories u ON a.story_id = u.story_id OR a.story_id = u.user_story_id
+            LEFT JOIN work_items w ON a.story_id = w.work_item_id
+            WHERE a.sprint_id = $1
+        `;
+        const params = [sprintIdStr];
+
+        if (project_id) {
+            sql += ` AND (COALESCE(w.project_id, u.project_id) = $2 OR COALESCE(w.project_id, u.project_id) IS NULL)`;
+            params.push(String(project_id));
+        }
+
+        sql += ' ORDER BY a.created_at ASC';
+
+        const result = await pool.query(sql, params);
+        const rows = result.rows || [];
+
+        // Normalise each row so fields match what allocateTasks() returns
+        const assignments = rows.map(r => ({
+            story_id: r.story_id,
+            taskId: r.story_id,
+            title: r.title,
+            developer_id: r.developer_id ?? null,
+            developerId: r.developer_id ?? null,
+            developer_name: r.developer_id ? r.developer_name : null,
+            developer_role: r.developer_role,
+            developer_domain: normalizeDomainString(r.developer_domain),
+            developer_capacity: Number(r.developer_capacity) || 40,
+            developer_skills: r.developer_skills,
+            allocated_hours: Number(r.allocated_hours) || 0,
+            allocatedHours: Number(r.allocated_hours) || 0,
+            predicted_complexity: r.predicted_complexity,
+            priority: r.priority,
+            story_points: Number(r.story_points) || 5,
+            estimated_hours: Number(r.estimated_hours) || 16,
+            required_domain: normalizeDomainString(r.required_domain),
+            required_skills: r.required_skills,
+            parent_story_id: r.parent_story_id,
+            project_id: r.project_id,
+            matched_domain: normalizeDomainString(r.required_domain),
+            // Assignments loaded from DB are always domain-validated (saved with strict checks)
+            domain_match: true
+        }));
+
+        res.json({ success: true, assignments, sprint_id: sprintIdStr });
+    } catch (error) {
+        console.error('[GET /api/task-assignments] error:', error);
         res.status(500).json({ error: error.message });
     }
 });

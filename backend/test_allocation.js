@@ -342,6 +342,51 @@ runTest('Unassigned entries have correct structure with null developer and zero 
 });
 
 
+// -------------------------------------------------------------
+// Test 16: MRV (Minimum Remaining Values) — Within Same Priority, Schedule
+//          Constrained Tasks First to Prevent Avoidable Unassigned Outcomes
+// -------------------------------------------------------------
+runTest('Within same priority, tasks with fewer eligible developers are scheduled first (MRV)', () => {
+    // D1 is the ONLY backend developer with enough capacity for a 30h task
+    // D2 is a backend developer who can handle a smaller 10h task
+    // Both can serve the 10h task; only D1 can serve the 30h task.
+    const devs = [
+        { id: 'D1', name: 'Backend Senior', capacity_hours: 30, project_commitments: [], primary_domain: 'backend', languages: ['Python'], role: 'Senior' },
+        { id: 'D2', name: 'Backend Junior', capacity_hours: 10, project_commitments: [], primary_domain: 'backend', languages: ['Python'], role: 'Junior' }
+    ];
+
+    // Both tasks are HIGH priority.
+    // T-BIG requires 30h (only D1 is eligible).
+    // T-SMALL requires 10h (both D1 and D2 are eligible).
+    // Without MRV: if T-SMALL is processed first and D1 is chosen (higher seniority),
+    //   D1 has 20h left, which is insufficient for T-BIG (30h) → T-BIG goes unassigned.
+    // With MRV: T-BIG is processed first (only 1 eligible dev) → D1 assigned to T-BIG,
+    //   then T-SMALL is assigned to D2 → both tasks are assigned.
+    const tasks = [
+        { story_id: 'T-SMALL', priority: 'HIGH', estimated_hours: 10, required_domain: 'backend', required_skills: ['Python'] },
+        { story_id: 'T-BIG',   priority: 'HIGH', estimated_hours: 30, required_domain: 'backend', required_skills: ['Python'] }
+    ];
+
+    const assignments = allocateTasks(tasks, devs, 'P01');
+    assert.strictEqual(assignments.length, 2, 'Both tasks must be returned');
+
+    const bigAssignment   = assignments.find(a => a.story_id === 'T-BIG');
+    const smallAssignment = assignments.find(a => a.story_id === 'T-SMALL');
+
+    assert.ok(bigAssignment, 'T-BIG assignment must exist');
+    assert.ok(smallAssignment, 'T-SMALL assignment must exist');
+
+    assert.strictEqual(bigAssignment.developer_id, 'D1',
+        'T-BIG (1 eligible dev) must be scheduled first and assigned to D1 via MRV');
+    assert.strictEqual(smallAssignment.developer_id, 'D2',
+        'T-SMALL must be assigned to D2 after D1 is consumed by T-BIG');
+    assert.ok(bigAssignment.allocated_hours === 30,
+        'T-BIG must have all 30h allocated');
+    assert.ok(smallAssignment.allocated_hours === 10,
+        'T-SMALL must have all 10h allocated');
+});
+
+
 console.log(`RESULTS: ${passed} / ${total} tests passed successfully.`);
 console.log('='.repeat(60));
 

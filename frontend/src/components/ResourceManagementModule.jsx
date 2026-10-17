@@ -520,6 +520,60 @@ export default function ResourceManagementModule({
   }, [selectedProject, selectedSprint]);
 
   // ══════════════════════════════════════════════════════════
+  // 4b. RESTORE SAVED ALLOCATIONS WHEN SPRINT CHANGES
+  //     Uses GET /api/task-assignments as the authoritative source.
+  //     If saved assignments exist for this sprint they are loaded
+  //     directly into the board without re-running the algorithm.
+  // ══════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (!selectedProject || !selectedSprint) return;
+    const projId  = selectedProject.project_id || selectedProject.id || '';
+    const sprintId = selectedSprint.sprint_id || selectedSprint.id || `SPR-0${selectedSprint.sprint_number}`;
+
+    let cancelled = false;
+    axios.get(`${EXPRESS_API}/task-assignments`, { params: { sprint_id: sprintId, project_id: projId } })
+      .then(res => {
+        if (cancelled) return;
+        const saved = res.data?.assignments;
+        if (Array.isArray(saved) && saved.length > 0) {
+          // Merge with local developer data so all fields are present
+          const enriched = saved.map(a => {
+            const dev = developers.find(d => String(d.id) === String(a.developer_id));
+            return {
+              ...a,
+              // Normalise domain-match flag
+              domain_match: !!(a.developer_id && normDomain(a.developer_domain) === normDomain(a.required_domain)),
+              // Derive skill / seniority metrics if not already present
+              skill_match_pct: a.skill_match_score ?? calcSkillMatch(
+                dev?.languages || dev?.skills || [],
+                Array.isArray(a.required_skills) ? a.required_skills : []
+              ),
+              seniority_suitability_score: a.complexity_suitability_score ?? 0,
+              seniority_rank: getSeniorityRank(a.developer_role || (dev?.role) || ''),
+              developer_name: a.developer_id ? (a.developer_name || dev?.name || 'Assigned') : null,
+              unassigned_reason: a.developer_id ? null : (a.unassigned_reason || 'Not assigned')
+            };
+          });
+          setAllocations(enriched);
+          setPhase('results');
+        } else {
+          // No saved allocations for this sprint — clear board and return to sub-tasks view
+          setAllocations([]);
+          setPhase('subtasks');
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAllocations([]);
+          setPhase('subtasks');
+        }
+      });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSprint]);
+
+
+  // ══════════════════════════════════════════════════════════
   // 5. DERIVE SPRINT WORK ITEMS (sub-tasks)
   // ══════════════════════════════════════════════════════════
   const currentSprintNum = selectedSprint ? (Number(selectedSprint.sprint_number) || 1) : 1;
@@ -628,8 +682,8 @@ export default function ResourceManagementModule({
     setSavedOk(false);
 
     try {
-      // 1. Try Express backend allocation first
-      let serverAssignments = null;
+      // ── STEP 1: Prefer backend allocation (single source of truth) ──────────
+      let backendResults = null;
       try {
         const r = await axios.post(`${EXPRESS_API}/allocate`, {
           tasks: workItems,
@@ -637,11 +691,55 @@ export default function ResourceManagementModule({
           project_id: selectedProject?.project_id || 'P00001'
         });
         if (Array.isArray(r.data?.assignments) && r.data.assignments.length > 0) {
-          serverAssignments = r.data.assignments;
+          backendResults = r.data.assignments;
         }
       } catch (_) {}
 
-      // 2. Client-side allocation (mirrors backend allocateTasks exactly)
+      if (backendResults) {
+        // Backend result is authoritative — enrich with full task metadata for the board
+        const enriched = backendResults.map(a => {
+          const item = workItems.find(w => String(w.story_id || w.id) === String(a.story_id));
+          const dev  = developers.find(d => String(d.id) === String(a.developer_id));
+          return {
+            // Task fields from workItems
+            story_id: a.story_id,
+            title: a.title || item?.title || a.story_id,
+            parent_story_id: item?.parent_story_id,
+            parent_story_title: item?.parent_story_title,
+            story_points: item?.story_points || 2,
+            estimated_hours: item?.estimated_hours || a.allocated_hours || 16,
+            priority: item?.priority || 'MEDIUM',
+            domain: item?.domain,
+            required_domain: a.matched_domain || item?.required_domain || 'backend',
+            required_skills: item?.required_skills || [],
+            predicted_complexity: a.predicted_complexity || 'MEDIUM',
+            status: item?.status || 'To Do',
+            start_date: item?.start_date || null,
+            end_date: item?.end_date || null,
+            // Developer assignment from backend
+            developer_id: a.developer_id ?? null,
+            developer_name: a.developer_id ? (a.developer_name || dev?.name || null) : null,
+            developer_role: dev?.role || null,
+            developer_domain: normDomain(dev?.primary_domain || dev?.domain),
+            developer_skills: dev?.languages || dev?.skills || [],
+            developer_capacity: Number(dev?.capacity_hours) || 40,
+            developer_remaining_after: null,
+            allocated_hours: a.allocated_hours || 0,
+            // Scoring
+            domain_match: !!(a.developer_id),
+            skill_match_pct: a.skill_match_score ?? 0,
+            seniority_suitability_score: a.complexity_suitability_score ?? 0,
+            seniority_rank: getSeniorityRank(dev?.role || ''),
+            unassigned_reason: a.developer_id ? null : (a.unassigned_reason || 'Not assigned')
+          };
+        });
+        setAllocations(enriched);
+        setPhase('results');
+        return;
+      }
+
+      // ── STEP 2: Client-side fallback (mirrors backend allocateTasks + MRV) ──
+      // Used only when backend is unreachable.
       const devPool = developers.map(dev => ({
         ...dev,
         remaining: Math.max(0, (Number(dev.capacity_hours) || 40) - (Number(dev.other_project_hours) || 0)),
@@ -652,23 +750,41 @@ export default function ResourceManagementModule({
       const hoursUsed = {};
       devPool.forEach(d => { hoursUsed[d.id] = 0; });
 
-      // Sort by priority (CRITICAL first)
+      // Build snapRemaining for MRV eligibility counts
+      const snapRemaining = {};
+      devPool.forEach(d => { snapRemaining[d.id] = d.remaining; });
+
+      function countEligible(task) {
+        const estHrs  = Number(task.estimated_hours) || 16;
+        const domain  = normDomain(task.required_domain || task.domain);
+        return devPool.filter(d => d.primary_domain === domain && (snapRemaining[d.id] ?? 0) >= estHrs).length;
+      }
+
+      // Sort: priority first, then MRV (fewer eligible → earlier), then larger tasks, then index
       const priorityOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
-      const sorted = [...workItems].sort((a, b) =>
-        (priorityOrder[(a.priority || 'MEDIUM').toUpperCase()] ?? 2) -
-        (priorityOrder[(b.priority || 'MEDIUM').toUpperCase()] ?? 2)
-      );
+      const sorted = workItems
+        .map((item, idx) => ({ item, idx, eligibleCount: countEligible(item) }))
+        .sort((a, b) => {
+          const pA = priorityOrder[(a.item.priority || 'MEDIUM').toUpperCase()] ?? 2;
+          const pB = priorityOrder[(b.item.priority || 'MEDIUM').toUpperCase()] ?? 2;
+          if (pA !== pB) return pA - pB;
+          if (a.eligibleCount !== b.eligibleCount) return a.eligibleCount - b.eligibleCount;
+          const hA = Number(a.item.estimated_hours) || 16;
+          const hB = Number(b.item.estimated_hours) || 16;
+          if (hA !== hB) return hB - hA;
+          return a.idx - b.idx;
+        })
+        .map(x => x.item);
 
       const results = sorted.map(item => {
-        const itemHrs = Number(item.estimated_hours) || 16;
+        const itemHrs   = Number(item.estimated_hours) || 16;
         const itemDomain = normDomain(item.required_domain || item.domain);
-        const reqSkills = Array.isArray(item.required_skills) && item.required_skills.length > 0
+        const reqSkills  = Array.isArray(item.required_skills) && item.required_skills.length > 0
           ? item.required_skills : (item.skills || []);
 
-        // Derive complexity from story points / hours
         let complexity = item.predicted_complexity || item.complexity;
         if (!complexity) {
-          const sp = Number(item.story_points) || 0;
+          const sp  = Number(item.story_points) || 0;
           const hrs = Number(item.estimated_hours) || 0;
           if (sp >= 8 || hrs >= 12) complexity = 'HIGH';
           else if (sp >= 5 || hrs >= 8) complexity = 'MEDIUM';
@@ -676,142 +792,77 @@ export default function ResourceManagementModule({
         }
         complexity = complexity.toUpperCase();
 
-        // Step 1: Strict Domain Filter — only developers whose primary domain matches task domain
-        const domainMatchedDevs = devPool.filter(d => d.primary_domain === itemDomain);
-
-        if (domainMatchedDevs.length === 0) {
+        // Strict domain filter
+        const domainDevs = devPool.filter(d => d.primary_domain === itemDomain);
+        if (domainDevs.length === 0) {
           return {
-            story_id: item.story_id || item.id,
-            title: item.title,
-            parent_story_id: item.parent_story_id,
-            parent_story_title: item.parent_story_title,
-            story_points: item.story_points || 2,
-            estimated_hours: itemHrs,
-            priority: item.priority,
-            domain: item.domain,
-            required_domain: itemDomain,
-            required_skills: reqSkills,
-            predicted_complexity: complexity,
-            status: item.status || 'To Do',
-            start_date: item.start_date || null,
-            end_date: item.end_date || null,
-            developer_id: null,
-            developer_name: 'Unassigned',
-            developer_role: null,
-            developer_domain: null,
-            developer_skills: [],
-            developer_capacity: 0,
-            developer_remaining_after: 0,
-            allocated_hours: 0,
-            domain_match: false,
-            skill_match_pct: 0,
-            seniority_suitability_score: 0,
-            seniority_rank: 0,
+            story_id: item.story_id || item.id, title: item.title,
+            parent_story_id: item.parent_story_id, parent_story_title: item.parent_story_title,
+            story_points: item.story_points || 2, estimated_hours: itemHrs,
+            priority: item.priority, domain: item.domain, required_domain: itemDomain,
+            required_skills: reqSkills, predicted_complexity: complexity,
+            status: item.status || 'To Do', start_date: item.start_date || null, end_date: item.end_date || null,
+            developer_id: null, developer_name: null, developer_role: null, developer_domain: null,
+            developer_skills: [], developer_capacity: 0, developer_remaining_after: 0, allocated_hours: 0,
+            domain_match: false, skill_match_pct: 0, seniority_suitability_score: 0, seniority_rank: 0,
             unassigned_reason: `No developers found in domain '${itemDomain}'`
           };
         }
 
-        // Step 2: Strict Capacity Filter — verify that FULL task estimate fits before assigning
-        const capableDevs = domainMatchedDevs
+        // Capacity filter
+        const capableDevs = domainDevs
           .filter(d => (d.remaining - (hoursUsed[d.id] || 0)) >= itemHrs)
           .map(d => {
             const available = d.remaining - (hoursUsed[d.id] || 0);
-            const domainMatch = true;
-            const skillPct = calcSkillMatch(d.languages, reqSkills);
+            const skillPct  = calcSkillMatch(d.languages, reqSkills);
             const seniority = calcSenioritySuitability(complexity, d.role);
-            return { ...d, available, domainMatch, skillPct, seniority };
+            return { ...d, available, skillPct, seniority };
           });
 
         if (capableDevs.length === 0) {
           return {
-            story_id: item.story_id || item.id,
-            title: item.title,
-            parent_story_id: item.parent_story_id,
-            parent_story_title: item.parent_story_title,
-            story_points: item.story_points || 2,
-            estimated_hours: itemHrs,
-            priority: item.priority,
-            domain: item.domain,
-            required_domain: itemDomain,
-            required_skills: reqSkills,
-            predicted_complexity: complexity,
-            status: item.status || 'To Do',
-            start_date: item.start_date || null,
-            end_date: item.end_date || null,
-            developer_id: null,
-            developer_name: 'Unassigned',
-            developer_role: null,
-            developer_domain: null,
-            developer_skills: [],
-            developer_capacity: 0,
-            developer_remaining_after: 0,
-            allocated_hours: 0,
-            domain_match: false,
-            skill_match_pct: 0,
-            seniority_suitability_score: 0,
-            seniority_rank: 0,
+            story_id: item.story_id || item.id, title: item.title,
+            parent_story_id: item.parent_story_id, parent_story_title: item.parent_story_title,
+            story_points: item.story_points || 2, estimated_hours: itemHrs,
+            priority: item.priority, domain: item.domain, required_domain: itemDomain,
+            required_skills: reqSkills, predicted_complexity: complexity,
+            status: item.status || 'To Do', start_date: item.start_date || null, end_date: item.end_date || null,
+            developer_id: null, developer_name: null, developer_role: null, developer_domain: null,
+            developer_skills: [], developer_capacity: 0, developer_remaining_after: 0, allocated_hours: 0,
+            domain_match: false, skill_match_pct: 0, seniority_suitability_score: 0, seniority_rank: 0,
             unassigned_reason: `No ${itemDomain} developer with sufficient capacity (${itemHrs}h required)`
           };
         }
 
-        // Step 3: Rank domain-matched & capacity-capable candidates
-        const candidates = capableDevs.sort((a, b) => {
-            if (b.skillPct !== a.skillPct) return b.skillPct - a.skillPct;
-            if (b.seniority !== a.seniority) return b.seniority - a.seniority;
-            if (b.available !== a.available) return b.available - a.available;
-            return String(a.id).localeCompare(String(b.id));
-          });
+        // Rank candidates
+        const candidates = [...capableDevs].sort((a, b) => {
+          if (b.skillPct  !== a.skillPct)  return b.skillPct  - a.skillPct;
+          if (b.seniority !== a.seniority) return b.seniority - a.seniority;
+          if (b.available !== a.available) return b.available - a.available;
+          return String(a.id).localeCompare(String(b.id));
+        });
 
         const best = candidates[0];
-
-        // Step 4: Allocate full task hours
         const allocHrs = itemHrs;
         hoursUsed[best.id] = (hoursUsed[best.id] || 0) + allocHrs;
 
-        const maxSuit = complexity === 'HIGH' ? 3 : 2;
+        const maxSuit  = complexity === 'HIGH' ? 3 : 2;
         const suitScore = Math.round((best.seniority / maxSuit) * 100);
 
-        // Merge with server result only if server result strictly matches domain!
-        let serverMatch = serverAssignments?.find(
-          a => String(a.story_id) === String(item.story_id || item.id)
-        );
-        if (serverMatch && serverMatch.developer_id) {
-          const sDev = developers.find(d => String(d.id) === String(serverMatch.developer_id));
-          if (sDev && normDomain(sDev.primary_domain || sDev.domain) !== itemDomain) {
-            serverMatch = null; // Reject server match if cross-domain!
-          }
-        }
-
         return {
-          story_id: item.story_id || item.id,
-          title: item.title,
-          parent_story_id: item.parent_story_id,
-          parent_story_title: item.parent_story_title,
-          story_points: item.story_points || 2,
-          estimated_hours: itemHrs,
-          priority: item.priority,
-          domain: item.domain,
-          required_domain: itemDomain,
-          required_skills: reqSkills,
-          predicted_complexity: complexity,
-          status: item.status || 'To Do',
-          start_date: item.start_date || null,
-          end_date: item.end_date || null,
-          // Developer assigned
-          developer_id: best.id,
-          developer_name: best.name,
-          developer_role: best.role,
-          developer_domain: best.primary_domain,
-          developer_skills: best.languages,
-          developer_capacity: Number(best.remaining) + allocHrs,
-          developer_remaining_after: best.available - allocHrs,
-          allocated_hours: allocHrs,
-          // Allocation reasoning
-          domain_match: best.domainMatch,
-          skill_match_pct: best.skillPct,
-          seniority_suitability_score: suitScore,
-          seniority_rank: getSeniorityRank(best.role),
-          ...(serverMatch || {})
+          story_id: item.story_id || item.id, title: item.title,
+          parent_story_id: item.parent_story_id, parent_story_title: item.parent_story_title,
+          story_points: item.story_points || 2, estimated_hours: itemHrs,
+          priority: item.priority, domain: item.domain, required_domain: itemDomain,
+          required_skills: reqSkills, predicted_complexity: complexity,
+          status: item.status || 'To Do', start_date: item.start_date || null, end_date: item.end_date || null,
+          developer_id: best.id, developer_name: best.name,
+          developer_role: best.role, developer_domain: best.primary_domain,
+          developer_skills: best.languages, developer_capacity: Number(best.remaining) + allocHrs,
+          developer_remaining_after: best.available - allocHrs, allocated_hours: allocHrs,
+          domain_match: true, skill_match_pct: best.skillPct,
+          seniority_suitability_score: suitScore, seniority_rank: getSeniorityRank(best.role),
+          unassigned_reason: null
         };
       }).filter(Boolean);
 
@@ -824,6 +875,7 @@ export default function ResourceManagementModule({
       setLoading(false);
     }
   };
+
 
   // ══════════════════════════════════════════════════════════
   // 7. SAVE ALLOCATION TO DATABASE
