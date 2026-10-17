@@ -18,10 +18,19 @@ const PROJECT_ENGINE_API = 'http://localhost:8082/api';
 // Keyword Method: Identifies Domain and Required Skills
 // dynamically from sub-task title
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ==============================================================================
+// KEYWORD-BASED DOMAIN & REQUIRED SKILLS IDENTIFICATION ENGINE
+// Dynamically extracts technical domain and required developer skills from
+// sub-task and user story requirement titles using regular expression keyword matching.
+// ==============================================================================
 function extractDomainAndSkills(titleOrText) {
   const text = (titleOrText || '').toLowerCase();
 
-  // 1. Explicit AI / Machine Learning Keywords
+  // --------------------------------------------------------------------------
+  // 1. AI & Machine Learning Domain Identification
+  // Keywords: machine learning, nlp, deep learning, models, spacy, neural network
+  // Associated Skills: Python, ML, NLP, Scikit-Learn
+  // --------------------------------------------------------------------------
   if (/\b(machine learning|nlp|spacy|scikit|svm|deep learning|neural network|tensorflow|pytorch|classifier|ai service|ml model|training dataset)\b/i.test(text) || (/\b(ml|ai)\b/i.test(text) && !text.includes('email') && !text.includes('detail') && !text.includes('main'))) {
     let skills = ['Python', 'ML'];
     if (text.includes('nlp') || text.includes('spacy')) skills.push('NLP');
@@ -29,7 +38,12 @@ function extractDomainAndSkills(titleOrText) {
     return { domain: 'ai', required_domain: 'ai', skills, required_skills: skills };
   }
 
-  // 2. Explicit Frontend UI / UX / Form / Entry Keywords
+  // --------------------------------------------------------------------------
+  // 2. Frontend Domain Identification (UI / UX / Forms / Views)
+  // Keywords: enter, input, form, ui, ux, frontend, react, dashboard, dark mode,
+  //           css, tailwind, export, pdf, excel, component, screen, button, render
+  // Associated Skills: JavaScript, React, Tailwind CSS, jsPDF, HTML/CSS
+  // --------------------------------------------------------------------------
   if (/\b(enter|input|form|ui|ux|frontend|react|dashboard|dark mode|css|tailwind|export|pdf|excel|component|layout|view|display|screen|button|render)\b/i.test(text)) {
     let skills = ['JavaScript', 'React'];
     if (text.includes('dark mode') || text.includes('css') || text.includes('tailwind')) skills.push('Tailwind');
@@ -38,19 +52,32 @@ function extractDomainAndSkills(titleOrText) {
     return { domain: 'frontend', required_domain: 'frontend', skills, required_skills: skills };
   }
 
-  // 3. QA / Testing / Automation Keywords
+  // --------------------------------------------------------------------------
+  // 3. QA & Quality Assurance Domain Identification (Testing & Verification)
+  // Keywords: test, qa, cypress, selenium, unit test, jest, verification, validation
+  // Associated Skills: QA Automation, Cypress
+  // --------------------------------------------------------------------------
   if (/\b(test|qa|cypress|selenium|unit test|jest|audit check|verification|verify|validation|validate)\b/i.test(text)) {
     const skills = ['QA Automation', 'Cypress'];
     return { domain: 'qa', required_domain: 'qa', skills, required_skills: skills };
   }
 
-  // 4. DevOps / Infrastructure Keywords
+  // --------------------------------------------------------------------------
+  // 4. DevOps & Cloud Infrastructure Domain Identification
+  // Keywords: devops, docker, kubernetes, aws, cloud, ci/cd, pipeline, deploy, nginx
+  // Associated Skills: Docker, DevOps
+  // --------------------------------------------------------------------------
   if (/\b(devops|docker|kubernetes|aws|cloud|ci\/cd|pipeline|deploy|nginx|dockerfile)\b/i.test(text)) {
     const skills = ['Docker', 'DevOps'];
     return { domain: 'devops', required_domain: 'devops', skills, required_skills: skills };
   }
 
-  // 5. Backend / API / Database / Workflow / Transactional Logic
+  // --------------------------------------------------------------------------
+  // 5. Backend Domain Identification (APIs / Database / Transactions / Auth)
+  // Keywords: api, backend, server, database, sql, postgres, defect, repair,
+  //           login, auth, permission, role, approve, reject, status, costing
+  // Associated Skills: JavaScript, SQL, Node.js, OAuth, PostgreSQL
+  // --------------------------------------------------------------------------
   if (/\b(defect|repair|vessel|equipment|overtime|labor|labour|history|audit|version|status|approve|reject|permission|role|user|login|auth|database|sql|postgres|backend|api|server|crud|link|assign|cost|costing)\b/i.test(text)) {
     let skills = ['JavaScript', 'SQL'];
     if (text.includes('login') || text.includes('auth') || text.includes('permission') || text.includes('role')) skills.push('OAuth');
@@ -59,7 +86,11 @@ function extractDomainAndSkills(titleOrText) {
     return { domain: 'backend', required_domain: 'backend', skills, required_skills: skills };
   }
 
-  // 6. Dynamic Fallback: Default Core System Development
+  // --------------------------------------------------------------------------
+  // 6. Default Fallback Domain & Skills
+  // Assigned when task title does not match specific specialized keywords
+  // Associated Skills: Core Full-Stack / Backend (JavaScript, SQL, Node.js)
+  // --------------------------------------------------------------------------
   const defaultSkills = ['JavaScript', 'SQL', 'Node.js'];
   return { domain: 'backend', required_domain: 'backend', skills: defaultSkills, required_skills: defaultSkills };
 }
