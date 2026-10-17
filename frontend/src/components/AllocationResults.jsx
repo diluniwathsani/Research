@@ -205,6 +205,10 @@ const DeveloperColumn = ({ developer, tasks, onDrop, theme }) => {
           </div>
         )}
       </div>
+    </div>
+  );
+};
+
 const UnassignedColumn = ({ tasks, onDrop }) => {
   const [{ isOver }, drop] = useDrop(() => ({
     accept: ItemTypes.TASK,
