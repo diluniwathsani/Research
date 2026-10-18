@@ -60,7 +60,7 @@ const DraggableTask = ({ task }) => {
         {task.title || task.story_id}
       </div>
       <div className="flex justify-between items-center text-xs uppercase tracking-wide font-semibold text-slate-400 dark:text-slate-400">
-        <span>{task.predicted_complexity || 'MEDIUM'} • {task.matched_domain || 'general'}</span>
+        <span>{task.predicted_complexity || 'MEDIUM'} • {task.matched_domain || task.required_domain || task.domain || 'general'}</span>
         {task.developer_remaining_after !== undefined && task.developer_remaining_after !== null && (
           <span className="text-emerald-600 dark:text-emerald-400 font-bold normal-case text-[11px]">
             {task.developer_remaining_after}h remaining
