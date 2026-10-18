@@ -3,7 +3,7 @@ import axios from 'axios';
 import {
   Users, Cpu, Clock, CheckCircle2, AlertCircle, RefreshCw, Save,
   Tag, Target, Info, Layers, Code, Shield, Sparkles,
-  Database, ChevronDown, ChevronRight, Zap
+  Database, ChevronDown, ChevronRight, Zap, ArrowLeft
 } from 'lucide-react';
 
 import ProjectSelection from './ProjectSelection.jsx';
@@ -14,10 +14,10 @@ import AllocationResults from './AllocationResults.jsx';
 const EXPRESS_API = 'http://localhost:3000/api';
 const PROJECT_ENGINE_API = 'http://localhost:8082/api';
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // Keyword Method: Identifies Domain and Required Skills
 // dynamically from sub-task title
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ==============================================================================
 // KEYWORD-BASED DOMAIN & REQUIRED SKILLS IDENTIFICATION ENGINE
 // Dynamically extracts technical domain and required developer skills from
@@ -26,240 +26,214 @@ const PROJECT_ENGINE_API = 'http://localhost:8082/api';
 // Key Skills: JavaScript, React, Node.js, Express, SQL, PostgreSQL, Cypress, Markdown
 // ==============================================================================
 function extractDomainAndSkills(titleOrText, description = '') {
-  // Extract unified text from title and description (supports string or work-item object)
-  let fullText = '';
-  let itemType = '';
-  if (titleOrText && typeof titleOrText === 'object') {
-    itemType = (titleOrText.work_item_type || titleOrText.type || '').trim().toLowerCase();
-    fullText = [
-      titleOrText.title || titleOrText.name || '',
-      titleOrText.work_item_type || titleOrText.type || '',
-      titleOrText.description || '',
-      titleOrText.user_story || '',
-      description || ''
-    ].filter(Boolean).join(' ');
-  } else {
-    fullText = `${titleOrText || ''} ${description || ''}`.trim();
-  }
-  const text = fullText.toLowerCase();
+    // Extract unified text and item type from title, task object, or description
+    let fullText = '';
+    let itemType = '';
+    if (titleOrText && typeof titleOrText === 'object') {
+        itemType = (titleOrText.work_item_type || titleOrText.type || '').trim().toLowerCase();
+        fullText = [
+            titleOrText.title || titleOrText.name || '',
+            titleOrText.work_item_type || titleOrText.type || '',
+            titleOrText.description || '',
+            titleOrText.user_story || '',
+            description || ''
+        ].filter(Boolean).join(' ');
+    } else {
+        fullText = `${titleOrText || ''} ${description || ''}`.trim();
+    }
+    const text = fullText.toLowerCase();
+    const cleanFullText = fullText.trim();
 
-  // --------------------------------------------------------------------------
-  // 1. Documentation Domain Identification
-  // Work Item Types / Prefixes: Technical & User Documentation, Documentation
-  // Keywords: documentation, technical documentation, user documentation, user manual,
-  //           release notes, technical guide, api documentation, readme, wiki, markdown
-  // Required Skills: Markdown, Technical Writing
-  // --------------------------------------------------------------------------
-  const isDoc = itemType === 'documentation'
-    || /^(technical & user documentation|documentation)\b/i.test(fullText.trim())
-    || /\b(technical & user documentation|documentation|user manual|release notes|technical guide|api documentation|user guide|readme|wiki|markdown|system documentation|specifications document)\b/i.test(text);
+    // ==========================================================================
+    // 1. DIRECT WORK-ITEM TYPE & TITLE PREFIX MATCHING
+    // Suitable for standard generated work-item titles and explicit deliverable formats
+    // ==========================================================================
 
-  if (isDoc) {
-    const skillsSet = new Set(['Markdown']);
-    if (/\b(technical guide|user manual|specifications|guide|writing|document)\b/i.test(text)) {
-      skillsSet.add('Technical Writing');
-    }
-    const skills = Array.from(skillsSet);
-    return { domain: 'Documentation', required_domain: 'Documentation', skills, required_skills: skills };
-  }
+    // Frontend: UI/UX, Frontend
+    const isFrontendPrefix = itemType === 'ui/ux' || itemType === 'frontend'
+        || /^(?:ui\/ux|frontend|to build frontend)\b/i.test(cleanFullText);
 
-  // --------------------------------------------------------------------------
-  // 2. Database Domain Identification
-  // Work Item Types / Prefixes: Database Schema & Logic, Database
-  // Keywords: database schema & logic, database schema, migration, postgresql,
-  //           postgres, neon postgresql, relational database, sql query, ddl,
-  //           table schema, data persistence, schema design, stored procedure
-  // Required Skills: PostgreSQL, SQL
-  // --------------------------------------------------------------------------
-  const isDatabase = itemType === 'database'
-    || /^(database schema & logic|database)\b/i.test(fullText.trim())
-    || /\b(database schema & logic|database schema|table schema|relational database|data persistence|schema migration|ddl|sql query|stored procedure|database design)\b/i.test(text)
-    || (/\b(postgresql|postgres|neon postgresql)\b/i.test(text) && !/\b(express|rest api|api endpoint)\b/i.test(text));
+    // Database: Database Schema & Logic, Database
+    const isDatabasePrefix = itemType === 'database'
+        || /^(?:database schema & logic|database schema|database|to implement database schema)\b/i.test(cleanFullText);
 
-  if (isDatabase) {
-    const skillsSet = new Set(['PostgreSQL', 'SQL']);
-    const skills = Array.from(skillsSet);
-    return { domain: 'Database', required_domain: 'Database', skills, required_skills: skills };
-  }
+    // QA/Testing: QA Integration & Testing, Testing, QA
+    const isQAPrefix = itemType === 'testing' || itemType === 'qa'
+        || /^(?:qa integration & testing|testing|qa|to conduct security.*testing)\b/i.test(cleanFullText);
 
-  // --------------------------------------------------------------------------
-  // 3. QA / Testing Domain Identification
-  // Work Item Types / Prefixes: QA Integration & Testing, Testing, QA
-  // Keywords: qa integration & testing, testing, qa, test case, test scenario,
-  //           regression testing, integration testing, unit testing, unit test,
-  //           end-to-end, e2e, bug report, test automation, cypress, jest, selenium,
-  //           assertion, audit check, verification, validation
-  // Required Skills: Cypress, QA Automation, Jest, Selenium, Manual Testing
-  // --------------------------------------------------------------------------
-  const isQA = itemType === 'testing' || itemType === 'qa'
-    || /^(qa integration & testing|testing|qa)\b/i.test(fullText.trim())
-    || /\b(qa integration & testing|test case|test scenario|regression testing|integration testing|unit testing|unit test|end-to-end|e2e|bug report|test automation|cypress|jest|selenium|assertion|audit check)\b/i.test(text)
-    || (/\b(qa|testing|test|verification|verify|validation|validate)\b/i.test(text) && !/\b(input validation|form validation)\b/i.test(text));
+    // Documentation: Technical & User Documentation, Documentation
+    const isDocPrefix = itemType === 'documentation' || itemType === 'doc'
+        || /^(?:technical & user documentation|documentation)\b/i.test(cleanFullText);
 
-  if (isQA) {
-    const skillsSet = new Set();
-    if (/\bcypress\b/i.test(text)) {
-      skillsSet.add('Cypress');
-    }
-    if (/\b(jest|unit testing|unit test|assertion)\b/i.test(text)) {
-      skillsSet.add('Jest');
-    }
-    if (/\bselenium\b/i.test(text)) {
-      skillsSet.add('Selenium');
-    }
-    if (/\b(test automation|automation|regression testing|integration testing|end-to-end|e2e|qa integration)\b/i.test(text)) {
-      skillsSet.add('QA Automation');
-    }
-    if (/\b(test case|test scenario|bug report|manual)\b/i.test(text)) {
-      skillsSet.add('Manual Testing');
-    }
-    if (!skillsSet.has('Cypress') && !skillsSet.has('QA Automation') && !skillsSet.has('Jest') && !skillsSet.has('Selenium') && !skillsSet.has('Manual Testing')) {
-      skillsSet.add('Cypress');
-      skillsSet.add('QA Automation');
-    } else if (!skillsSet.has('Cypress') && (itemType === 'testing' || /qa integration & testing|testing:/i.test(fullText))) {
-      skillsSet.add('Cypress');
-    }
-    const skills = Array.from(skillsSet);
-    return { domain: 'QA/Testing', required_domain: 'QA/Testing', skills, required_skills: skills };
-  }
+    // DevOps: DevOps, Infrastructure, CI/CD
+    const isDevOpsPrefix = itemType === 'devops' || itemType === 'infrastructure' || itemType === 'ci/cd'
+        || /^(?:devops|infrastructure|ci\/cd|to configure devops)\b/i.test(cleanFullText);
 
-  // --------------------------------------------------------------------------
-  // 4. DevOps & Infrastructure Domain Identification
-  // Work Item Types / Prefixes: DevOps, Infrastructure, CI/CD
-  // Keywords: devops, github actions, continuous integration, continuous deployment,
-  //           ci/cd, environment variables, docker, container, kubernetes,
-  //           deployment, hosting, aws, nginx, dockerfile, pipeline
-  // Required Skills: DevOps, Docker, CI/CD, AWS
-  // --------------------------------------------------------------------------
-  const isDevOps = itemType === 'devops'
-    || /^(devops|infrastructure|ci\/cd)\b/i.test(fullText.trim())
-    || /\b(devops|github actions|continuous integration|continuous deployment|ci\/cd|environment variables|docker|container|kubernetes|deployment|hosting|aws|nginx|dockerfile)\b/i.test(text)
-    || (/\b(pipeline|workflow|build)\b/i.test(text) && /\b(deploy|ci|cd|release|infra|cloud|docker|git|env)\b/i.test(text));
+    // AI/ML: AI, ML, AI/ML
+    const isAiPrefix = itemType === 'ai' || itemType === 'ml' || itemType === 'ai/ml'
+        || /^(?:ai\/ml|to develop machine learning|machine learning)\b/i.test(cleanFullText);
 
-  if (isDevOps) {
-    const skillsSet = new Set(['DevOps']);
-    if (/\b(docker|container|dockerfile)\b/i.test(text)) {
-      skillsSet.add('Docker');
-    }
-    if (/\b(ci\/cd|github actions|continuous integration|continuous deployment|workflow|pipeline|build)\b/i.test(text)) {
-      skillsSet.add('CI/CD');
-    }
-    if (/\b(aws|cloud|hosting|kubernetes|nginx|environment variables)\b/i.test(text)) {
-      skillsSet.add('AWS');
-    }
-    const skills = Array.from(skillsSet);
-    return { domain: 'DevOps', required_domain: 'DevOps', skills, required_skills: skills };
-  }
+    // Backend/API: API/Backend, Backend, API
+    const isBackendPrefix = itemType === 'api/backend' || itemType === 'backend' || itemType === 'api'
+        || /^(?:api\/backend|backend\/api|backend|api|to implement core business api)\b/i.test(cleanFullText);
 
-  // --------------------------------------------------------------------------
-  // 5. AI / Machine Learning Domain Identification
-  // Work Item Types / Prefixes: AI, ML, AI/ML
-  // Keywords: machine learning, nlp, spacy, scikit-learn, svm, deep learning,
-  //           neural network, tensorflow, pytorch, classifier, ai service,
-  //           ml model, training dataset, prediction, predict, model training,
-  //           feature extraction, classification, inference, model integration,
-  //           data preprocessing, pandas, random forest
-  // Required Skills: Python, ML, NLP, Scikit-Learn, TensorFlow, PyTorch, Pandas
-  // --------------------------------------------------------------------------
-  const isAi = itemType === 'ai' || itemType === 'ai/ml' || itemType === 'ml'
-    || /\b(machine learning|nlp|spacy|scikit-learn|scikit|svm|deep learning|neural network|tensorflow|pytorch|classifier|ai service|ml model|training dataset|prediction|predict|model training|feature extraction|classification|inference|model integration|data preprocessing|pandas|random forest)\b/i.test(text)
-    || (/\b(ml|ai)\b/i.test(text) && !text.includes('email') && !text.includes('detail') && !text.includes('main') && !text.includes('gain') && !text.includes('chain'));
+    // ==========================================================================
+    // 2. DOMAIN RESOLUTION (Prefix Priority followed by Comprehensive Keywords)
+    // ==========================================================================
 
-  if (isAi) {
-    const skillsSet = new Set(['Python']);
-    if (/\b(machine learning|ml|ml model|model training|training dataset|inference|model integration|prediction|predict)\b/i.test(text)) {
-      skillsSet.add('ML');
-    }
-    if (/\b(nlp|spacy)\b/i.test(text)) {
-      skillsSet.add('NLP');
-    }
-    if (/\b(scikit|scikit-learn|svm|random forest|classifier|classification)\b/i.test(text)) {
-      skillsSet.add('Scikit-Learn');
-    }
-    if (/\btensorflow\b/i.test(text)) {
-      skillsSet.add('TensorFlow');
-    }
-    if (/\bpytorch\b/i.test(text)) {
-      skillsSet.add('PyTorch');
-    }
-    if (/\b(pandas|data preprocessing|feature extraction)\b/i.test(text)) {
-      skillsSet.add('Pandas');
-    }
-    if (skillsSet.size === 1) {
-      skillsSet.add('ML');
-    }
-    const skills = Array.from(skillsSet);
-    return { domain: 'AI/ML', required_domain: 'AI/ML', skills, required_skills: skills };
-  }
+    // 1. Documentation Domain
+    const isDoc = isDocPrefix
+        || /\b(technical & user documentation|documentation|user manual|release notes|technical guide|api documentation|user guide|readme|wiki|markdown|system documentation|specifications document)\b/i.test(text);
 
-  // --------------------------------------------------------------------------
-  // 6. Frontend Domain Identification
-  // Work Item Types / Prefixes: UI/UX, Frontend
-  // Keywords: ui/ux, frontend, react, jsx, ui, ux, dashboard, dark mode, css,
-  //           tailwind css, responsive, navigation, modal, dropdown, table,
-  //           chart, progress bar, drag and drop, form validation,
-  //           react component, layout, button, screen, render
-  // Required Skills: JavaScript, React, HTML/CSS, Tailwind CSS
-  // --------------------------------------------------------------------------
-  const isFrontend = itemType === 'ui/ux' || itemType === 'frontend'
-    || /^(ui\/ux|frontend)\b/i.test(fullText.trim())
-    || /\b(ui\/ux|frontend|react|jsx|ui|ux|dashboard|dark mode|css|tailwind css|tailwind|responsive|navigation|modal|dropdown|table|chart|progress bar|drag and drop|form validation|react component|layout|button|screen|render|component|display|view|export|pdf|excel|input|enter|form)\b/i.test(text);
+    if (isDoc && !isFrontendPrefix && !isBackendPrefix && !isDatabasePrefix && !isQAPrefix && !isDevOpsPrefix && !isAiPrefix) {
+        const skillsSet = new Set(['Markdown']);
+        if (/\b(technical guide|user manual|specifications|guide|writing|document)\b/i.test(text)) {
+            skillsSet.add('Technical Writing');
+        }
+        const skills = Array.from(skillsSet);
+        return { domain: 'Documentation', required_domain: 'Documentation', skills, required_skills: skills };
+    }
 
-  if (isFrontend) {
-    const skillsSet = new Set(['JavaScript', 'React']);
-    if (/\b(css|html|responsive|form validation|layout|modal|dropdown|navigation|screen|render)\b/i.test(text)) {
-      skillsSet.add('HTML/CSS');
-    }
-    if (/\b(tailwind|tailwind css|dark mode)\b/i.test(text)) {
-      skillsSet.add('Tailwind CSS');
-    }
-    const skills = Array.from(skillsSet);
-    return { domain: 'Frontend', required_domain: 'Frontend', skills, required_skills: skills };
-  }
+    // 2. Database Domain
+    const isDatabase = isDatabasePrefix
+        || /\b(database schema & logic|database schema|table schema|relational database|data persistence|schema migration|ddl|sql query|stored procedure|database design)\b/i.test(text)
+        || (/\b(postgresql|postgres|neon postgresql)\b/i.test(text) && !/\b(express|rest api|api endpoint)\b/i.test(text));
 
-  // --------------------------------------------------------------------------
-  // 7. Backend / API Domain Identification
-  // Work Item Types / Prefixes: API/Backend, Backend, API
-  // Keywords: api/backend, backend, rest api, api endpoint, express, middleware,
-  //           request, response, crud, jwt, bcrypt, authentication, authorization,
-  //           server, node.js, api, endpoint, oauth, microservices
-  // Business workflows: defect, repair, vessel, equipment, overtime, labor,
-  //                     labour, history, audit, version, status, approve, reject,
-  //                     permission, role, user, login, auth, cost, costing
-  // Required Skills: Node.js, Express, JavaScript, SQL
-  // --------------------------------------------------------------------------
-  const isBackend = itemType === 'api/backend' || itemType === 'backend' || itemType === 'api'
-    || /^(api\/backend|backend|api)\b/i.test(fullText.trim())
-    || /\b(api\/backend|backend|rest api|api endpoint|express|middleware|request|response|crud|jwt|bcrypt|authentication|authorization|server|query|node\.js|node|api|endpoint|oauth|defect|repair|vessel|equipment|overtime|labor|labour|history|audit|version|status|approve|reject|permission|role|user|login|auth|cost|costing)\b/i.test(text);
+    if (isDatabase && !isFrontendPrefix && !isBackendPrefix && !isQAPrefix && !isDevOpsPrefix && !isAiPrefix && !isDocPrefix) {
+        const skillsSet = new Set(['PostgreSQL', 'SQL']);
+        const skills = Array.from(skillsSet);
+        return { domain: 'Database', required_domain: 'Database', skills, required_skills: skills };
+    }
 
-  if (isBackend) {
-    const skillsSet = new Set(['Node.js', 'Express', 'JavaScript']);
-    if (/\b(database|sql|crud|query|schema)\b/i.test(text)) {
-      skillsSet.add('SQL');
-    }
-    if (/\b(postgresql|postgres|neon postgresql|neon|migration|data persistence)\b/i.test(text)) {
-      skillsSet.add('PostgreSQL');
-    }
-    if (!skillsSet.has('SQL') && !skillsSet.has('PostgreSQL')) {
-      skillsSet.add('SQL');
-    }
-    const skills = Array.from(skillsSet);
-    return { domain: 'Backend/API', required_domain: 'Backend/API', skills, required_skills: skills };
-  }
+    // 3. QA / Testing Domain
+    const isQA = isQAPrefix
+        || /\b(qa integration & testing|qa integration|test case|test scenario|regression testing|integration testing|unit testing|unit test|end-to-end|e2e|bug report|test automation|cypress|jest|selenium|assertion|audit check)\b/i.test(text)
+        || (/\b(qa|testing|test|verification|verify|validation|validate)\b/i.test(text) && !/\b(input validation|form validation)\b/i.test(text));
 
-  // --------------------------------------------------------------------------
-  // 8. Default Fallback Domain & Skills
-  // Assigned when work item does not match specific specialized keywords
-  // Associated Skills: Node.js, Express, JavaScript, SQL
-  // --------------------------------------------------------------------------
-  const defaultSkills = ['Node.js', 'Express', 'JavaScript', 'SQL'];
-  return { domain: 'Backend/API', required_domain: 'Backend/API', skills: defaultSkills, required_skills: defaultSkills };
+    if (isQA && !isFrontendPrefix && !isBackendPrefix && !isDatabasePrefix && !isDevOpsPrefix && !isAiPrefix && !isDocPrefix) {
+        const skillsSet = new Set(['Cypress', 'QA Automation']);
+        if (/\b(jest|unit testing|unit test|assertion)\b/i.test(text)) {
+            skillsSet.add('Jest');
+        }
+        if (/\bselenium\b/i.test(text)) {
+            skillsSet.add('Selenium');
+        }
+        if (/\b(test case|test scenario|bug report|manual)\b/i.test(text)) {
+            skillsSet.add('Manual Testing');
+        }
+        const skills = Array.from(skillsSet);
+        return { domain: 'QA/Testing', required_domain: 'QA/Testing', skills, required_skills: skills };
+    }
+
+    // 4. DevOps & Infrastructure Domain
+    const isDevOps = isDevOpsPrefix
+        || /\b(devops|github actions|continuous integration|continuous deployment|ci\/cd|environment variables|docker|container|kubernetes|deployment|hosting|aws|nginx|dockerfile)\b/i.test(text)
+        || (/\b(pipeline|workflow|build)\b/i.test(text) && /\b(deploy|ci|cd|release|infra|cloud|docker|git|env)\b/i.test(text));
+
+    if (isDevOps && !isFrontendPrefix && !isBackendPrefix && !isDatabasePrefix && !isQAPrefix && !isAiPrefix && !isDocPrefix) {
+        const skillsSet = new Set(['DevOps', 'Docker', 'CI/CD']);
+        if (/\b(aws|cloud|hosting|kubernetes|nginx|environment variables)\b/i.test(text)) {
+            skillsSet.add('AWS');
+        }
+        const skills = Array.from(skillsSet);
+        return { domain: 'DevOps', required_domain: 'DevOps', skills, required_skills: skills };
+    }
+
+    // 5. AI / Machine Learning Domain
+    const isAi = isAiPrefix
+        || /\b(machine learning|nlp|spacy|scikit-learn|scikit|svm|deep learning|neural network|tensorflow|pytorch|classifier|ai service|ml model|training dataset|prediction|predict|model training|feature extraction|classification|inference|model integration|data preprocessing|pandas|random forest)\b/i.test(text)
+        || (/\b(ml|ai)\b/i.test(text) && !text.includes('email') && !text.includes('detail') && !text.includes('main') && !text.includes('gain') && !text.includes('chain'));
+
+    if (isAi && !isFrontendPrefix && !isBackendPrefix && !isDatabasePrefix && !isQAPrefix && !isDevOpsPrefix && !isDocPrefix) {
+        const skillsSet = new Set(['Python', 'ML']);
+        if (/\b(nlp|spacy)\b/i.test(text)) {
+            skillsSet.add('NLP');
+        }
+        if (/\b(scikit|scikit-learn|svm|random forest|classifier|classification)\b/i.test(text)) {
+            skillsSet.add('Scikit-Learn');
+        }
+        if (/\btensorflow\b/i.test(text)) {
+            skillsSet.add('TensorFlow');
+        }
+        if (/\bpytorch\b/i.test(text)) {
+            skillsSet.add('PyTorch');
+        }
+        if (/\b(pandas|data preprocessing|feature extraction)\b/i.test(text)) {
+            skillsSet.add('Pandas');
+        }
+        const skills = Array.from(skillsSet);
+        return { domain: 'AI/ML', required_domain: 'AI/ML', skills, required_skills: skills };
+    }
+
+    // 6. Frontend Domain
+    const isFrontend = isFrontendPrefix
+        || /\b(ui\/ux|frontend|react|jsx|ui|ux|dashboard|dark mode|css|tailwind css|tailwind|responsive|navigation|modal|dropdown|table|chart|progress bar|drag and drop|form validation|react component|layout|button|screen|render|component|display|view|export|pdf|excel|input|enter|form)\b/i.test(text);
+
+    if (isFrontend && !isBackendPrefix && !isDatabasePrefix && !isQAPrefix && !isDevOpsPrefix && !isAiPrefix && !isDocPrefix) {
+        const skillsSet = new Set(['JavaScript', 'React']);
+        if (/\b(css|html|responsive|form validation|layout|modal|dropdown|navigation|screen|render)\b/i.test(text)) {
+            skillsSet.add('HTML/CSS');
+        }
+        if (/\b(tailwind|tailwind css|dark mode)\b/i.test(text)) {
+            skillsSet.add('Tailwind CSS');
+        }
+        const skills = Array.from(skillsSet);
+        return { domain: 'Frontend', required_domain: 'Frontend', skills, required_skills: skills };
+    }
+
+    // 7. Backend / API Domain
+    const isBackend = isBackendPrefix
+        || /\b(api\/backend|backend|rest api|api endpoint|express|middleware|request|response|crud|jwt|bcrypt|authentication|authorization|server|query|node\.js|node|api|endpoint|oauth|defect|repair|vessel|equipment|overtime|labor|labour|history|audit|version|status|approve|reject|permission|role|user|login|auth|cost|costing)\b/i.test(text);
+
+    if (isBackend) {
+        const skillsSet = new Set(['Node.js', 'Express', 'JavaScript', 'SQL']);
+        if (/\b(postgresql|postgres|neon postgresql|neon|migration|data persistence)\b/i.test(text)) {
+            skillsSet.add('PostgreSQL');
+        }
+        const skills = Array.from(skillsSet);
+        return { domain: 'Backend/API', required_domain: 'Backend/API', skills, required_skills: skills };
+    }
+
+    // Explicit fallback for matched prefixes that did not trigger earlier
+    if (isFrontendPrefix) {
+        const skillsSet = new Set(['JavaScript', 'React']);
+        if (/\b(css|html|responsive|layout)\b/i.test(text)) skillsSet.add('HTML/CSS');
+        if (/\b(tailwind|dark mode)\b/i.test(text)) skillsSet.add('Tailwind CSS');
+        const skills = Array.from(skillsSet);
+        return { domain: 'Frontend', required_domain: 'Frontend', skills, required_skills: skills };
+    }
+
+    if (isDatabasePrefix) {
+        const skills = ['PostgreSQL', 'SQL'];
+        return { domain: 'Database', required_domain: 'Database', skills, required_skills: skills };
+    }
+
+    if (isQAPrefix) {
+        const skills = ['Cypress', 'QA Automation'];
+        return { domain: 'QA/Testing', required_domain: 'QA/Testing', skills, required_skills: skills };
+    }
+
+    if (isDocPrefix) {
+        const skills = ['Markdown'];
+        return { domain: 'Documentation', required_domain: 'Documentation', skills, required_skills: skills };
+    }
+
+    if (isDevOpsPrefix) {
+        const skills = ['DevOps', 'Docker', 'CI/CD'];
+        return { domain: 'DevOps', required_domain: 'DevOps', skills, required_skills: skills };
+    }
+
+    if (isAiPrefix) {
+        const skills = ['Python', 'ML'];
+        return { domain: 'AI/ML', required_domain: 'AI/ML', skills, required_skills: skills };
+    }
+
+    // 8. Default Fallback Domain & Skills
+    const defaultSkills = ['Node.js', 'Express', 'JavaScript', 'SQL'];
+    return { domain: 'Backend/API', required_domain: 'Backend/API', skills: defaultSkills, required_skills: defaultSkills };
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// Format Sub-Task Title: Converts raw User Story into actionable
-// technical deliverable title (e.g. "To implement Core Business API & Database Logic for...")
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 export function formatSubTaskTitle(rawTitle, domainHint) {
   if (!rawTitle) return '';
   let str = String(rawTitle).trim();
@@ -307,9 +281,9 @@ export function formatSubTaskTitle(rawTitle, domainHint) {
   return `To implement Core Business API & Database Logic for ${capAction}`;
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // Helper: styling functions
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 const priorityStyle = (p) => {
   const v = (p || 'MEDIUM').toUpperCase();
   if (v === 'CRITICAL') return 'bg-red-500/15 text-red-500 border-red-500/30';
@@ -336,9 +310,9 @@ const domainIcon = (d) => {
   return <Database size={11} />;
 };
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // Allocation logic helpers (mirrors backend server.js)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 function normDomain(d) {
   const s = (Array.isArray(d) ? d.join(' ') : String(d || '')).toLowerCase();
   if (s.includes('front'))  return 'frontend';
@@ -374,16 +348,16 @@ function calcSkillMatch(devSkills, requiredSkills) {
   return Math.round((matched / req.length) * 100);
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // MAIN MODULE COMPONENT
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 export default function ResourceManagementModule({
   requirements = [],
   projects: parentProjects = [],
   selectedProjectId: parentSelectedProjectId = '',
   onSelectProject
 }) {
-  // â”€â”€ State â”€â”€
+  // ------------ State ------------
   const [localProjects, setLocalProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [sprints, setSprints] = useState([]);
@@ -401,9 +375,9 @@ export default function ResourceManagementModule({
   // resultsView: 'table' (default detailed table) | 'board' (drag-and-drop Kanban board)
 
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // 1. DYNAMIC PROJECTS LIST
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   const unifiedProjects = useMemo(() => {
     const list = [];
     const seenNames = new Set();
@@ -456,9 +430,9 @@ export default function ResourceManagementModule({
 
   };
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // 2. LOAD DB PROJECTS FALLBACK
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   useEffect(() => {
     if (parentProjects.length === 0) {
       axios.get(`${EXPRESS_API}/projects`)
@@ -467,9 +441,9 @@ export default function ResourceManagementModule({
     }
   }, [parentProjects]);
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // 3. LOAD DEVELOPERS
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   const loadDevelopers = useCallback(async () => {
     try {
       const pid = selectedProject?.project_id || selectedProject?.id || '';
@@ -481,9 +455,9 @@ export default function ResourceManagementModule({
 
   useEffect(() => { loadDevelopers(); }, [loadDevelopers]);
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // 4. FETCH SPRINT PLAN FROM PROJECT MODULE
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   useEffect(() => {
     if (!selectedProject) return;
     setLoading(true);
@@ -530,7 +504,7 @@ export default function ResourceManagementModule({
             sprint_id: s.sprint_id,
             sprint_number: Number(s.sprint_number) || 1,
             name: s.sprint_name || `Sprint ${s.sprint_number}`,
-            sprint_name: s.start_date && s.end_date ? `${s.sprint_name || `Sprint ${s.sprint_number}`} (${s.start_date} â†’ ${s.end_date})` : (s.sprint_name || `Sprint ${s.sprint_number}`),
+            sprint_name: s.start_date && s.end_date ? `${s.sprint_name || `Sprint ${s.sprint_number}`} (${s.start_date} → ${s.end_date})` : (s.sprint_name || `Sprint ${s.sprint_number}`),
             start_date: s.start_date || null,
             end_date: s.end_date || null,
             working_days: s.working_days || 10,
@@ -712,12 +686,12 @@ export default function ResourceManagementModule({
     return () => { isCancelled = true; };
   }, [selectedProject, selectedSprint]);
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // 4b. RESTORE SAVED ALLOCATIONS WHEN SPRINT CHANGES
   //     Uses GET /api/task-assignments as the authoritative source.
   //     If saved assignments exist for this sprint they are loaded
   //     directly into the board without re-running the algorithm.
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   useEffect(() => {
     if (!selectedProject || !selectedSprint) return;
     const projId  = selectedProject.project_id || selectedProject.id || '';
@@ -750,7 +724,7 @@ export default function ResourceManagementModule({
           setAllocations(enriched);
           setPhase('results');
         } else {
-          // No saved allocations for this sprint â€” clear board and return to sub-tasks view
+          // No saved allocations for this sprint — clear board and return to sub-tasks view
           setAllocations([]);
           setPhase('subtasks');
         }
@@ -766,9 +740,9 @@ export default function ResourceManagementModule({
   }, [selectedSprint]);
 
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // 5. DERIVE SPRINT WORK ITEMS (sub-tasks)
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   const currentSprintNum = selectedSprint ? (Number(selectedSprint.sprint_number) || 1) : 1;
 
   const sprintStories = useMemo(() => {
@@ -829,7 +803,7 @@ export default function ResourceManagementModule({
       }];
     });
 
-    // â”€â”€ STRICT PRIORITY SCHEDULING QUEUE â”€â”€
+    // ------------ STRICT PRIORITY SCHEDULING QUEUE ------------
     // CRITICAL (0) -> HIGH (1) -> MEDIUM (2) -> LOW (3)
     const priorityWeights = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
     const domainOrder = { backend: 0, ai: 1, frontend: 2, qa: 3, devops: 4 };
@@ -863,9 +837,9 @@ export default function ResourceManagementModule({
   const highCount = workItems.filter(i => (i.priority || '').toUpperCase() === 'HIGH').length;
   const medCount = workItems.filter(i => (i.priority || '').toUpperCase() === 'MEDIUM').length;
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // 6. RUN SKILL-BASED ALLOCATION
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   const runAllocation = async () => {
     if (workItems.length === 0) return alert('No sub-tasks found for this sprint.');
     if (developers.length === 0) return alert('No developers found. Click "Manage Resources & Skills" to add developers.');
@@ -874,7 +848,7 @@ export default function ResourceManagementModule({
     setAllocations([]);
 
     try {
-      // â”€â”€ STEP 1: Prefer backend allocation (single source of truth) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ------------ STEP 1: Prefer backend allocation (single source of truth) ------------------------------------------------------------
       let backendResults = null;
       try {
         const r = await axios.post(`${EXPRESS_API}/allocate`, {
@@ -888,7 +862,7 @@ export default function ResourceManagementModule({
       } catch (_) {}
 
       if (backendResults) {
-        // Backend result is authoritative â€” enrich with full task metadata for the board
+        // Backend result is authoritative — enrich with full task metadata for the board
         const enriched = backendResults.map(a => {
           const item = workItems.find(w => String(w.story_id || w.id) === String(a.story_id));
           const dev  = developers.find(d => String(d.id) === String(a.developer_id));
@@ -931,7 +905,7 @@ export default function ResourceManagementModule({
         return;
       }
 
-      // â”€â”€ STEP 2: Client-side fallback (mirrors backend allocateTasks + MRV) â”€â”€
+      // ------------ STEP 2: Client-side fallback (mirrors backend allocateTasks + MRV) ------------
       // Used only when backend is unreachable.
       const devPool = developers.map(dev => ({
         ...dev,
@@ -1057,9 +1031,9 @@ export default function ResourceManagementModule({
   };
 
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // 7. SAVE ALLOCATION TO DATABASE
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   const saveAllocation = async () => {
     try {
       const pid = selectedProject?.project_id || 'P00001';
@@ -1083,15 +1057,15 @@ export default function ResourceManagementModule({
         }))
       });
       setSavedOk(true);
-      alert(`âœ… Allocations saved for "${projName}" (${pid})!\n\n${allocations.length} sub-tasks allocated to ${new Set(allocations.map(a => a.developer_id)).size} developers.`);
+      alert(`✅ Allocations saved for "${projName}" (${pid})!\n\n${allocations.length} sub-tasks allocated to ${new Set(allocations.map(a => a.developer_id)).size} developers.`);
     } catch (e) {
       alert('Save failed: ' + (e.response?.data?.error || e.message));
     }
   };
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // 8. DRAG-AND-DROP TASK REASSIGNMENT (Board View)
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   const handleTaskMove = useCallback((task, fromDevId, toDevId) => {
     if (String(fromDevId) === String(toDevId)) return;
 
@@ -1124,7 +1098,7 @@ export default function ResourceManagementModule({
     const taskDomain = normDomain(task.required_domain || task.matched_domain || task.domain);
     const targetDomain = normDomain(newDev.primary_domain || newDev.domain);
     if (taskDomain !== targetDomain) {
-      alert(`â›” Reassignment Blocked!\n\nThis task requires a "${taskDomain.toUpperCase()}" developer, but ${newDev.name} is in the "${targetDomain.toUpperCase()}" domain.\n\nStrict domain matching is enforced.`);
+      alert(`⛔ Reassignment Blocked!\n\nThis task requires a "${taskDomain.toUpperCase()}" developer, but ${newDev.name} is in the "${targetDomain.toUpperCase()}" domain.\n\nStrict domain matching is enforced.`);
       return;
     }
 
@@ -1137,7 +1111,7 @@ export default function ResourceManagementModule({
 
     if (currentSprintUsed + otherProjectHours + taskHours > capacity) {
       const remainingAvail = Math.max(0, capacity - (currentSprintUsed + otherProjectHours));
-      alert(`âš ï¸ Capacity Exceeded for ${newDev.name}!\n\nDeveloper has only ${remainingAvail}h available remaining capacity, but task requires ${taskHours}h.\n\nTask cannot exceed permitted capacity.`);
+      alert(`⚠️  Capacity Exceeded for ${newDev.name}!\n\nDeveloper has only ${remainingAvail}h available remaining capacity, but task requires ${taskHours}h.\n\nTask cannot exceed permitted capacity.`);
       return;
     }
 
@@ -1172,13 +1146,13 @@ export default function ResourceManagementModule({
   const avgSkillMatch = allocations.length > 0
     ? Math.round(allocations.reduce((s, a) => s + a.skill_match_pct, 0) / allocations.length) : 0;
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // RENDER
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ==============================================================â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   return (
     <div className="space-y-6">
 
-      {/* â”€â”€â”€â”€â”€â”€ Header Banner â”€â”€â”€â”€â”€â”€ */}
+      {/* ------------------------------------ Header Banner ------------------------------------ */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 text-white border border-slate-800 shadow-xl relative overflow-hidden">
         <div className="absolute -top-10 -right-10 w-48 h-48 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
@@ -1191,7 +1165,7 @@ export default function ResourceManagementModule({
               Sprint Resource Allocation Module
             </h1>
             <p className="text-xs text-slate-400 mt-1">
-              Select project â†’ select sprint â†’ view sub-tasks with identified domain & skills â†’ run allocation â†’ save results.
+              Select project → select sprint → view sub-tasks with identified domain & skills → run allocation → save results.
             </p>
           </div>
           <button
@@ -1207,7 +1181,7 @@ export default function ResourceManagementModule({
         </div>
       </div>
 
-      {/* â”€â”€â”€â”€â”€â”€ Project & Sprint Selection â”€â”€â”€â”€â”€â”€ */}
+      {/* ------------------------------------ Project & Sprint Selection ------------------------------------ */}
       <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-200 dark:border-slate-700/80 shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           {/* Project */}
@@ -1252,24 +1226,24 @@ export default function ResourceManagementModule({
         {selectedSprint && workItems.length > 0 && (
           <div className="pt-3 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center gap-4 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
             {selectedSprint.start_date && selectedSprint.end_date && (
-              <span className="flex items-center gap-1"><Clock size={12} /> {selectedSprint.start_date} â†’ {selectedSprint.end_date}</span>
+              <span className="flex items-center gap-1"><Clock size={12} /> {selectedSprint.start_date} → {selectedSprint.end_date}</span>
             )}
             {selectedSprint.working_days && (
               <span className="flex items-center gap-1"><CheckCircle2 size={12} className="text-emerald-500" /> {selectedSprint.working_days} working days</span>
             )}
             <span className="flex items-center gap-1"><Layers size={12} /> {workItems.length} sub-tasks</span>
-            <span className="flex items-center gap-1 text-purple-600 dark:text-purple-400 font-bold">â¬¡ {totalPts} pts</span>
-            <span className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 font-bold">â± {totalHrs}h effort</span>
+            <span className="flex items-center gap-1 text-purple-600 dark:text-purple-400 font-bold"><Zap size={12} /> {totalPts} pts</span>
+            <span className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 font-bold"><Clock size={12} /> {totalHrs}h effort</span>
           </div>
         )}
       </div>
 
-      {/* â”€â”€â”€â”€â”€â”€ Loading â”€â”€â”€â”€â”€â”€ */}
+      {/* ------------------------------------ Loading ------------------------------------ */}
       {loading && (
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-16 text-center">
           <RefreshCw size={32} className="animate-spin text-indigo-500 mx-auto mb-3" />
           <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
-            {phase === 'subtasks' ? 'Loading sprint planâ€¦' : 'Running allocation engineâ€¦'}
+            {phase === 'subtasks' ? 'Loading sprint plan...' : 'Running allocation engine...'}
           </p>
         </div>
       )}
@@ -1286,7 +1260,7 @@ export default function ResourceManagementModule({
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
                   <Layers size={16} className="text-indigo-500" />
-                  Sprint Sub-Tasks â€” Domain & Skill Identification
+                  Sprint Sub-Tasks — Domain & Skill Identification
                 </h3>
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[10px] font-extrabold uppercase tracking-wide">
                   <Zap size={11} className="text-amber-500" /> Priority Queue (Critical & High First)
@@ -1358,7 +1332,7 @@ export default function ResourceManagementModule({
                     >
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className="px-2.5 py-1 rounded-lg bg-sky-500/10 border border-sky-400/30 text-sky-700 dark:text-sky-300 font-mono font-bold text-[10px] inline-flex items-center gap-1">
-                          <span>â†³</span> {itemId}
+                          <span>↳</span> {itemId}
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap font-mono font-bold text-indigo-600 dark:text-indigo-400 text-[11px]">
@@ -1367,7 +1341,7 @@ export default function ResourceManagementModule({
                       <td className="px-4 py-3 max-w-xs">
                         <div className="font-semibold text-slate-900 dark:text-white leading-snug">{item.title}</div>
                         {item.start_date && item.end_date && (
-                          <div className="text-[10px] text-slate-400 mt-0.5">{item.start_date} â†’ {item.end_date}</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">{item.start_date} → {item.end_date}</div>
                         )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
@@ -1445,11 +1419,11 @@ export default function ResourceManagementModule({
           <div className="p-5 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold mb-2">
-                <CheckCircle2 size={13} /> Allocation Complete â€” {allocations.length} sub-tasks assigned
+                <CheckCircle2 size={13} /> Allocation Complete — {allocations.length} sub-tasks assigned
               </div>
               <h3 className="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
                 <Target size={16} className="text-emerald-600" />
-                Allocation Board â€” Developer Task Lanes
+                Allocation Board — Developer Task Lanes
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Drag &amp; drop tasks between developer columns to reassign. Each card shows task title, complexity and hours.
@@ -1461,11 +1435,11 @@ export default function ResourceManagementModule({
                 onClick={() => { setPhase('subtasks'); setAllocations([]); setSavedOk(false); }}
                 className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center gap-1.5 transition-all border border-slate-200 dark:border-slate-600 cursor-pointer"
               >
-                â† Back to Sub-Tasks
+                <ArrowLeft size={13} /> Back to Sub-Tasks
               </button>
               {savedOk ? (
                 <span className="px-4 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-bold text-xs flex items-center gap-1.5">
-                  <CheckCircle2 size={13} /> Saved âœ“
+                  <CheckCircle2 size={13} /> Saved ✓
                 </span>
               ) : (
                 <button
@@ -1478,7 +1452,7 @@ export default function ResourceManagementModule({
             </div>
           </div>
 
-          {/* â”€â”€ Board View â”€â”€ */}
+          {/* ------------ Board View ------------ */}
           <div className="p-5">
             <AllocationResults
               assignments={allocations}
@@ -1498,7 +1472,7 @@ export default function ResourceManagementModule({
 
 
 
-      {/* â”€â”€â”€â”€â”€â”€ Footer Status â”€â”€â”€â”€â”€â”€ */}
+      {/* ------------------------------------ Footer Status ------------------------------------ */}
       <div className="flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 font-medium border border-slate-200 dark:border-slate-700">
           <Info size={14} />
@@ -1509,7 +1483,7 @@ export default function ResourceManagementModule({
         </div>
       </div>
 
-      {/* â”€â”€â”€â”€â”€â”€ Manage Team Modal â”€â”€â”€â”€â”€â”€ */}
+      {/* ------------------------------------ Manage Team Modal ------------------------------------ */}
       <ManageTeamModal
         isOpen={isManageTeamOpen}
         onClose={() => setIsManageTeamOpen(false)}
