@@ -74,24 +74,46 @@ def check_completeness(text):
     if nlp:
         doc = nlp(clean_text)
         has_subject = any(token.dep_ in ('nsubj', 'nsubjpass') for token in doc)
-        # Require an actual action verb (not solely the modal auxiliary like 'shall')
+        # Require an actual action verb (not solely a modal auxiliary)
         has_verb = any(token.pos_ == 'VERB' for token in doc) or any(token.pos_ == 'AUX' and token.lemma_.lower() not in ['shall', 'should', 'must', 'will', 'can', 'may', 'could', 'might'] for token in doc)
-        has_modal = any(token.lemma_.lower() in ['shall', 'should', 'must', 'will'] for token in doc)
 
         if not has_subject:
             return "Incomplete: Missing a subject (Who/What?)"
         if not has_verb:
             return "Incomplete: Missing an action (Does what?)"
-        if not has_modal:
-            return "Incomplete: Missing a requirement keyword (shall/must)"
     else:
-        # Fallback regex check if spaCy model is unavailable
-        has_modal = bool(re.search(r'\b(shall|should|must|will)\b', lower_text))
-        has_actor = bool(re.search(r'\b(system|user|users|engineer|engineers|platform|application|admin|administrator|manager|supervisor|api|service|module|portal|database|client|customer)\b', lower_text))
-        if not has_actor:
-            return "Incomplete: Missing a subject (Who/What?)"
-        if not has_modal:
-            return "Incomplete: Missing a requirement keyword (shall/must)"
+        # Fallback check if spaCy model is unavailable
+        action_verb_regex = r'\b(add|adds|edit|edits|create|creates|delete|deletes|remove|removes|update|updates|modify|modifies|change|changes|manage|manages|enter|enters|input|inputs|allow|allows|permit|permits|enable|enables|disable|disables|prevent|prevents|prohibit|prohibits|restrict|restricts|display|displays|show|shows|hide|hides|view|views|see|sees|record|records|log|logs|track|tracks|capture|captures|store|stores|save|saves|retrieve|retrieves|fetch|fetches|load|loads|export|exports|import|imports|upload|uploads|download|downloads|send|sends|receive|receives|notify|notifies|alert|alerts|prompt|prompts|request|requests|respond|responds|approve|approves|reject|rejects|review|reviews|validate|validates|verify|verifies|authenticate|authenticates|authorize|authorizes|calculate|calculates|compute|computes|estimate|estimates|determine|determines|assess|assesses|evaluate|evaluates|consider|considers|process|processes|generate|generates|produce|produces|assign|assigns|allocate|allocates|distribute|distributes|schedule|schedules|select|selects|choose|chooses|filter|filters|search|searches|sort|sorts|order|orders|query|queries|maintain|maintains|support|supports|provide|provides|offer|offers|ensure|ensures|enforce|enforces|apply|applies|perform|performs|execute|executes|run|runs|initiate|initiates|trigger|triggers|start|starts|stop|stops|halt|halts|pause|pauses|resume|resumes|cancel|cancels|close|closes|open|opens|complete|completes|finish|finishes|archive|archives|attach|attaches|convert|converts|format|formats|parse|parses|extract|extracts|sync|syncs|synchronize|synchronizes|connect|connects|disconnect|disconnects|integrate|integrates|link|links|be|been|have|has|contain|contains|include|includes|consist|consists|require|requires|accept|accepts|refuse|refuses|handle|handles|use|uses|used|using|obtain|obtains|obtained|obtaining|utilize|utilizes|utilized|utilizing|consume|consumes|employ|employs|operate|operates|transfer|transfers|transmit|transmits|identify|identifies|identified|identifying|find|finds|found|detect|detects|detected)\b'
+
+        modal_match = re.search(r'\b(shall|should|must|will|can|could|may|needs?\s+to|need\s+to|is\s+required\s+to|are\s+required\s+to|has\s+to|have\s+to|is\s+able\s+to|are\s+able\s+to)\b', clean_text, re.I)
+        if modal_match:
+            before_modal = clean_text[:modal_match.start()].strip()
+            before_modal = re.sub(r'^(?:(?:REQ|FR|NFR|SR|US|CR|BR)[-\s_]?\d*[:.\-–—\s]+|\d+(?:\.\d+)*[\.\)\:\-–—]\s+|[-•*–—▪▫◦•]\s+|Requirement\s*\d*[:.\-–—\s]+)\s*', '', before_modal, flags=re.I).strip()
+            if not before_modal:
+                return "Incomplete: Missing a subject (Who/What?)"
+
+            after_modal = clean_text[modal_match.end():].strip()
+            if not after_modal:
+                return "Incomplete: Missing an action (Does what?)"
+
+            after_modal_clean = re.sub(r'^(?:not|never|always|automatically|only|promptly|immediately|periodically|dynamically|securely|directly)\s+', '', after_modal, flags=re.I).strip()
+            first_word = after_modal_clean.split()[0].lower() if after_modal_clean else ''
+            invalid_first_words = {'a', 'an', 'the', 'of', 'in', 'on', 'at', 'for', 'with', 'by', 'from', 'to', 'into', 'about', 'his', 'her', 'their', 'my', 'our', 'its', 'them', 'him', 'it', 'me', 'us'}
+
+            if invalid_first_words and first_word in invalid_first_words and not re.search(action_verb_regex, after_modal_clean, re.I):
+                return "Incomplete: Missing an action (Does what?)"
+
+            if not re.search(action_verb_regex, after_modal, re.I):
+                return "Incomplete: Missing an action (Does what?)"
+        else:
+            clean_no_prefix = re.sub(r'^(?:(?:REQ|FR|NFR|SR|US|CR|BR)[-\s_]?\d*[:.\-–—\s]+|\d+(?:\.\d+)*[\.\)\:\-–—]\s+|[-•*–—▪▫◦•]\s+|Requirement\s*\d*[:.\-–—\s]+)\s*', '', clean_text, flags=re.I).strip()
+            if not re.search(action_verb_regex, clean_no_prefix, re.I):
+                return "Incomplete: Missing an action (Does what?)"
+
+            first_word = clean_no_prefix.split()[0].lower() if clean_no_prefix else ''
+            imperative_verbs = r'^(add|edit|create|delete|remove|update|modify|change|manage|enter|input|record|log|track|capture|store|save|retrieve|fetch|load|export|import|upload|download|send|receive|notify|alert|prompt|request|respond|approve|reject|review|validate|verify|authenticate|authorize|calculate|compute|estimate|determine|assess|evaluate|process|generate|produce|assign|allocate|distribute|schedule|select|choose|filter|search|sort|maintain|provide|support|execute|run|start|stop|cancel|close|open|complete|convert|sync|connect|disconnect|integrate|link|obtain|utilize|operate|transfer|transmit)$'
+            if re.match(imperative_verbs, first_word, re.I):
+                return "Incomplete: Missing a subject (Who/What?)"
 
     # -------------------------------------------------------------
     # 2. INCONSISTENT CHECKS (Direct Contradictions & Conflicts)
@@ -382,16 +404,64 @@ def process_all_requirements(reqs):
                 goal = parts[1].strip()
                 break
 
-        clean_action = re.sub(r'^(the system shall allow users to|the system shall|the system must|the platform must|allow users to|users shall be allowed to|engineers shall be allowed to|engineers shall|the supervisor shall|the onshore engineer shall|onshore engineers shall|the workshop manager shall|workshop managers shall|administrators shall|the administrator shall)\s*', '', action, flags=re.IGNORECASE).strip().rstrip('.')
+        role_list = [
+            'onshore engineer', 'onshore engineers',
+            'workshop manager', 'workshop managers',
+            'project manager', 'project managers',
+            'team leader', 'team leaders',
+            'team member', 'team members',
+            'supervisor', 'supervisors',
+            'administrator', 'administrators', 'admin',
+            'system user', 'system users',
+            'engineer', 'engineers',
+            'manager', 'managers',
+            'user', 'users'
+        ]
+
+        actor = 'System User'
+        clean_action = action
+
+        for role in role_list:
+            role_pattern = rf'^(?:the|a|an)?\s*{re.escape(role)}\b'
+            if re.search(role_pattern, clean_action, re.I):
+                actor = role
+                clean_action = re.sub(role_pattern, '', clean_action, flags=re.I).strip()
+                break
+
+        actor_lower = actor.lower()
+        if actor_lower.endswith('s') and not actor_lower.endswith('ss') and not actor_lower.endswith('us'):
+            actor = actor[:-1]
+        actor = ' '.join(w.capitalize() for w in actor.split())
+
+        clean_action = re.sub(
+            r'^(?:as a system user, i want to|the system shall allow users to|the system shall|the system must|the platform shall|the platform must|users shall be allowed to|engineers shall be allowed to|allow users to|users shall|users must|need to|needs to|shall be able to|must be able to|is required to|are required to|shall|must|can|should|will|the)\s*',
+            '',
+            clean_action,
+            flags=re.IGNORECASE
+        ).strip()
+
+        verb_uninflect = {
+            'enters': 'enter', 'approves': 'approve', 'rejects': 'reject', 'assigns': 'assign',
+            'updates': 'update', 'selects': 'select', 'maintains': 'maintain', 'calculates': 'calculate',
+            'provides': 'provide', 'allows': 'allow', 'supports': 'support', 'displays': 'display',
+            'stores': 'store', 'obtains': 'obtain', 'uses': 'use', 'creates': 'create', 'manages': 'manage',
+            'searches': 'search', 'views': 'view', 'identifies': 'identify', 'receives': 'receive'
+        }
+        first_w = clean_action.split()[0].lower() if clean_action.split() else ''
+        if first_w in verb_uninflect:
+            clean_action = verb_uninflect[first_w] + clean_action[len(first_w):]
+
+        clean_action = clean_action.strip().rstrip('.')
         goal = goal.strip().rstrip('.')
-        user_story = f"As a System User, I want to {clean_action.lower()} so that {goal}."
+        article = 'an' if actor[0].lower() in 'aeiou' else 'a'
+        user_story = f"As {article} {actor}, I want to {clean_action[:1].lower() + clean_action[1:]} so that {goal}."
 
         ac = (
-            f"Scenario: Verify {clean_action.lower()}\n"
-            f"1. Given the system is ready for {feature_name.lower()}\n"
-            f"2. When the user initiates: {clean_action.lower()}\n"
-            f"3. Then the system must validate the request against {epic_name.lower()} rules\n"
-            f"4. And the {feature_name.lower()} state should be updated successfully."
+            f"Scenario: Verify {feature_name}\n"
+            f"1. Given the system is operational and ready for {feature_name.lower()}\n"
+            f"2. When the {actor.lower()} performs: {clean_action[:1].lower() + clean_action[1:]}\n"
+            f"3. Then the system must validate the input according to {epic_name.lower()} rules\n"
+            f"4. And the {feature_name.lower()} records should be updated successfully."
         )
 
         results.append({

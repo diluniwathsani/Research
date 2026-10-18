@@ -404,6 +404,10 @@ async function createTables() {
             await db.exec(`ALTER TABLE work_items ADD COLUMN IF NOT EXISTS story_points INT DEFAULT 1`);
             await db.exec(`ALTER TABLE work_items ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'generated'`);
             await db.exec(`ALTER TABLE work_items ADD COLUMN IF NOT EXISTS parent_story_title TEXT`);
+            await db.exec(`ALTER TABLE work_items ADD COLUMN IF NOT EXISTS required_domain TEXT DEFAULT 'Backend'`);
+            await db.exec(`ALTER TABLE work_items ADD COLUMN IF NOT EXISTS predicted_complexity TEXT DEFAULT 'MEDIUM'`);
+            await db.exec(`ALTER TABLE work_items ADD COLUMN IF NOT EXISTS priority_score NUMERIC DEFAULT 50`);
+            await db.exec(`ALTER TABLE work_items ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT 'Medium'`);
         } catch (wiColErr) {
             // Column already exists
         }

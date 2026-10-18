@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { 
   CheckSquare, Plus, Eye, Edit2, Trash2, 
   Layers, GitCommit, UserCheck, Sparkles, RefreshCw, X,
-  ChevronDown, CheckCircle2, ShieldAlert
+  ChevronDown, CheckCircle2, ShieldAlert, Search, Filter, Clock, Award
 } from 'lucide-react';
 import ProjectSelection from './ProjectSelection.jsx';
 
@@ -20,8 +20,160 @@ const WORK_ITEM_TYPES = [
   'Other'
 ];
 
+const DOMAIN_OPTIONS = [
+  'Reporting/Analytics',
+  'Frontend',
+  'Backend',
+  'Database',
+  'API/Integration',
+  'Engineering and Asset Management',
+  'Labour and Cost Management',
+  'QA/Testing',
+  'DevOps/Security',
+  'AI/ML'
+];
+
 const PRIORITIES = ['High', 'Medium', 'Low'];
+const COMPLEXITY_LEVELS = ['LOW', 'MEDIUM', 'HIGH'];
 const STATUSES = ['To Do', 'In Progress', 'In Review', 'Done'];
+
+// Helper renderers for badges and tags
+const renderDomainBadge = (domain) => {
+  const d = String(domain || 'Backend').trim();
+  const dLower = d.toLowerCase();
+  
+  if (dLower.includes('report') || dLower.includes('analytics')) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 whitespace-nowrap">
+        <span>📊</span> {d}
+      </span>
+    );
+  }
+  if (dLower.includes('labour') || dLower.includes('labor') || dLower.includes('cost') || dLower.includes('overtime')) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800 whitespace-nowrap">
+        <span>💰</span> {d}
+      </span>
+    );
+  }
+  if (dLower.includes('asset') || dLower.includes('equipment') || dLower.includes('vessel') || dLower.includes('engineering')) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800 whitespace-nowrap">
+        <span>⚙️</span> {d}
+      </span>
+    );
+  }
+  if (dLower.includes('database') || dLower.includes('sql')) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-800 whitespace-nowrap">
+        <span>🗄️</span> {d}
+      </span>
+    );
+  }
+  if (dLower.includes('front') || dLower.includes('ui') || dLower.includes('ux')) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-100 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border border-sky-300 dark:border-sky-800 whitespace-nowrap">
+        <span>🎨</span> {d}
+      </span>
+    );
+  }
+  if (dLower.includes('api') || dLower.includes('integration')) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-teal-100 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 border border-teal-300 dark:border-teal-800 whitespace-nowrap">
+        <span>🔌</span> {d}
+      </span>
+    );
+  }
+  if (dLower.includes('qa') || dLower.includes('test')) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-violet-100 dark:bg-violet-950/60 text-violet-800 dark:text-violet-300 border border-violet-300 dark:border-violet-800 whitespace-nowrap">
+        <span>🧪</span> {d}
+      </span>
+    );
+  }
+  if (dLower.includes('ai') || dLower.includes('ml')) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-fuchsia-100 dark:bg-fuchsia-950/60 text-fuchsia-800 dark:text-fuchsia-300 border border-fuchsia-300 dark:border-fuchsia-800 whitespace-nowrap">
+        <span>🧠</span> {d}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 whitespace-nowrap">
+      <span>⚙️</span> {d}
+    </span>
+  );
+};
+
+const renderComplexityBadge = (complexity) => {
+  const c = String(complexity || 'MEDIUM').toUpperCase().trim();
+  if (c === 'HIGH') {
+    return (
+      <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800">
+        HIGH
+      </span>
+    );
+  }
+  if (c === 'LOW') {
+    return (
+      <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+        LOW
+      </span>
+    );
+  }
+  return (
+    <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+      MEDIUM
+    </span>
+  );
+};
+
+const renderPriorityBadge = (priority) => {
+  const p = String(priority || 'Medium').toUpperCase().trim();
+  if (p === 'HIGH' || p === 'CRITICAL') {
+    return (
+      <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/40">
+        {priority}
+      </span>
+    );
+  }
+  if (p === 'LOW') {
+    return (
+      <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/40">
+        {priority}
+      </span>
+    );
+  }
+  return (
+    <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40">
+      {priority}
+    </span>
+  );
+};
+
+const renderSkillTags = (skills) => {
+  let list = [];
+  if (Array.isArray(skills)) {
+    list = skills;
+  } else if (typeof skills === 'string') {
+    list = skills.replace(/^\{|\}$/g, '').split(',').map(s => s.trim().replace(/^"|"$/g, '')).filter(Boolean);
+  }
+  if (list.length === 0) {
+    return <span className="text-[11px] text-slate-400 italic">None specified</span>;
+  }
+  return (
+    <div className="flex flex-wrap gap-1">
+      {list.map((skill, sIdx) => (
+        <span 
+          key={sIdx}
+          className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700/80 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 whitespace-nowrap"
+        >
+          {skill}
+        </span>
+      ))}
+    </div>
+  );
+};
 
 export default function WorkItemsModule({
   projects = [],
@@ -34,7 +186,12 @@ export default function WorkItemsModule({
   const [developers, setDevelopers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [batchLoading, setBatchLoading] = useState(false);
+  const [decomposingStoryId, setDecomposingStoryId] = useState(null);
   const [error, setError] = useState(null);
+
+  // Search and Domain Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [domainFilter, setDomainFilter] = useState('ALL');
 
   // Accordion Expand/Collapse State for User Story Cards
   const [expandedStories, setExpandedStories] = useState({});
@@ -54,9 +211,14 @@ export default function WorkItemsModule({
     feature: '',
     title: '',
     description: '',
+    domain: 'Backend',
+    required_domain: 'Backend',
+    required_skills: '',
     work_item_type: 'Development',
     priority: 'Medium',
+    story_points: 1,
     estimated_hours: 8,
+    predicted_complexity: 'MEDIUM',
     assigned_to: 'Unassigned',
     status: 'To Do',
     start_date: '',
@@ -81,7 +243,6 @@ export default function WorkItemsModule({
         const storiesRes = storiesResult.value;
         const storiesList = Array.isArray(storiesRes.data) ? storiesRes.data : (storiesRes.data?.data || []);
 
-        // Group stories by Epic in order of Epic creation (first appearance), then sort by requirement_order / ID
         const epicMinOrder = {};
         storiesList.forEach((s, idx) => {
           const epicName = (s.epic || 'General Epic').trim();
@@ -103,35 +264,20 @@ export default function WorkItemsModule({
             return epicOrderA - epicOrderB;
           }
 
-          const orderA = a.requirement_order !== undefined && a.requirement_order !== null ? Number(a.requirement_order) : 999999;
-          const orderB = b.requirement_order !== undefined && b.requirement_order !== null ? Number(b.requirement_order) : 999999;
-          if (orderA !== orderB) return orderA - orderB;
+          const orderA = a.requirement_order !== undefined && a.requirement_order !== null
+            ? Number(a.requirement_order)
+            : (parseInt(String(a.story_id || a.user_story_id || a.id || '').replace(/\D/g, '')) || 0);
+          const orderB = b.requirement_order !== undefined && b.requirement_order !== null
+            ? Number(b.requirement_order)
+            : (parseInt(String(b.story_id || b.user_story_id || b.id || '').replace(/\D/g, '')) || 0);
 
-          const idA = parseInt(String(a.story_id || a.user_story_id || a.id || '').replace(/\D/g, '')) || 0;
-          const idB = parseInt(String(b.story_id || b.user_story_id || b.id || '').replace(/\D/g, '')) || 0;
-          return idA - idB;
-        });
-        // Deduplicate sortedStories by unique story_id
-        const seenStoryIds = new Set();
-        const uniqueSortedStories = sortedStories.filter((s, idx) => {
-          const sid = s.story_id || s.user_story_id || s.id || `story-${idx}`;
-          if (seenStoryIds.has(sid)) return false;
-          seenStoryIds.add(sid);
-          return true;
+          return orderA - orderB;
         });
 
-        setUserStories(uniqueSortedStories);
-
-        // Auto-expand all stories by default
-        const expandMap = {};
-        uniqueSortedStories.forEach(s => {
-          const sid = s.story_id || s.user_story_id || s.id;
-          expandMap[sid] = true;
-        });
-        setExpandedStories(expandMap);
+        setUserStories(sortedStories);
       } else {
-        console.error('Failed to load user stories:', storiesResult.reason);
-        fetchErrors.push('user stories');
+        console.warn('Failed to load user stories:', storiesResult.reason);
+        fetchErrors.push('User Stories');
       }
 
       // 2. Process Work Items
@@ -140,8 +286,8 @@ export default function WorkItemsModule({
         const wiList = Array.isArray(wiRes.data) ? wiRes.data : (wiRes.data?.data || []);
         setWorkItems(wiList);
       } else {
-        console.error('Failed to load work items:', wiResult.reason);
-        fetchErrors.push('work items');
+        console.warn('Failed to load work items:', wiResult.reason);
+        fetchErrors.push('Work Items');
       }
 
       // 3. Process Developers
@@ -184,7 +330,7 @@ export default function WorkItemsModule({
         stories: userStories
       });
       await fetchData();
-      alert(`✅ Successfully decomposed all ${userStories.length} User Stories into Work Items!`);
+      alert(`✅ Successfully decomposed all ${userStories.length} User Stories into structured Work Items!`);
     } catch (err) {
       console.error('Error batch decomposing stories:', err);
       setError('Failed to batch decompose project user stories: ' + (err.response?.data?.error || err.message));
@@ -193,23 +339,47 @@ export default function WorkItemsModule({
     }
   };
 
-
+  // --- SINGLE USER STORY DECOMPOSITION ---
+  const handleDecomposeSingleStory = async (story) => {
+    const storyId = story.story_id || story.user_story_id || story.id;
+    setDecomposingStoryId(storyId);
+    setError(null);
+    try {
+      await axios.post(`${EXPRESS_API}/user-stories/${encodeURIComponent(storyId)}/decompose`, {
+        story,
+        project_id: selectedProjectId
+      });
+      setExpandedStories(prev => ({ ...prev, [storyId]: true }));
+      await fetchData();
+    } catch (err) {
+      console.error('Error decomposing single story:', err);
+      alert('Failed to decompose story: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setDecomposingStoryId(null);
+    }
+  };
 
   // --- FORM HANDLERS ---
   const openCreateModal = () => {
     const defaultStory = userStories.length > 0 ? userStories[0] : null;
+    const defaultStoryId = defaultStory ? (defaultStory.story_id || defaultStory.user_story_id || defaultStory.id) : '';
     setFormData({
       work_item_id: '',
-      story_id: defaultStory ? (defaultStory.story_id || defaultStory.user_story_id || defaultStory.id) : '',
+      story_id: defaultStoryId,
       parent_story_title: defaultStory ? (defaultStory.title || defaultStory.user_story || '') : '',
       requirement_sentence: defaultStory ? (defaultStory.requirement_sentence || defaultStory.description || '') : '',
       epic: defaultStory ? (defaultStory.epic || 'General') : 'General',
       feature: defaultStory ? (defaultStory.feature || 'General Feature') : 'General Feature',
       title: '',
       description: '',
+      domain: 'Backend',
+      required_domain: 'Backend',
+      required_skills: 'JavaScript, SQL',
       work_item_type: 'Development',
-      priority: 'Medium',
+      priority: defaultStory?.priority || 'Medium',
+      story_points: 1,
       estimated_hours: 8,
+      predicted_complexity: 'MEDIUM',
       assigned_to: 'Unassigned',
       status: 'To Do',
       start_date: new Date().toISOString().split('T')[0],
@@ -220,6 +390,10 @@ export default function WorkItemsModule({
   };
 
   const openEditModal = (item) => {
+    const skillStr = Array.isArray(item.required_skills)
+      ? item.required_skills.join(', ')
+      : (typeof item.required_skills === 'string' ? item.required_skills.replace(/^\{|\}$/g, '') : '');
+
     setFormData({
       work_item_id: item.work_item_id || '',
       story_id: item.story_id || '',
@@ -229,9 +403,14 @@ export default function WorkItemsModule({
       feature: item.feature || '',
       title: item.title || '',
       description: item.description || '',
+      domain: item.domain || item.required_domain || 'Backend',
+      required_domain: item.required_domain || item.domain || 'Backend',
+      required_skills: skillStr,
       work_item_type: item.work_item_type || item.domain || 'Development',
       priority: item.priority || 'Medium',
-      estimated_hours: item.estimated_hours || item.estimated_effort || 8,
+      story_points: Number(item.story_points) || 1,
+      estimated_hours: Number(item.estimated_hours || item.estimated_effort) || 8,
+      predicted_complexity: (item.predicted_complexity || 'MEDIUM').toUpperCase(),
       assigned_to: item.assigned_to || item.assigned_resource || 'Unassigned',
       status: item.status || 'To Do',
       start_date: item.start_date ? String(item.start_date).split('T')[0] : '',
@@ -261,10 +440,16 @@ export default function WorkItemsModule({
     }
     setLoading(true);
     try {
+      const parsedSkills = formData.required_skills
+        ? String(formData.required_skills).split(',').map(s => s.trim()).filter(Boolean)
+        : [];
+
       const payload = {
         ...formData,
+        required_skills: parsedSkills,
         project_id: selectedProjectId
       };
+
       if (editingItem) {
         await axios.put(`${EXPRESS_API}/work-items/${editingItem.work_item_id}`, payload);
       } else {
@@ -295,8 +480,6 @@ export default function WorkItemsModule({
     }
   };
 
-
-
   const handleStatusQuickChange = async (item, newStatus) => {
     try {
       await axios.put(`${EXPRESS_API}/work-items/${item.work_item_id}`, { status: newStatus });
@@ -310,12 +493,53 @@ export default function WorkItemsModule({
     setExpandedStories(prev => ({ ...prev, [storyId]: !prev[storyId] }));
   };
 
-  // Summary Counts
+  // Summary Metrics
   const totalCount = workItems.length;
   const storiesCount = userStories.length;
+  const totalPoints = useMemo(() => {
+    return workItems.reduce((sum, item) => sum + (Number(item.story_points) || 1), 0);
+  }, [workItems]);
+  const totalHours = useMemo(() => {
+    return workItems.reduce((sum, item) => sum + (Number(item.estimated_hours) || 8), 0);
+  }, [workItems]);
 
   const activeProjectObj = projects.find(p => p.project_id === selectedProjectId || p.id === selectedProjectId);
   const activeProjectName = activeProjectObj ? (activeProjectObj.project_name || activeProjectObj.name) : selectedProjectId;
+
+  // Filter stories and their work items based on search and domain
+  const filteredStories = useMemo(() => {
+    return userStories.filter(story => {
+      const sId = String(story.story_id || story.user_story_id || story.id || '').toLowerCase();
+      const sTitle = String(story.title || story.user_story || '').toLowerCase();
+      const sDesc = String(story.description || '').toLowerCase();
+      const query = searchQuery.toLowerCase().trim();
+
+      const matchesSearch = !query || sId.includes(query) || sTitle.includes(query) || sDesc.includes(query);
+
+      if (!matchesSearch) return false;
+
+      if (domainFilter === 'ALL') return true;
+
+      // Check if any work item under this story matches the domain filter
+      const cleanStoryId = String(story.story_id || story.user_story_id || story.id || '').toUpperCase().trim();
+      const cleanStoryNum = cleanStoryId.replace(/^US-?/i, '');
+      const storyItems = workItems.filter(w => {
+        const wStoryId = String(w.story_id || '').toUpperCase().trim();
+        const wStoryNum = wStoryId.replace(/^US-?/i, '');
+        const wItemIdNum = String(w.work_item_id || '').replace(/^WI-US-?/i, '').split('-')[0].trim();
+        return (
+          wStoryId === cleanStoryId ||
+          (cleanStoryNum && wStoryNum === cleanStoryNum) ||
+          (cleanStoryNum && wItemIdNum === cleanStoryNum)
+        );
+      });
+
+      return storyItems.some(item => {
+        const d = String(item.domain || item.required_domain || '').toLowerCase();
+        return d.includes(domainFilter.toLowerCase());
+      });
+    });
+  }, [userStories, workItems, searchQuery, domainFilter]);
 
   return (
     <div className="space-y-6">
@@ -325,11 +549,14 @@ export default function WorkItemsModule({
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-semibold mb-2">
               <CheckSquare size={14} className="text-indigo-300" />
-              <span>Module 2: Work Items Engine</span>
+              <span>Module 2: Work Items & Decomposition Engine</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
-              Work Items & Decomposition Module
+              Work Items & Domain Classification
             </h1>
+            <p className="text-xs text-slate-400 mt-1 max-w-xl">
+              Keyword-driven user story decomposition mapping engineering deliverables to practical skills, domains, and complexity for resource allocation.
+            </p>
           </div>
 
           {/* Action Buttons */}
@@ -356,7 +583,7 @@ export default function WorkItemsModule({
       </div>
 
       {/* Project Selector & Summary Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Active Project Picker Card */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700/80 shadow-sm flex flex-col justify-center">
           <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
@@ -386,9 +613,58 @@ export default function WorkItemsModule({
             <CheckSquare size={24} />
           </div>
           <div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Work Items</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Decomposed Items</span>
             <span className="text-2xl font-black text-slate-800 dark:text-white">{totalCount}</span>
           </div>
+        </div>
+
+        {/* Stats 3: Total Points & Hours */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700/80 shadow-sm flex items-center gap-4">
+          <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+            <Clock size={24} />
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Effort</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xl font-black text-slate-800 dark:text-white">{totalPoints} pts</span>
+              <span className="text-xs font-semibold text-slate-400">({totalHours} hrs)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filter and Search Bar */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700/80 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+        {/* Search Input */}
+        <div className="relative w-full md:w-96">
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search stories, work items, or skills..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pl-10 pr-4 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100 placeholder-slate-400 outline-none focus:ring-2 focus:ring-indigo-500/20"
+          />
+        </div>
+
+        {/* Domain Filter Pills */}
+        <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
+          <span className="text-xs font-bold text-slate-400 flex items-center gap-1 mr-1">
+            <Filter size={14} /> Domain:
+          </span>
+          {['ALL', 'Reporting', 'Engineering', 'Labour', 'Frontend', 'Backend', 'Database', 'QA'].map(dom => (
+            <button
+              key={dom}
+              onClick={() => setDomainFilter(dom)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                domainFilter === dom
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              {dom}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -424,14 +700,18 @@ export default function WorkItemsModule({
             <RefreshCw className="animate-spin mx-auto mb-2" size={24} />
             <span>Loading project User Stories & Work Items...</span>
           </div>
-        ) : userStories.length === 0 ? (
+        ) : filteredStories.length === 0 ? (
           <div className="p-12 text-center text-slate-400 bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700">
             <Layers className="mx-auto mb-3 opacity-20" size={48} />
-            <h3 className="text-base font-bold text-slate-700 dark:text-slate-300">No User Stories Found for Active Project</h3>
-            <p className="text-xs text-slate-400 mt-1">Upload a requirement document (Word or PDF) in Module 1 to import requirements & generate User Stories.</p>
+            <h3 className="text-base font-bold text-slate-700 dark:text-slate-300">No User Stories Found</h3>
+            <p className="text-xs text-slate-400 mt-1">
+              {searchQuery || domainFilter !== 'ALL' 
+                ? 'No stories match your search or domain filter.' 
+                : 'Upload a requirement document (Word or PDF) in Module 1 to import requirements & generate User Stories.'}
+            </p>
           </div>
         ) : (
-          userStories.map((story, storyIdx) => {
+          filteredStories.map((story, storyIdx) => {
             const storyId = story.story_id || story.user_story_id || story.id;
             const storyTitle = story.title || story.user_story || 'User Story Requirement';
             const reqOrder = story.requirement_order || (storyIdx + 1);
@@ -449,6 +729,9 @@ export default function WorkItemsModule({
                 (cleanStoryNum && wItemIdNum === cleanStoryNum)
               );
             });
+
+            const storyHours = storyWorkItems.reduce((acc, curr) => acc + (Number(curr.estimated_hours) || 8), 0);
+            const storyPts = storyWorkItems.reduce((acc, curr) => acc + (Number(curr.story_points) || 1), 0);
 
             const isExpanded = expandedStories[storyId] !== false;
 
@@ -469,7 +752,7 @@ export default function WorkItemsModule({
                     </div>
 
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
                           {storyId}
                         </span>
@@ -481,6 +764,7 @@ export default function WorkItemsModule({
                             {story.feature}
                           </span>
                         )}
+                        {renderPriorityBadge(story.priority || 'Medium')}
                       </div>
 
                       <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 mt-1">
@@ -495,7 +779,28 @@ export default function WorkItemsModule({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
+                    {/* Story Stats Pill */}
+                    <div className="hidden sm:flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                      <span>{storyWorkItems.length} Work Items</span>
+                      <span className="text-slate-300 dark:text-slate-600">•</span>
+                      <span className="text-indigo-600 dark:text-indigo-400">{storyHours} hrs</span>
+                    </div>
+
+                    {/* Single Story Decompose Button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDecomposeSingleStory(story);
+                      }}
+                      disabled={decomposingStoryId === storyId}
+                      className="text-xs font-bold px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                      title="Decompose or re-generate work items for this user story"
+                    >
+                      <Sparkles size={14} className={decomposingStoryId === storyId ? 'animate-spin' : ''} />
+                      <span>{decomposingStoryId === storyId ? 'Decomposing...' : 'Decompose'}</span>
+                    </button>
+
                     <ChevronDown size={18} className={`text-slate-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
                   </div>
                 </div>
@@ -504,10 +809,18 @@ export default function WorkItemsModule({
                 {isExpanded && (
                   <div className="p-5">
                     {storyWorkItems.length === 0 ? (
-                      <div className="p-6 text-center text-slate-400 bg-slate-50/50 dark:bg-slate-900/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700/60 flex flex-col items-center justify-center gap-2">
+                      <div className="p-6 text-center text-slate-400 bg-slate-50/50 dark:bg-slate-900/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700/60 flex flex-col items-center justify-center gap-3">
                         <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                           No work items generated for this story yet.
                         </p>
+                        <button
+                          onClick={() => handleDecomposeSingleStory(story)}
+                          disabled={decomposingStoryId === storyId}
+                          className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2"
+                        >
+                          <Sparkles size={14} />
+                          <span>Generate Structured Work Items</span>
+                        </button>
                       </div>
                     ) : (
                       <div className="space-y-3">
@@ -515,23 +828,34 @@ export default function WorkItemsModule({
                           <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                             Decomposed Work Items ({storyWorkItems.length})
                           </h4>
+                          <span className="text-[11px] font-semibold text-slate-400">
+                            Total Effort: {storyPts} pts • {storyHours} hrs
+                          </span>
                         </div>
 
                         <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700">
                           <table className="w-full text-xs text-left text-slate-700 dark:text-slate-300">
                             <thead className="text-[10px] uppercase bg-slate-100 dark:bg-slate-900 text-slate-500 font-extrabold border-b border-slate-200 dark:border-slate-700">
                               <tr>
-                                <th scope="col" className="px-4 py-3 w-32">Work Item ID</th>
-                                <th scope="col" className="px-4 py-3">Title & Details</th>
+                                <th scope="col" className="px-3 py-3 w-28">Work Item ID</th>
+                                <th scope="col" className="px-3 py-3 min-w-[220px]">Title & Technical Scope</th>
+                                <th scope="col" className="px-3 py-3 w-40">Identified Domain</th>
+                                <th scope="col" className="px-3 py-3 min-w-[160px]">Required Skills</th>
+                                <th scope="col" className="px-3 py-3 w-20 text-center">Priority</th>
+                                <th scope="col" className="px-3 py-3 w-16 text-center">Points</th>
+                                <th scope="col" className="px-3 py-3 w-16 text-center">Hours</th>
+                                <th scope="col" className="px-3 py-3 w-24 text-center">Complexity</th>
+                                <th scope="col" className="px-3 py-3 w-28 text-center">Status</th>
+                                <th scope="col" className="px-3 py-3 w-24 text-center">Actions</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
                               {storyWorkItems.map((item, wIdx) => (
                                 <tr key={item.work_item_id ? `${item.work_item_id}-${wIdx}` : `wi-${wIdx}`} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors">
-                                  <td className="px-4 py-3 font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                                  <td className="px-3 py-3 font-mono font-bold text-indigo-600 dark:text-indigo-400 text-xs">
                                     {item.work_item_id}
                                   </td>
-                                  <td className="px-4 py-3">
+                                  <td className="px-3 py-3">
                                     <div className="font-bold text-slate-800 dark:text-slate-100 text-xs">
                                       {item.title}
                                     </div>
@@ -540,6 +864,58 @@ export default function WorkItemsModule({
                                         {item.description}
                                       </div>
                                     )}
+                                  </td>
+                                  <td className="px-3 py-3">
+                                    {renderDomainBadge(item.domain || item.required_domain)}
+                                  </td>
+                                  <td className="px-3 py-3">
+                                    {renderSkillTags(item.required_skills)}
+                                  </td>
+                                  <td className="px-3 py-3 text-center">
+                                    {renderPriorityBadge(item.priority || story.priority || 'Medium')}
+                                  </td>
+                                  <td className="px-3 py-3 text-center font-mono font-bold text-slate-700 dark:text-slate-300 text-xs">
+                                    {item.story_points ?? 1}
+                                  </td>
+                                  <td className="px-3 py-3 text-center font-mono font-bold text-indigo-600 dark:text-indigo-400 text-xs">
+                                    {item.estimated_hours ?? 8}h
+                                  </td>
+                                  <td className="px-3 py-3 text-center">
+                                    {renderComplexityBadge(item.predicted_complexity)}
+                                  </td>
+                                  <td className="px-3 py-3 text-center">
+                                    <select
+                                      value={item.status || 'To Do'}
+                                      onChange={(e) => handleStatusQuickChange(item, e.target.value)}
+                                      className="text-[10px] font-bold px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 outline-none"
+                                    >
+                                      {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                  </td>
+                                  <td className="px-3 py-3 text-center">
+                                    <div className="flex items-center justify-center gap-1.5">
+                                      <button
+                                        onClick={() => setTraceabilityItem(item)}
+                                        className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                                        title="Traceability details"
+                                      >
+                                        <Eye size={14} />
+                                      </button>
+                                      <button
+                                        onClick={() => openEditModal(item)}
+                                        className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-500 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+                                        title="Edit work item"
+                                      >
+                                        <Edit2 size={14} />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDelete(item.work_item_id)}
+                                        className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
+                                        title="Delete work item"
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </div>
                                   </td>
                                 </tr>
                               ))}
@@ -602,7 +978,7 @@ export default function WorkItemsModule({
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Design Login UI / Develop Authentication API"
+                  placeholder="e.g. Develop Aggregation API / Export PDF Generator"
                   value={formData.title}
                   onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
                   className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold outline-none"
@@ -612,7 +988,7 @@ export default function WorkItemsModule({
 
               <div>
                 <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Description
+                  Technical Scope & Details
                 </label>
                 <textarea
                   rows={3}
@@ -623,22 +999,37 @@ export default function WorkItemsModule({
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Work Item Type
+                    Identified Domain
                   </label>
                   <select
-                    value={formData.work_item_type}
-                    onChange={(e) => setFormData(prev => ({ ...prev, work_item_type: e.target.value }))}
+                    value={formData.domain}
+                    onChange={(e) => setFormData(prev => ({ ...prev, domain: e.target.value, required_domain: e.target.value }))}
                     className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold outline-none"
                   >
-                    {WORK_ITEM_TYPES.map(t => (
-                      <option key={t} value={t}>{t}</option>
+                    {DOMAIN_OPTIONS.map(d => (
+                      <option key={d} value={d}>{d}</option>
                     ))}
                   </select>
                 </div>
 
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Required Skills (Comma-separated)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. SQL, Node.js, PostgreSQL"
+                    value={formData.required_skills}
+                    onChange={(e) => setFormData(prev => ({ ...prev, required_skills: e.target.value }))}
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
                     Priority
@@ -656,14 +1047,43 @@ export default function WorkItemsModule({
 
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Estimated Effort (Hours)
+                    Complexity
+                  </label>
+                  <select
+                    value={formData.predicted_complexity}
+                    onChange={(e) => setFormData(prev => ({ ...prev, predicted_complexity: e.target.value }))}
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold outline-none"
+                  >
+                    {COMPLEXITY_LEVELS.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Story Points
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={formData.story_points}
+                    onChange={(e) => setFormData(prev => ({ ...prev, story_points: Number(e.target.value) }))}
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Estimated Hours
                   </label>
                   <input
                     type="number"
                     min={1}
                     max={120}
                     value={formData.estimated_hours}
-                    onChange={(e) => setFormData(prev => ({ ...prev, estimated_hours: e.target.value }))}
+                    onChange={(e) => setFormData(prev => ({ ...prev, estimated_hours: Number(e.target.value) }))}
                     className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold outline-none"
                   />
                 </div>
@@ -701,31 +1121,6 @@ export default function WorkItemsModule({
                       <option key={s} value={s}>{s}</option>
                     ))}
                   </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Start Date
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.start_date}
-                    onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
-                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    End Date
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.end_date}
-                    onChange={(e) => setFormData(prev => ({ ...prev, end_date: e.target.value }))}
-                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 font-semibold outline-none"
-                  />
                 </div>
               </div>
 
@@ -770,10 +1165,10 @@ export default function WorkItemsModule({
             <div className="space-y-4">
               <div className="p-3.5 rounded-2xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-900/50">
                 <span className="text-[9px] font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider block">
-                  1. Original Excel Requirement
+                  1. Original Requirement Sentence
                 </span>
                 <p className="text-xs font-semibold text-purple-950 dark:text-purple-200 mt-1">
-                  {traceabilityItem.requirement_sentence || 'Requirement details synced from Excel Upload'}
+                  {traceabilityItem.requirement_sentence || 'Requirement details synced from Requirement Analysis Module'}
                 </p>
               </div>
 
@@ -811,17 +1206,22 @@ export default function WorkItemsModule({
 
               <div className="text-center text-slate-300 dark:text-slate-600">↓</div>
 
-              <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/50">
+              <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/50 space-y-2">
                 <span className="text-[9px] font-black uppercase text-emerald-600 dark:text-emerald-400 tracking-wider block">
-                  5. Current Work Item ({traceabilityItem.work_item_id})
+                  5. Current Decomposed Work Item ({traceabilityItem.work_item_id})
                 </span>
-                <p className="text-xs font-bold text-emerald-950 dark:text-emerald-200 mt-1">
+                <p className="text-xs font-bold text-emerald-950 dark:text-emerald-200">
                   {traceabilityItem.title}
                 </p>
-                <div className="flex items-center gap-3 mt-2 text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold">
-                  <span>Type: {traceabilityItem.work_item_type || 'Development'}</span>
-                  <span>Effort: {traceabilityItem.estimated_hours || 8} hrs</span>
-                  <span>Assigned: {traceabilityItem.assigned_to || 'Unassigned'}</span>
+                <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px]">
+                  <span>Domain: {renderDomainBadge(traceabilityItem.domain || traceabilityItem.required_domain)}</span>
+                  <span>Complexity: {renderComplexityBadge(traceabilityItem.predicted_complexity)}</span>
+                  <span>Effort: <strong className="text-indigo-600 dark:text-indigo-400 font-mono">{traceabilityItem.estimated_hours || 8} hrs</strong></span>
+                  <span>Points: <strong className="font-mono">{traceabilityItem.story_points || 1} pts</strong></span>
+                </div>
+                <div className="pt-1">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Required Skills:</span>
+                  {renderSkillTags(traceabilityItem.required_skills)}
                 </div>
               </div>
             </div>

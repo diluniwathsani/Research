@@ -114,7 +114,27 @@ pool.on('error', (err) => {
         } catch (stErr) {
             console.warn('Notice creating sprint_tasks table:', stErr.message);
         }
-        console.log('✅ Base requirements, team_members, and sprint_tasks tables ready.');
+
+        // ================= CREATE SPRINTS TABLE =================
+        try {
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS public.sprints (
+                    sprint_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    sprint_name TEXT NOT NULL,
+                    sprint_number INTEGER NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'PENDING',
+                    start_date DATE,
+                    end_date DATE,
+                    capacity_story_points INTEGER DEFAULT 40,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            `);
+            console.log('✅ Sprints table is ready.');
+        } catch (spErr) {
+            console.warn('Notice creating sprints table:', spErr.message);
+        }
+        console.log('✅ Base requirements, team_members, sprints, and sprint_tasks tables ready.');
 
         // ================= CREATE DEVELOPERS TABLE =================
         await client.query(`
@@ -233,19 +253,13 @@ pool.on('error', (err) => {
             await client.query(`ALTER TABLE public.work_items ADD COLUMN IF NOT EXISTS feature TEXT`);
             await client.query(`ALTER TABLE public.work_items ADD COLUMN IF NOT EXISTS work_item_type TEXT DEFAULT 'Development'`);
             await client.query(`ALTER TABLE public.work_items ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT 'Medium'`);
+            await client.query(`ALTER TABLE public.work_items ADD COLUMN IF NOT EXISTS priority_score NUMERIC DEFAULT 50`);
+            await client.query(`ALTER TABLE public.work_items ADD COLUMN IF NOT EXISTS required_domain TEXT DEFAULT 'Backend'`);
+            await client.query(`ALTER TABLE public.work_items ADD COLUMN IF NOT EXISTS predicted_complexity TEXT DEFAULT 'MEDIUM'`);
             await client.query(`ALTER TABLE public.work_items ADD COLUMN IF NOT EXISTS assigned_to TEXT DEFAULT 'Unassigned'`);
             await client.query(`ALTER TABLE public.work_items ADD COLUMN IF NOT EXISTS start_date DATE`);
             await client.query(`ALTER TABLE public.work_items ADD COLUMN IF NOT EXISTS end_date DATE`);
             await client.query(`ALTER TABLE public.work_items ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`);
-            await client.query(`ALTER TABLE work_items ADD COLUMN IF NOT EXISTS assigned_to TEXT DEFAULT 'Unassigned'`);
-            await client.query(`ALTER TABLE work_items ADD COLUMN IF NOT EXISTS start_date DATE`);
-            await client.query(`ALTER TABLE work_items ADD COLUMN IF NOT EXISTS end_date DATE`);
-            await client.query(`ALTER TABLE work_items ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`);
-            
-            // Clean up legacy titles
-            await client.query(`UPDATE work_items SET title = 'Backend Development' WHERE UPPER(domain) LIKE '%BACKEND%' AND (title LIKE '%As a %' OR title LIKE '%I want%' OR title LIKE '%Implement %' OR title LIKE '%Build %')`);
-            await client.query(`UPDATE work_items SET title = 'Frontend Development' WHERE UPPER(domain) LIKE '%FRONTEND%' AND (title LIKE '%As a %' OR title LIKE '%I want%' OR title LIKE '%Implement %' OR title LIKE '%Build %')`);
-            await client.query(`UPDATE work_items SET title = 'QA and Testing' WHERE (UPPER(domain) LIKE '%QA%' OR UPPER(domain) LIKE '%TESTING%') AND (title LIKE '%As a %' OR title LIKE '%I want%' OR title LIKE '%Implement %' OR title LIKE '%Conduct %')`);
 
             // Deduplicate work items per story: Keep only 1 latest item per domain per story_id
             await client.query(`

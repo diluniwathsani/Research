@@ -108,6 +108,9 @@ export default function TaskPreview({
         (domainFilter === 'BACKEND' && itemDom.includes('BACKEND')) ||
         (domainFilter === 'FRONTEND' && itemDom.includes('FRONTEND')) ||
         (domainFilter === 'DATABASE' && (itemDom.includes('DATABASE') || itemDom.includes('SQL') || itemDom.includes('DATA'))) ||
+        (domainFilter === 'REPORTING' && (itemDom.includes('REPORT') || itemDom.includes('ANALYTICS'))) ||
+        (domainFilter === 'ENGINEERING' && (itemDom.includes('ENGINEERING') || itemDom.includes('ASSET') || itemDom.includes('VESSEL'))) ||
+        (domainFilter === 'LABOUR' && (itemDom.includes('LABOUR') || itemDom.includes('LABOR') || itemDom.includes('COST') || itemDom.includes('OVERTIME'))) ||
         (domainFilter === 'AI/ML' && (itemDom.includes('AI') || itemDom.includes('ML')));
 
       return matchesSearch && matchesDomain;
@@ -287,11 +290,11 @@ export default function TaskPreview({
 
             {/* Domain Filter Pills */}
             <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900/60 p-1 rounded-xl border border-slate-200 dark:border-slate-700 text-[11px] font-semibold">
-              {['ALL', 'BACKEND', 'FRONTEND', 'DATABASE'].map(dom => (
+              {['ALL', 'REPORTING', 'ENGINEERING', 'LABOUR', 'FRONTEND', 'BACKEND', 'DATABASE'].map(dom => (
                 <button
                   key={dom}
                   onClick={() => setDomainFilter(dom)}
-                  className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                  className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
                     domainFilter === dom
                       ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold'
                       : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'

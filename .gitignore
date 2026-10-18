@@ -13,3 +13,4 @@ backend/ml_model/priority_model.pkl
 Research_Project.zip
 *.zip
 ~$*
+backend/final_results_*.json

@@ -386,18 +386,52 @@ function evaluateRequirementQuality(reqText) {
         return "Incomplete: Trailing incomplete clause or ellipsis";
     }
 
-    const hasModal = /\b(shall|should|must|will)\b/i.test(lower);
-    const hasActor = /\b(system|user|users|engineer|engineers|platform|application|admin|administrator|manager|supervisor|workshop|operator|analyst|patient|supervisor|personnel|api|service|module|portal|database|client|customer)\b/i.test(lower);
-    const hasActionVerb = /\b(create|creates|manage|manages|enter|enters|allow|allows|display|displays|show|shows|record|records|approve|approves|reject|rejects|update|updates|select|selects|assign|assigns|maintain|maintains|calculate|calculates|provide|provides|support|supports|store|stores|obtain|obtains|use|uses|view|views|export|exports|include|includes|restrict|restricts|send|sends|filter|filters|search|searches|validate|verify|track|log|capture|generate|authenticate)\b/i.test(lower);
+    // Comprehensive list of software requirement action verbs
+    const actionVerbRegex = /\b(add|adds|edit|edits|create|creates|delete|deletes|remove|removes|update|updates|modify|modifies|change|changes|manage|manages|enter|enters|input|inputs|allow|allows|permit|permits|enable|enables|disable|disables|prevent|prevents|prohibit|prohibits|restrict|restricts|display|displays|show|shows|hide|hides|view|views|see|sees|record|records|log|logs|track|tracks|capture|captures|store|stores|save|saves|retrieve|retrieves|fetch|fetches|load|loads|export|exports|import|imports|upload|uploads|download|downloads|send|sends|receive|receives|notify|notifies|alert|alerts|prompt|prompts|request|requests|respond|responds|approve|approves|reject|rejects|review|reviews|validate|validates|verify|verifies|authenticate|authenticates|authorize|authorizes|calculate|calculates|compute|computes|estimate|estimates|determine|determines|assess|assesses|evaluate|evaluates|consider|considers|process|processes|generate|generates|produce|produces|assign|assigns|allocate|allocates|distribute|distributes|schedule|schedules|select|selects|choose|chooses|filter|filters|search|searches|sort|sorts|order|orders|query|queries|maintain|maintains|support|supports|provide|provides|offer|offers|ensure|ensures|enforce|enforces|apply|applies|perform|performs|execute|executes|run|runs|initiate|initiates|trigger|triggers|start|starts|stop|stops|halt|halts|pause|pauses|resume|resumes|cancel|cancels|close|closes|open|opens|complete|completes|finish|finishes|archive|archives|attach|attaches|convert|converts|format|formats|parse|parses|extract|extracts|sync|syncs|synchronize|synchronizes|connect|connects|disconnect|disconnects|integrate|integrates|link|links|be|been|have|has|contain|contains|include|includes|consist|consists|require|requires|accept|accepts|refuse|refuses|handle|handles|use|uses|used|using|obtain|obtains|obtained|obtaining|utilize|utilizes|utilized|utilizing|consume|consumes|employ|employs|operate|operates|transfer|transfers|transmit|transmits|identify|identifies|identified|identifying|find|finds|found|detect|detects|detected)\b/i;
 
-    if (!hasActor) {
-        return "Incomplete: Missing a subject (Who/What?)";
-    }
-    if (!hasActionVerb) {
-        return "Incomplete: Missing an action (Does what?)";
-    }
-    if (!hasModal) {
-        return "Incomplete: Missing a requirement keyword (shall/must)";
+    // Check for modal or semi-modal phrasing (shall, must, should, will, can, could, may, need to, needs to, etc.)
+    const modalMatch = clean.match(/\b(shall|should|must|will|can|could|may|needs?\s+to|need\s+to|is\s+required\s+to|are\s+required\s+to|has\s+to|have\s+to|is\s+able\s+to|are\s+able\s+to)\b/i);
+
+    if (modalMatch) {
+        // Subject / Actor check: There must be a subject preceding the modal keyword
+        const beforeModal = clean.slice(0, modalMatch.index)
+            .replace(/^(?:(?:REQ|FR|NFR|SR|US|CR|BR)[-\s_]?\d*[:.\-–—\s]+|\d+(?:\.\d+)*[\.\)\:\-–—]\s+|[-•*–—▪▫◦•]\s+|Requirement\s*\d*[:.\-–—\s]+)\s*/i, '')
+            .trim();
+
+        if (!beforeModal || beforeModal.length === 0) {
+            return "Incomplete: Missing a subject (Who/What?)";
+        }
+
+        const afterModal = clean.slice(modalMatch.index + modalMatch[0].length).trim();
+        if (!afterModal || afterModal.length === 0) {
+            return "Incomplete: Missing an action (Does what?)";
+        }
+
+        // Check if the content following modal has an action verb
+        const afterModalClean = afterModal.replace(/^(?:not|never|always|automatically|only|promptly|immediately|periodically|dynamically|securely|directly)\s+/i, '').trim();
+        const firstWord = afterModalClean.split(/\s+/)[0].toLowerCase();
+        const invalidFirstWords = new Set(['a', 'an', 'the', 'of', 'in', 'on', 'at', 'for', 'with', 'by', 'from', 'to', 'into', 'about', 'his', 'her', 'their', 'my', 'our', 'its', 'them', 'him', 'it', 'me', 'us']);
+
+        if (invalidFirstWords.has(firstWord) && !actionVerbRegex.test(afterModalClean)) {
+            return "Incomplete: Missing an action (Does what?)";
+        }
+
+        if (!actionVerbRegex.test(afterModal)) {
+            return "Incomplete: Missing an action (Does what?)";
+        }
+    } else {
+        // Natural declarative requirement (no modal auxiliary)
+        const cleanNoPrefix = clean.replace(/^(?:(?:REQ|FR|NFR|SR|US|CR|BR)[-\s_]?\d*[:.\-–—\s]+|\d+(?:\.\d+)*[\.\)\:\-–—]\s+|[-•*–—▪▫◦•]\s+|Requirement\s*\d*[:.\-–—\s]+)\s*/i, '').trim();
+
+        if (!actionVerbRegex.test(cleanNoPrefix)) {
+            return "Incomplete: Missing an action (Does what?)";
+        }
+
+        const firstWordOfSentence = cleanNoPrefix.split(/\s+/)[0].toLowerCase();
+        const imperativeVerbs = /^(add|edit|create|delete|remove|update|modify|change|manage|enter|input|record|log|track|capture|store|save|retrieve|fetch|load|export|import|upload|download|send|receive|notify|alert|prompt|request|respond|approve|reject|review|validate|verify|authenticate|authorize|calculate|compute|estimate|determine|assess|evaluate|process|generate|produce|assign|allocate|distribute|schedule|select|choose|filter|search|sort|maintain|provide|support|execute|run|start|stop|cancel|close|open|complete|convert|sync|connect|disconnect|integrate|link|obtain|utilize|operate|transfer|transmit)$/i;
+        if (imperativeVerbs.test(firstWordOfSentence)) {
+            return "Incomplete: Missing a subject (Who/What?)";
+        }
     }
 
     // 2. INCONSISTENT CHECKS (Direct Contradictions & Conflicts)
@@ -606,6 +640,7 @@ function generateDynamicArtifacts(reqText) {
         'onshore engineer', 'onshore engineers',
         'workshop manager', 'workshop managers',
         'project manager', 'project managers',
+        'team leader', 'team leaders',
         'team member', 'team members',
         'supervisor', 'supervisors',
         'administrator', 'administrators', 'admin',
@@ -653,7 +688,7 @@ function generateDynamicArtifacts(reqText) {
         .replace(/^the\s+/i, '')
         .trim();
 
-    const actionVerbs = ['create', 'creates', 'manage', 'manages', 'enter', 'enters', 'allow', 'allows', 'display', 'displays', 'show', 'shows', 'record', 'records', 'approve', 'approves', 'reject', 'rejects', 'update', 'updates', 'select', 'selects', 'assign', 'assigns', 'maintain', 'maintains', 'calculate', 'calculates', 'provide', 'provides', 'support', 'supports', 'store', 'stores', 'obtain', 'obtains', 'use', 'uses', 'view', 'views', 'export', 'exports', 'include', 'includes', 'restrict', 'restricts', 'send', 'sends', 'filter', 'filters', 'search', 'searches'];
+    const actionVerbs = ['create', 'creates', 'manage', 'manages', 'enter', 'enters', 'allow', 'allows', 'display', 'displays', 'show', 'shows', 'record', 'records', 'approve', 'approves', 'reject', 'rejects', 'update', 'updates', 'select', 'selects', 'assign', 'assigns', 'maintain', 'maintains', 'calculate', 'calculates', 'provide', 'provides', 'support', 'supports', 'store', 'stores', 'obtain', 'obtains', 'use', 'uses', 'view', 'views', 'export', 'exports', 'include', 'includes', 'restrict', 'restricts', 'send', 'sends', 'filter', 'filters', 'search', 'searches', 'identify', 'identifies', 'generate', 'generates', 'receive', 'receives', 'log', 'logs', 'notify', 'notifies', 'alert', 'alerts'];
     const wordsInAction = cleanAction.toLowerCase().split(/\s+/);
     const hasVerb = actionVerbs.some(v => wordsInAction.includes(v));
     if (!hasVerb) {
@@ -665,7 +700,8 @@ function generateDynamicArtifacts(reqText) {
         'updates': 'update', 'selects': 'select', 'maintains': 'maintain', 'calculates': 'calculate',
         'provides': 'provide', 'allows': 'allow', 'supports': 'support', 'displays': 'display',
         'stores': 'store', 'obtains': 'obtain', 'uses': 'use', 'creates': 'create', 'manages': 'manage',
-        'searches': 'search'
+        'searches': 'search', 'views': 'view', 'identifies': 'identify', 'receives': 'receive',
+        'generates': 'generate', 'logs': 'log', 'notifies': 'notify', 'alerts': 'alert'
     };
     const firstWord = cleanAction.split(/\s+/)[0]?.toLowerCase() || '';
     if (verbUninflectMap[firstWord]) {
@@ -674,7 +710,7 @@ function generateDynamicArtifacts(reqText) {
 
     cleanAction = cleanAction.replace(/\.+$/, '').trim();
     goal = goal.replace(/\.+$/, '').trim();
-    const article = ['a', 'e', 'i', 'o', 'u'].includes(actor.charAt(0).toLowerCase()) ? 'an' : 'a';
+    const article = actor.toLowerCase() === 'user' ? 'a' : (['a', 'e', 'i', 'o', 'u'].includes(actor.charAt(0).toLowerCase()) ? 'an' : 'a');
     const userStory = `As ${article} ${actor}, I want to ${cleanAction.charAt(0).toLowerCase() + cleanAction.slice(1)} so that ${goal}.`;
 
     // 4. Dynamic Acceptance Criteria Generation (Gherkin Format)
@@ -969,6 +1005,19 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
             // Step B: Auto-create default sprint entries in public.sprints table
             try {
                 await pool.query(`
+                    CREATE TABLE IF NOT EXISTS public.sprints (
+                        sprint_id TEXT PRIMARY KEY,
+                        project_id TEXT NOT NULL,
+                        sprint_name TEXT NOT NULL,
+                        sprint_number INTEGER NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'PENDING',
+                        start_date DATE,
+                        end_date DATE,
+                        capacity_story_points INTEGER DEFAULT 40,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                `);
+                await pool.query(`
                     INSERT INTO public.sprints (sprint_id, project_id, sprint_name, sprint_number, status, capacity_story_points)
                     VALUES 
                     ('SPR-01', $1, 'Sprint 1 - Core Development', 1, 'ACTIVE', 30),
@@ -986,7 +1035,21 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
             // Step C: Begin database transaction for requirement batch ingestion
             await client.query('BEGIN');
 
-            // Step D: Defensive auto-creation check for requirements & user_stories tables
+            // Step D: Defensive auto-creation check for requirements, user_stories & sprints tables
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS public.sprints (
+                    sprint_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    sprint_name TEXT NOT NULL,
+                    sprint_number INTEGER NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'PENDING',
+                    start_date DATE,
+                    end_date DATE,
+                    capacity_story_points INTEGER DEFAULT 40,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            `);
+
             await client.query(`
                 CREATE TABLE IF NOT EXISTS public.requirements (
                     id SERIAL PRIMARY KEY,
@@ -1098,13 +1161,16 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
                     for (let sNum = 1; sNum <= currentSprint; sNum++) {
                         const sprintCode = `SPR-${sNum < 10 ? '0' + sNum : sNum}`;
                         try {
+                            await client.query('SAVEPOINT sprint_sp');
                             await client.query(`
                                 INSERT INTO public.sprints (sprint_id, project_id, sprint_name, sprint_number, status, capacity_story_points)
                                 VALUES 
                                 ($1, $2, $3, $4, $5, 30)
                                 ON CONFLICT (sprint_id) DO UPDATE SET project_id = EXCLUDED.project_id
                             `, [sprintCode, effectiveProjectId, `Sprint ${sNum}`, sNum, sNum === 1 ? 'ACTIVE' : 'PENDING']);
+                            await client.query('RELEASE SAVEPOINT sprint_sp');
                         } catch (sErr) {
+                            await client.query('ROLLBACK TO SAVEPOINT sprint_sp');
                             console.warn(`Notice creating sprint ${sprintCode}:`, sErr.message);
                         }
                     }
@@ -1285,6 +1351,9 @@ app.post('/api/process', async (req, res) => {
         pythonProcess.stderr.on('data', (data) => {
             stderr += data.toString();
         });
+
+        pythonProcess.stdin.write(JSON.stringify(sentences));
+        pythonProcess.stdin.end();
 
         pythonProcess.on('close', async (code) => {
             if (code !== 0) {
@@ -1844,9 +1913,28 @@ function calculateSkillMatchPercentage(devSkills, requiredSkills) {
     const devSkillList = extractSkillList(devSkills);
     if (devSkillList.length === 0) return 0;
 
+    const normalizeSkill = (s) => {
+        const clean = String(s || '').toLowerCase().trim();
+        if (clean === 'postgres' || clean === 'postgresql' || clean === 'psql') return 'sql';
+        if (clean === 'reactjs') return 'react';
+        if (clean === 'node' || clean === 'nodejs') return 'node.js';
+        if (clean === 'rest' || clean === 'rest api' || clean === 'api development') return 'api';
+        if (clean === 'qa' || clean === 'testing' || clean === 'qa testing') return 'qa automation';
+        return clean;
+    };
+
+    const matchesEquivalent = (devS, reqS) => {
+        if (devS === reqS) return true;
+        const normDev = normalizeSkill(devS);
+        const normReq = normalizeSkill(reqS);
+        if (normDev === normReq) return true;
+        if ((normDev === 'sql' || devS === 'sql') && (normReq === 'sql' || reqS === 'database')) return true;
+        return false;
+    };
+
     let matched = 0;
     for (const req of reqList) {
-        if (devSkillList.includes(req)) {
+        if (devSkillList.some(devS => matchesEquivalent(devS, req))) {
             matched++;
         }
     }
@@ -1861,10 +1949,12 @@ function normalizeDomainString(d) {
     }
     const s = String(d).toLowerCase().trim();
     if (s.includes('qa') || s.includes('testing')) return 'qa';
-    if (s.includes('front')) return 'frontend';
-    if (s.includes('back')) return 'backend';
-    if (s.includes('devops')) return 'devops';
-    if (s.includes('ai') || s.includes('ml')) return 'ai';
+    if (s.includes('front') || s.includes('ui') || s.includes('ux') || s.includes('view') || s.includes('display')) return 'frontend';
+    if (s.includes('devops') || s.includes('docker') || s.includes('cloud') || s.includes('infrastructure')) return 'devops';
+    if (s.includes('ai') || s.includes('ml') || s.includes('machine learning')) return 'ai';
+    if (s.includes('back') || s.includes('database') || s.includes('sql') || s.includes('api') || s.includes('integration') || s.includes('report') || s.includes('analytics') || s.includes('asset') || s.includes('equipment') || s.includes('labour') || s.includes('labor') || s.includes('cost') || s.includes('overtime')) {
+        return 'backend';
+    }
     return s;
 }
 
@@ -2021,6 +2111,26 @@ app.post('/api/allocate', async (req, res) => {
             return res.status(400).json({ error: 'No tasks provided' });
         }
 
+        // Normalize task data types and fallback fields
+        const normalizedTasks = tasks.map(t => {
+            let reqSkills = t.required_skills || t.skills || [];
+            if (typeof reqSkills === 'string') {
+                reqSkills = reqSkills.replace(/^\{|\}$/g, '').split(',').map(s => s.trim().replace(/^"|"$/g, '')).filter(Boolean);
+            }
+            return {
+                ...t,
+                story_id: t.story_id || t.work_item_id || t.id,
+                title: t.title || t.parent_story_title || 'Work Item',
+                estimated_hours: Number(t.estimated_hours) || (Number(t.story_points) ? Number(t.story_points) * 6 : 8),
+                story_points: Number(t.story_points) || 1,
+                required_domain: t.required_domain || t.domain || 'Backend',
+                domain: t.domain || t.required_domain || 'Backend',
+                required_skills: reqSkills,
+                predicted_complexity: (t.predicted_complexity || t.complexity || 'MEDIUM').toUpperCase(),
+                priority: t.priority || 'MEDIUM'
+            };
+        });
+
         // Load developers from PostgreSQL
         const result = await pool.query(
             'SELECT id, name, role, capacity_hours, primary_domain, languages FROM developers'
@@ -2056,7 +2166,7 @@ app.post('/api/allocate', async (req, res) => {
             project_commitments: commitmentsMap[String(d.id)] || []
         }));
 
-        const assignments = allocateTasks(tasks, devListWithCommitments, project_id);
+        const assignments = allocateTasks(normalizedTasks, devListWithCommitments, project_id);
 
         res.json({ success: true, assignments });
     } catch (error) {
@@ -2108,16 +2218,20 @@ app.post(['/api/user-stories/:storyId/decompose', '/api/user-stories/:storyId/ge
             for (const item of result.work_items) {
                 await pool.query(
                     `INSERT INTO work_items (
-                        work_item_id, story_id, parent_story_title, project_id, title, description, domain, required_skills, estimated_hours, story_points, status
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                        work_item_id, story_id, parent_story_title, project_id, title, description, domain, required_domain, required_skills, estimated_hours, story_points, predicted_complexity, priority, priority_score, status
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
                     ON CONFLICT (work_item_id) DO UPDATE SET
                         parent_story_title = EXCLUDED.parent_story_title,
                         title = EXCLUDED.title,
                         description = EXCLUDED.description,
                         domain = EXCLUDED.domain,
+                        required_domain = EXCLUDED.required_domain,
                         required_skills = EXCLUDED.required_skills,
                         estimated_hours = EXCLUDED.estimated_hours,
                         story_points = EXCLUDED.story_points,
+                        predicted_complexity = EXCLUDED.predicted_complexity,
+                        priority = EXCLUDED.priority,
+                        priority_score = EXCLUDED.priority_score,
                         status = EXCLUDED.status`,
                     [
                         item.work_item_id,
@@ -2127,10 +2241,14 @@ app.post(['/api/user-stories/:storyId/decompose', '/api/user-stories/:storyId/ge
                         item.title,
                         item.description,
                         item.domain,
+                        item.required_domain || item.domain,
                         item.required_skills || [],
                         item.estimated_hours || 8,
                         item.story_points || 1,
-                        item.status || 'generated'
+                        item.predicted_complexity || 'MEDIUM',
+                        item.priority || storyData.priority || 'Medium',
+                        item.priority_score || 50,
+                        item.status || 'To Do'
                     ]
                 );
             }
@@ -2177,16 +2295,20 @@ app.post('/api/user-stories/decompose-batch', async (req, res) => {
                 for (const item of resData.work_items) {
                     await pool.query(
                         `INSERT INTO work_items (
-                            work_item_id, story_id, parent_story_title, project_id, title, description, domain, required_skills, estimated_hours, story_points, status
-                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                            work_item_id, story_id, parent_story_title, project_id, title, description, domain, required_domain, required_skills, estimated_hours, story_points, predicted_complexity, priority, priority_score, status
+                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
                         ON CONFLICT (work_item_id) DO UPDATE SET
                             parent_story_title = EXCLUDED.parent_story_title,
                             title = EXCLUDED.title,
                             description = EXCLUDED.description,
                             domain = EXCLUDED.domain,
+                            required_domain = EXCLUDED.required_domain,
                             required_skills = EXCLUDED.required_skills,
                             estimated_hours = EXCLUDED.estimated_hours,
                             story_points = EXCLUDED.story_points,
+                            predicted_complexity = EXCLUDED.predicted_complexity,
+                            priority = EXCLUDED.priority,
+                            priority_score = EXCLUDED.priority_score,
                             status = EXCLUDED.status`,
                         [
                             item.work_item_id,
@@ -2196,10 +2318,14 @@ app.post('/api/user-stories/decompose-batch', async (req, res) => {
                             item.title,
                             item.description,
                             item.domain,
+                            item.required_domain || item.domain,
                             item.required_skills || [],
                             item.estimated_hours || 8,
                             item.story_points || 1,
-                            item.status || 'generated'
+                            item.predicted_complexity || 'MEDIUM',
+                            item.priority || story.priority || 'Medium',
+                            item.priority_score || 50,
+                            item.status || 'To Do'
                         ]
                     );
                 }
@@ -2222,6 +2348,11 @@ app.get('/api/work-items', async (req, res) => {
         let query = `
             SELECT 
                 w.*,
+                COALESCE(w.required_domain, w.domain, 'Backend') as required_domain,
+                COALESCE(w.domain, w.required_domain, 'Backend') as domain,
+                COALESCE(w.predicted_complexity, 'MEDIUM') as predicted_complexity,
+                COALESCE(w.priority, 'Medium') as priority,
+                COALESCE(w.priority_score, 50) as priority_score,
                 COALESCE(w.parent_story_title, u.title, u.description, r.user_story, 'User Story Requirement') as parent_story_title,
                 COALESCE(w.requirement_sentence, r.requirement_sentence, 'Requirement Sentence') as requirement_sentence,
                 COALESCE(w.epic, r.epic, 'General') as epic,
@@ -2257,7 +2388,21 @@ app.get('/api/work-items', async (req, res) => {
         query += ` ORDER BY w.created_at ASC, w.work_item_id ASC`;
 
         const result = await pool.query(query, params);
-        res.json(result.rows || []);
+        const rows = (result.rows || []).map(row => {
+            let skills = row.required_skills || [];
+            if (typeof skills === 'string') {
+                skills = skills.replace(/^\{|\}$/g, '').split(',').map(s => s.trim().replace(/^"|"$/g, '')).filter(Boolean);
+            }
+            return {
+                ...row,
+                required_skills: Array.isArray(skills) ? skills : [],
+                estimated_hours: Number(row.estimated_hours) || 8,
+                story_points: Number(row.story_points) || 1,
+                priority_score: Number(row.priority_score) || 50,
+                predicted_complexity: (row.predicted_complexity || 'MEDIUM').toUpperCase()
+            };
+        });
+        res.json(rows);
     } catch (err) {
         console.error('Error fetching work items:', err);
         res.status(500).json({ error: err.message });
@@ -2279,8 +2424,8 @@ app.post('/api/work-items', async (req, res) => {
 
         await pool.query(
             `INSERT INTO work_items (
-                work_item_id, story_id, parent_story_title, requirement_sentence, epic, feature, project_id, title, description, domain, work_item_type, priority, required_skills, estimated_hours, story_points, status, assigned_to, start_date, end_date, updated_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, CURRENT_TIMESTAMP)
+                work_item_id, story_id, parent_story_title, requirement_sentence, epic, feature, project_id, title, description, domain, required_domain, work_item_type, priority, priority_score, required_skills, estimated_hours, story_points, predicted_complexity, status, assigned_to, start_date, end_date, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, CURRENT_TIMESTAMP)
             ON CONFLICT (work_item_id) DO UPDATE SET
                 story_id = EXCLUDED.story_id,
                 parent_story_title = EXCLUDED.parent_story_title,
@@ -2291,11 +2436,14 @@ app.post('/api/work-items', async (req, res) => {
                 title = EXCLUDED.title,
                 description = EXCLUDED.description,
                 domain = EXCLUDED.domain,
+                required_domain = EXCLUDED.required_domain,
                 work_item_type = EXCLUDED.work_item_type,
                 priority = EXCLUDED.priority,
+                priority_score = EXCLUDED.priority_score,
                 required_skills = EXCLUDED.required_skills,
                 estimated_hours = EXCLUDED.estimated_hours,
                 story_points = EXCLUDED.story_points,
+                predicted_complexity = EXCLUDED.predicted_complexity,
                 status = EXCLUDED.status,
                 assigned_to = EXCLUDED.assigned_to,
                 start_date = EXCLUDED.start_date,
@@ -2311,12 +2459,15 @@ app.post('/api/work-items', async (req, res) => {
                 item.project_id || 'P00001',
                 item.title,
                 item.description || '',
-                item.domain || item.work_item_type || 'Backend',
+                item.domain || item.required_domain || 'Backend',
+                item.required_domain || item.domain || 'Backend',
                 item.work_item_type || item.domain || 'Development',
                 item.priority || 'Medium',
+                Number(item.priority_score) || 50,
                 Array.isArray(item.required_skills) ? item.required_skills : (item.required_skills ? String(item.required_skills).split(',') : []),
                 Number(item.estimated_hours || item.estimated_effort) || 8,
                 Number(item.story_points) || 1,
+                (item.predicted_complexity || item.complexity || 'MEDIUM').toUpperCase(),
                 itemStatus,
                 item.assigned_to || item.assigned_resource || 'Unassigned',
                 item.start_date || null,
@@ -2434,60 +2585,60 @@ app.post('/api/user-stories/:storyId/generate-work-items', async (req, res) => {
             return res.status(404).json({ error: 'User Story not found' });
         }
 
-        const parentTitle = storyData.title || storyData.user_story || 'User Story';
-        const reqSentence = storyData.requirement_sentence || storyData.description || parentTitle;
-        const epic = storyData.epic || 'General';
-        const feature = storyData.feature || 'Feature Logic';
-        const projectId = storyData.project_id || req.body.project_id || 'P00001';
-        const cleanSid = String(storyId).replace(/[^a-zA-Z0-9]/g, '');
+        const parentTitle = storyData.title || storyData.user_story || storyData.requirement_sentence || '';
+        const result = await decompositionEngine.decomposeUserStory({
+            story_id: storyId,
+            ...storyData
+        });
 
-        const standardItems = [
-            { type: 'UI/UX', title: `UI/UX: ${parentTitle}`, domain: 'Frontend', hours: 8, points: 2, skills: ['React', 'JavaScript', 'HTML/CSS'] },
-            { type: 'API/Backend', title: `API/Backend: ${parentTitle}`, domain: 'Backend', hours: 12, points: 3, skills: ['Node.js', 'Express', 'SQL'] },
-            { type: 'Database', title: `Database Schema & Logic: ${parentTitle}`, domain: 'Backend', hours: 8, points: 2, skills: ['PostgreSQL', 'SQL'] },
-            { type: 'Testing', title: `QA Integration & Testing: ${parentTitle}`, domain: 'QA', hours: 6, points: 1, skills: ['Cypress', 'QA Automation'] },
-            { type: 'Documentation', title: `Technical & User Documentation: ${parentTitle}`, domain: 'Documentation', hours: 4, points: 1, skills: ['Markdown'] }
-        ];
-
-        const insertedWIs = [];
-        for (let i = 0; i < standardItems.length; i++) {
-            const item = standardItems[i];
-            const wiId = `WI-${cleanSid}-${i + 1}`;
-            await pool.query(
-                `INSERT INTO work_items (
-                    work_item_id, story_id, parent_story_title, requirement_sentence, epic, feature, project_id, title, description, domain, work_item_type, priority, required_skills, estimated_hours, story_points, status, assigned_to
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-                ON CONFLICT (work_item_id) DO UPDATE SET
-                    title = EXCLUDED.title,
-                    description = EXCLUDED.description,
-                    domain = EXCLUDED.domain,
-                    work_item_type = EXCLUDED.work_item_type,
-                    estimated_hours = EXCLUDED.estimated_hours,
-                    story_points = EXCLUDED.story_points`,
-                [
-                    wiId,
-                    storyId,
-                    parentTitle,
-                    reqSentence,
-                    epic,
-                    feature,
-                    projectId,
-                    item.title,
-                    `Implement ${item.type} requirements for ${parentTitle}`,
-                    item.domain,
-                    item.type,
-                    storyData.priority || 'Medium',
-                    item.skills,
-                    item.hours,
-                    item.points,
-                    'To Do',
-                    'Unassigned'
-                ]
-            );
-            insertedWIs.push({ work_item_id: wiId, story_id: storyId, title: item.title, work_item_type: item.type, estimated_hours: item.hours, status: 'To Do' });
+        if (result.work_items && result.work_items.length > 0) {
+            const cleanSid = String(storyId).replace(/[^a-zA-Z0-9]/g, '');
+            if (cleanSid) {
+                await pool.query(
+                    `DELETE FROM work_items WHERE REGEXP_REPLACE(story_id, '[^a-zA-Z0-9]', '', 'g') = $1 AND status != 'approved'`,
+                    [cleanSid]
+                );
+            }
+            for (const item of result.work_items) {
+                await pool.query(
+                    `INSERT INTO work_items (
+                        work_item_id, story_id, parent_story_title, project_id, title, description, domain, required_domain, required_skills, estimated_hours, story_points, predicted_complexity, priority, priority_score, status
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                    ON CONFLICT (work_item_id) DO UPDATE SET
+                        parent_story_title = EXCLUDED.parent_story_title,
+                        title = EXCLUDED.title,
+                        description = EXCLUDED.description,
+                        domain = EXCLUDED.domain,
+                        required_domain = EXCLUDED.required_domain,
+                        required_skills = EXCLUDED.required_skills,
+                        estimated_hours = EXCLUDED.estimated_hours,
+                        story_points = EXCLUDED.story_points,
+                        predicted_complexity = EXCLUDED.predicted_complexity,
+                        priority = EXCLUDED.priority,
+                        priority_score = EXCLUDED.priority_score,
+                        status = EXCLUDED.status`,
+                    [
+                        item.work_item_id,
+                        item.story_id || storyId,
+                        item.parent_story_title || parentTitle,
+                        item.project_id || req.body.project_id || 'P00001',
+                        item.title,
+                        item.description,
+                        item.domain,
+                        item.required_domain || item.domain,
+                        item.required_skills || [],
+                        item.estimated_hours || 8,
+                        item.story_points || 1,
+                        item.predicted_complexity || 'MEDIUM',
+                        item.priority || storyData.priority || 'Medium',
+                        item.priority_score || 50,
+                        item.status || 'To Do'
+                    ]
+                );
+            }
         }
 
-        res.json({ success: true, work_items: insertedWIs });
+        res.json({ success: true, work_items: result.work_items || [] });
     } catch (err) {
         console.error('Error generating work items:', err);
         res.status(500).json({ error: err.message });
@@ -2809,6 +2960,50 @@ async function generateWorkItemsForStory(story) {
             return existing.rows;
         }
     } catch (e) {}
+
+    const decomp = await decompositionEngine.decomposeUserStory(story);
+    if (decomp && decomp.work_items && decomp.work_items.length > 0) {
+        for (const item of decomp.work_items) {
+            try {
+                await pool.query(
+                    `INSERT INTO work_items (
+                        work_item_id, story_id, parent_story_title, project_id, title, description, domain, required_domain, required_skills, estimated_hours, story_points, predicted_complexity, priority, priority_score, status
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                    ON CONFLICT (work_item_id) DO UPDATE SET
+                        parent_story_title = EXCLUDED.parent_story_title,
+                        title = EXCLUDED.title,
+                        description = EXCLUDED.description,
+                        domain = EXCLUDED.domain,
+                        required_domain = EXCLUDED.required_domain,
+                        required_skills = EXCLUDED.required_skills,
+                        estimated_hours = EXCLUDED.estimated_hours,
+                        story_points = EXCLUDED.story_points,
+                        predicted_complexity = EXCLUDED.predicted_complexity,
+                        priority = EXCLUDED.priority,
+                        priority_score = EXCLUDED.priority_score,
+                        status = EXCLUDED.status`,
+                    [
+                        item.work_item_id,
+                        item.story_id || storyId,
+                        item.parent_story_title || story.title || 'User Story',
+                        story.project_id || 'P00001',
+                        item.title,
+                        item.description,
+                        item.domain,
+                        item.required_domain || item.domain,
+                        item.required_skills || [],
+                        item.estimated_hours || 8,
+                        item.story_points || 1,
+                        item.predicted_complexity || 'MEDIUM',
+                        item.priority || story.priority || 'Medium',
+                        item.priority_score || 50,
+                        item.status || 'To Do'
+                    ]
+                );
+            } catch (err) {}
+        }
+        return decomp.work_items;
+    }
     return buildWorkItemsForStory(story);
 }
 

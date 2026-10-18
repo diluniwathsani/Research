@@ -1,29 +1,322 @@
 /**
- * Hybrid User Story Decomposition Engine
- * Research Module: Hybrid User Story Decomposition
- * Components:
- * 1. Rule-Based Decomposition Layer (Agile Splitting Patterns)
- * 2. LLM-Assisted Work Item Generation Layer
- * 3. Human-in-the-Loop Validation (handled on Frontend & API approval)
+ * Hybrid User Story Decomposition & Keyword Classification Engine
+ * 
+ * Capabilities:
+ * 1. Keyword-based Domain Identification (Reporting/Analytics, Engineering & Asset, Labour & Cost, Backend, Frontend, Database, etc.)
+ * 2. Practical Required-Skill Detection (normalized, synonyms, mapped to real developer skills)
+ * 3. Granular Technical Work Item Decomposition (Titles, Hours, Story Points, Predicted Complexity)
+ * 4. Integration with PostgreSQL work_items table and Resource Management allocation algorithm
  */
 
+// ================= 1. DOMAIN TAXONOMY & NORMALIZATION =================
+const DOMAIN_TAXONOMY = {
+    REPORTING: 'Reporting/Analytics',
+    ENGINEERING_ASSET: 'Engineering and Asset Management',
+    LABOUR_COST: 'Labour and Cost Management',
+    DATABASE: 'Database',
+    API_INTEGRATION: 'API/Integration',
+    FRONTEND: 'Frontend',
+    BACKEND: 'Backend',
+    QA: 'QA/Testing',
+    DEVOPS_SECURITY: 'DevOps/Security',
+    AI_ML: 'AI/ML'
+};
 
-// ================= 1. RULE-BASED DECOMPOSITION LAYER =================
+// Maps any domain string to the developer allocation primary_domain (backend, frontend, ai, qa, devops)
+function mapToAllocationDomain(domainStr) {
+    if (!domainStr) return 'backend';
+    const s = String(domainStr).toLowerCase().trim();
+    if (s.includes('front') || s.includes('ui') || s.includes('ux') || s.includes('view') || s.includes('display')) {
+        return 'frontend';
+    }
+    if (s.includes('qa') || s.includes('test')) {
+        return 'qa';
+    }
+    if (s.includes('ai') || s.includes('ml') || s.includes('machine learning')) {
+        return 'ai';
+    }
+    if (s.includes('devops') || s.includes('docker') || s.includes('cloud') || s.includes('infrastructure')) {
+        return 'devops';
+    }
+    // Database, Reporting/Analytics, API/Integration, Labour/Cost, Engineering/Asset, Backend default to backend developers
+    return 'backend';
+}
+
+// ================= 2. CONFIGURABLE KEYWORD MAPPINGS =================
+const KEYWORD_DOMAIN_RULES = [
+    // Reporting & Analytics
+    {
+        domain: DOMAIN_TAXONOMY.REPORTING,
+        keywords: [
+            'report', 'reports', 'reporting', 'analytics', 'export', 'download', 'pdf', 'excel',
+            'csv', 'chart', 'summary report', 'kpi', 'metrics', 'print', 'data export', 'job card export'
+        ]
+    },
+    // Labour & Cost Management
+    {
+        domain: DOMAIN_TAXONOMY.LABOUR_COST,
+        keywords: [
+            'overtime', 'labor', 'labour', 'cost', 'costing', 'wage', 'rate', 'hour', 'working hours',
+            'salary', 'expense', 'payroll', 'budget', 'billing', 'time sheet', 'timesheet', 'calculate overtime'
+        ]
+    },
+    // Engineering & Asset Management
+    {
+        domain: DOMAIN_TAXONOMY.ENGINEERING_ASSET,
+        keywords: [
+            'vessel', 'equipment', 'asset', 'materials', 'work order', 'maintenance', 'repair',
+            'defect', 'job card', 'spare part', 'allocation', 'inspection', 'fleet', 'machinery', 'tool'
+        ]
+    },
+    // Database & Persistence
+    {
+        domain: DOMAIN_TAXONOMY.DATABASE,
+        keywords: [
+            'database', 'schema', 'sql', 'postgresql', 'query', 'store', 'retrieve', 'table',
+            'migration', 'index', 'persist', 'persistence', 'data model', 'entity', 'relational'
+        ]
+    },
+    // API & Integration
+    {
+        domain: DOMAIN_TAXONOMY.API_INTEGRATION,
+        keywords: [
+            'endpoint', 'endpoints', 'rest api', 'restful', 'api development', 'integration',
+            'webhook', 'service integration', 'microservice', 'http', 'external service', 'json api'
+        ]
+    },
+    // AI / Machine Learning
+    {
+        domain: DOMAIN_TAXONOMY.AI_ML,
+        keywords: [
+            'machine learning', 'ml', 'nlp', 'spacy', 'scikit', 'svm', 'deep learning',
+            'neural network', 'tensorflow', 'pytorch', 'classifier', 'ai service', 'model inference', 'training dataset'
+        ]
+    },
+    // DevOps & Security
+    {
+        domain: DOMAIN_TAXONOMY.DEVOPS_SECURITY,
+        keywords: [
+            'docker', 'kubernetes', 'aws', 'cloud', 'ci/cd', 'pipeline', 'deploy', 'deployment',
+            'nginx', 'auth', 'authentication', 'login', 'sso', 'oauth', 'security', 'role', 'permission', 'rbac'
+        ]
+    },
+    // QA & Testing
+    {
+        domain: DOMAIN_TAXONOMY.QA,
+        keywords: [
+            'test', 'testing', 'qa', 'cypress', 'selenium', 'unit test', 'e2e', 'automation',
+            'verification', 'verify', 'validation test', 'audit test', 'acceptance test'
+        ]
+    },
+    // Frontend / UI
+    {
+        domain: DOMAIN_TAXONOMY.FRONTEND,
+        keywords: [
+            'display', 'view', 'screen', 'ui', 'ux', 'dashboard', 'user interface', 'visualize',
+            'component', 'form', 'button', 'modal', 'table view', 'render', 'interactive', 'react', 'tailwind'
+        ]
+    }
+];
+
+// Repertoire of skills actually present in the developers database:
+// Alice: ['JavaScript', 'Python', 'SQL']
+// Bob: ['JavaScript', 'React']
+// Charlie: ['HTML', 'CSS']
+// David: ['Python', 'SQL', 'Security']
+// Eve: ['ML', 'TensorFlow', 'Python']
+// Frank Miller: ['JavaScript', 'React', 'Tailwind']
+// Grace Hopper: ['JavaScript', 'React', 'jsPDF', 'CSS']
+// Ian Malcolm: ['JavaScript', 'SQL', 'Node.js', 'PostgreSQL']
+// Julia Roberts: ['Python', 'SQL', 'Node.js', 'OAuth']
+// Laura Croft: ['Python', 'ML', 'NLP', 'Spacy']
+// Michael Scott: ['Python', 'ML', 'Scikit-Learn', 'SVM']
+// Nora Allen: ['QA Automation', 'Cypress', 'Selenium']
+// Oscar Isaac: ['Docker', 'DevOps', 'Kubernetes', 'AWS']
+// Vihanga: ['Node.js', 'JavaScript', 'requirement gathering']
+// Nimthera: ['Node.js', 'PostgreSQL', 'JavaScript', 'React', 'Agile']
+const SKILL_KEYWORD_RULES = [
+    // React / Frontend UI
+    {
+        skills: ['React', 'JavaScript', 'HTML/CSS'],
+        keywords: ['display', 'view', 'dashboard', 'user interface', 'screen', 'form', 'ui', 'ux', 'visualize', 'frontend', 'interactive', 'dialog', 'modal']
+    },
+    // Styling & Tailwind
+    {
+        skills: ['Tailwind', 'CSS'],
+        keywords: ['styling', 'theme', 'dark mode', 'responsive', 'layout', 'tailwind', 'css']
+    },
+    // Export & Document Reporting
+    {
+        skills: ['jsPDF', 'React', 'JavaScript'],
+        keywords: ['export', 'pdf', 'excel', 'csv', 'download', 'print report', 'export report', 'document export', 'print']
+    },
+    // Backend API & REST
+    {
+        skills: ['Node.js', 'JavaScript'],
+        keywords: ['rest api', 'endpoint', 'backend', 'api', 'server', 'service', 'controller', 'http', 'business logic', 'business rules', 'calculate', 'overtime', 'validation']
+    },
+    // Database & SQL
+    {
+        skills: ['SQL', 'PostgreSQL'],
+        keywords: ['database', 'query', 'store', 'retrieve', 'sql', 'postgresql', 'data model', 'schema', 'entity', 'persistence', 'allocation model', 'equipment allocation']
+    },
+    // Security & Auth
+    {
+        skills: ['OAuth', 'Security'],
+        keywords: ['auth', 'login', 'security', 'permission', 'role', 'oauth', 'encrypt', 'token', 'authorization', 'access control', 'restrict', 'supervisor']
+    },
+    // Python & Machine Learning
+    {
+        skills: ['Python', 'ML', 'Scikit-Learn'],
+        keywords: ['machine learning', 'ml', 'classifier', 'scikit', 'prediction', 'model', 'data processing']
+    },
+    // NLP & Text Processing
+    {
+        skills: ['NLP', 'Spacy', 'Python'],
+        keywords: ['nlp', 'spacy', 'text processing', 'natural language', 'sentiment', 'extraction']
+    },
+    // Deep Learning
+    {
+        skills: ['TensorFlow', 'Python'],
+        keywords: ['tensorflow', 'deep learning', 'neural network', 'pytorch']
+    },
+    // QA & Test Automation
+    {
+        skills: ['QA Automation', 'Cypress'],
+        keywords: ['test', 'qa', 'cypress', 'automation', 'acceptance', 'verify', 'verification', 'e2e']
+    },
+    // DevOps & Cloud
+    {
+        skills: ['Docker', 'DevOps', 'AWS'],
+        keywords: ['docker', 'devops', 'kubernetes', 'aws', 'cloud', 'container', 'ci/cd', 'pipeline', 'deploy']
+    }
+];
+
+// ================= 3. CLASSIFICATION FUNCTIONS =================
 /**
- * Analyzes a User Story using established Agile story-splitting patterns:
- * - Workflow Steps
- * - CRUD Operations
- * - Business Rules & Validation
- * - Data Variations
- * - Happy Path / Alternative & Error Flows
- * - Acceptance Criteria Boundaries
+ * Classifies the appropriate domain for a requirement or work item.
+ * Evaluates title, description, acceptance criteria, and epic.
+ */
+function classifyDomain(title, description = '', acceptanceCriteria = '', epic = '') {
+    const fullText = `${title || ''} ${description || ''} ${acceptanceCriteria || ''} ${epic || ''}`.toLowerCase();
+
+    // Check specific taxonomy keywords
+    for (const rule of KEYWORD_DOMAIN_RULES) {
+        for (const kw of rule.keywords) {
+            const regex = new RegExp(`\\b${kw.replace('/', '\\/')}\\b`, 'i');
+            if (regex.test(fullText)) {
+                return rule.domain;
+            }
+        }
+    }
+
+    // Contextual fallback:
+    if (/\b(export|report|analytics|chart)\b/i.test(fullText)) return DOMAIN_TAXONOMY.REPORTING;
+    if (/\b(overtime|wage|labor|labour|cost|hour)\b/i.test(fullText)) return DOMAIN_TAXONOMY.LABOUR_COST;
+    if (/\b(vessel|equipment|material|asset|repair|defect|work order)\b/i.test(fullText)) return DOMAIN_TAXONOMY.ENGINEERING_ASSET;
+    if (/\b(display|view|ui|frontend|screen|form)\b/i.test(fullText)) return DOMAIN_TAXONOMY.FRONTEND;
+    if (/\b(database|sql|query|table|schema)\b/i.test(fullText)) return DOMAIN_TAXONOMY.DATABASE;
+    if (/\b(api|rest|endpoint|service)\b/i.test(fullText)) return DOMAIN_TAXONOMY.API_INTEGRATION;
+
+    return DOMAIN_TAXONOMY.BACKEND;
+}
+
+/**
+ * Detects required technical skills based on keywords and mapped to developer skills in DB.
+ */
+function detectRequiredSkills(title, description = '', acceptanceCriteria = '', domain = '') {
+    const fullText = `${title || ''} ${description || ''} ${acceptanceCriteria || ''} ${domain || ''}`.toLowerCase();
+    const matchedSkills = new Set();
+
+    for (const rule of SKILL_KEYWORD_RULES) {
+        for (const kw of rule.keywords) {
+            const regex = new RegExp(`\\b${kw.replace('/', '\\/')}\\b`, 'i');
+            if (regex.test(fullText)) {
+                rule.skills.forEach(s => matchedSkills.add(s));
+                break;
+            }
+        }
+    }
+
+    // Domain-targeted baseline skills if none matched
+    const domNorm = String(domain).toLowerCase();
+    if (matchedSkills.size === 0) {
+        if (domNorm.includes('front') || domNorm.includes('ui')) {
+            matchedSkills.add('React');
+            matchedSkills.add('JavaScript');
+        } else if (domNorm.includes('qa') || domNorm.includes('test')) {
+            matchedSkills.add('QA Automation');
+            matchedSkills.add('Cypress');
+        } else if (domNorm.includes('ai') || domNorm.includes('ml')) {
+            matchedSkills.add('Python');
+            matchedSkills.add('ML');
+        } else if (domNorm.includes('devops')) {
+            matchedSkills.add('Docker');
+            matchedSkills.add('DevOps');
+        } else if (domNorm.includes('database') || domNorm.includes('sql')) {
+            matchedSkills.add('SQL');
+            matchedSkills.add('PostgreSQL');
+        } else if (domNorm.includes('reporting')) {
+            matchedSkills.add('SQL');
+            matchedSkills.add('jsPDF');
+            matchedSkills.add('JavaScript');
+        } else {
+            matchedSkills.add('JavaScript');
+            matchedSkills.add('Node.js');
+            matchedSkills.add('SQL');
+        }
+    }
+
+    // Limit to top 3-4 distinct skills to avoid noise
+    return Array.from(matchedSkills).slice(0, 4);
+}
+
+/**
+ * Calculates deterministic predicted complexity based on points and estimated hours.
+ */
+function calculateComplexity(hours, storyPoints, titleOrText = '') {
+    const hrs = Number(hours) || 0;
+    const pts = Number(storyPoints) || 0;
+    const text = String(titleOrText).toLowerCase();
+
+    // High complexity indicators
+    if (pts >= 8 || hrs >= 16 || /\b(machine learning|nlp|spacy|deep learning|security|encryption|oauth|audit tracking|emergency override)\b/i.test(text)) {
+        return 'HIGH';
+    }
+    // Low complexity indicators
+    if (pts <= 2 && hrs <= 8 && /\b(button|label|text field|minor|display only|view|static)\b/i.test(text)) {
+        return 'LOW';
+    }
+    // Default
+    if (pts >= 5 || hrs >= 12) {
+        return 'MEDIUM';
+    }
+    return hrs <= 8 ? 'LOW' : 'MEDIUM';
+}
+
+/**
+ * Calculates normalized priority score (0-100)
+ */
+function calculatePriorityScore(priorityStr, storyPoints) {
+    const p = String(priorityStr || 'MEDIUM').toUpperCase();
+    const pts = Number(storyPoints) || 3;
+    let base = 50;
+    if (p === 'CRITICAL') base = 90;
+    else if (p === 'HIGH') base = 75;
+    else if (p === 'LOW') base = 30;
+
+    return Math.min(100, Math.max(10, base + pts * 2));
+}
+
+// ================= 4. AGILE DECOMPOSITION PIPELINE =================
+/**
+ * Analyzes rule-based boundaries (CRUD, Workflow, Data, Validation).
  */
 function analyzeRuleBasedBoundaries(story) {
     const title = story.title || story.user_story || story.requirement_sentence || '';
     const description = story.description || '';
     const ac = story.acceptance_criteria || story.ac || '';
     const fullText = `${title} ${description} ${ac}`.trim();
-    const lowerText = fullText.toLowerCase();
 
     const patternsDetected = [];
     const boundaries = [];
@@ -38,59 +331,18 @@ function analyzeRuleBasedBoundaries(story) {
     }
 
     // Pattern 2: CRUD Operations Pattern
-    if (/\b(create|add|enter|insert|read|view|display|fetch|search|list|filter|update|edit|modify|change|delete|remove|clear|reset)\b/i.test(fullText)) {
+    if (/\b(create|add|enter|insert|read|view|display|fetch|search|list|filter|update|edit|modify|change|delete|remove)\b/i.test(fullText)) {
         patternsDetected.push('CRUD Operations Pattern');
-
-        if (/\b(create|add|enter|insert|reset|request)\b/i.test(fullText)) {
-            boundaries.push({ pattern: 'CRUD - Create/Initiate', domain: 'Backend/Frontend', skill: 'REST API' });
-        }
-        if (/\b(read|view|display|fetch|search|list|filter)\b/i.test(fullText)) {
-            boundaries.push({ pattern: 'CRUD - Read/Display', domain: 'Frontend', skill: 'React' });
-        }
-        if (/\b(update|edit|modify|change|reset|password)\b/i.test(fullText)) {
-            boundaries.push({ pattern: 'CRUD - Update/Logic', domain: 'Backend', skill: 'Node.js' });
-        }
-        if (/\b(delete|remove|clear)\b/i.test(fullText)) {
-            boundaries.push({ pattern: 'CRUD - Delete', domain: 'Backend', skill: 'PostgreSQL' });
-        }
     }
 
     // Pattern 3: Business Rules & Validation Pattern
-    if (/\b(validate|validation|verify|verification|check|rule|permission|role|auth|security|encrypt|token|authorize|restrict|limit|error|fail)\b/i.test(fullText)) {
+    if (/\b(validate|validation|verify|rule|permission|role|auth|security|overtime|calculate|business rules)\b/i.test(fullText)) {
         patternsDetected.push('Business Rules & Validation Pattern');
-        boundaries.push({
-            pattern: 'Business Rules & Security',
-            domain: 'Backend',
-            skill: 'OAuth/Security'
-        });
     }
 
     // Pattern 4: Data Variations Pattern
-    if (/\b(pdf|excel|export|print|report|chart|batch|bulk|single|multiple|upload|file|csv|import|format)\b/i.test(fullText)) {
-        patternsDetected.push('Data Variations & Formatting Pattern');
-        boundaries.push({
-            pattern: 'Data Export & Processing',
-            domain: 'Frontend/Backend',
-            skill: 'jsPDF / Data Processing'
-        });
-    }
-
-    // Pattern 5: Happy Path vs Error / Alternative Flows Pattern
-    if (/\b(scenario|given|when|then|if|else|error|fallback|exception|try|catch|timeout|retry)\b/i.test(fullText)) {
-        patternsDetected.push('Happy vs Alternative Flow Pattern');
-        boundaries.push({
-            pattern: 'Alternative/Error Handling',
-            domain: 'QA/Testing',
-            skill: 'QA Automation'
-        });
-    }
-
-    // Pattern 6: Distinct Acceptance Criteria Lines
-    if (ac) {
-        const acLines = ac.split(/\n|;|\./).map(l => l.trim()).filter(l => l.length > 5);
-        if (acLines.length > 1) {
-            patternsDetected.push('Distinct Acceptance Criteria Pattern');
-        }
+    if (/\b(pdf|excel|export|print|report|batch|bulk|file|csv|import|download)\b/i.test(fullText)) {
+        patternsDetected.push('Data Variations & Reporting Pattern');
     }
 
     return {
@@ -99,244 +351,333 @@ function analyzeRuleBasedBoundaries(story) {
     };
 }
 
-
-// ================= 2. LLM-ASSISTED WORK ITEM GENERATION =================
 /**
- * Uses LLM (or Heuristic LLM fallback) to decompose a User Story into technical Work Items.
- * Combines Title, Description, Acceptance Criteria, and Rule-Based boundaries.
+ * Core User Story Decomposition function.
+ * Generates granular, technically accurate work items with proper domains, skills, hours, and complexity.
  */
-async function generateWorkItemsWithLLM(story, ruleAnalysis) {
-    const parentStoryId = story.story_id || story.id || story.user_story_id || `US-${Date.now()}`;
-    const title = story.title || story.user_story || story.requirement_sentence || 'User Story Requirement';
+function decomposeUserStory(story) {
+    const parentId = story.story_id || story.id || story.user_story_id || 'US-01';
+    const cleanSid = String(parentId).replace(/[^a-zA-Z0-9]/g, '');
+    const parentTitle = story.title || story.user_story || story.requirement_sentence || 'User Story Requirement';
     const description = story.description || '';
     const ac = story.acceptance_criteria || story.ac || '';
+    const epic = story.epic || '';
+    const feature = story.feature || '';
+    const parentPriority = (story.priority || story.priority_tier || 'MEDIUM').toUpperCase();
     const totalPoints = Number(story.story_points) || 5;
+    const fullText = `${parentTitle} ${description} ${ac} ${epic} ${feature}`.toLowerCase();
 
-    // Intelligent Pattern-Aware LLM Generator (Offline / Heuristic Engine)
-    return generatePatternAwareWorkItems(title, description, ac, ruleAnalysis, parentStoryId, totalPoints);
-}
-
-/**
- * Intelligent Pattern-Aware Work Item Generator
- * Constructs domain-specific, technically precise work items based on story intent & rule analysis.
- */
-function generatePatternAwareWorkItems(title, description, ac, ruleAnalysis, parentStoryId, totalPoints) {
-    const text = `${title} ${description} ${ac}`.toLowerCase();
+    const ruleAnalysis = analyzeRuleBasedBoundaries(story);
     const workItems = [];
+    let seq = 1;
 
-    // Helper to generate work item object
-    const createItem = (seq, subTitle, desc, domain, skills, hours, points) => ({
-        work_item_id: `WI-${parentStoryId.replace(/[^a-zA-Z0-9]/g, '')}-${seq}`,
-        story_id: parentStoryId,
-        parent_user_story_id: parentStoryId,
-        parent_story_title: title,
-        title: subTitle,
-        description: desc,
-        domain: domain,
-        required_skills: skills,
-        estimated_hours: hours,
-        story_points: points,
-        status: 'generated'
-    });
+    // Helper to build a work item
+    const makeItem = (subTitle, desc, domainTaxonomy, customSkills = null, hours = 8, points = 2) => {
+        const domain = domainTaxonomy;
+        const requiredDomain = mapToAllocationDomain(domain);
+        const skills = (customSkills && customSkills.length > 0)
+            ? customSkills
+            : detectRequiredSkills(subTitle, desc, ac, domain);
 
-    let itemSeq = 1;
+        const complexity = calculateComplexity(hours, points, `${subTitle} ${desc}`);
+        const priorityScore = calculatePriorityScore(parentPriority, points);
 
-    // Case 1: Password Reset / Auth / Security Stories
-    if (text.includes('password') && (text.includes('reset') || text.includes('change') || text.includes('recover'))) {
-        workItems.push(createItem(
-            itemSeq++,
-            'Backend Development: Password Reset API',
-            'Develop REST endpoint to generate password reset tokens, validate expiration, and update user password securely.',
-            'Backend',
-            ['Node.js', 'REST API', 'PostgreSQL'],
+        return {
+            work_item_id: `WI-${cleanSid}-${seq++}`,
+            story_id: parentId,
+            parent_user_story_id: parentId,
+            parent_story_title: parentTitle,
+            requirement_sentence: story.requirement_sentence || description || parentTitle,
+            epic: epic,
+            feature: feature,
+            title: subTitle,
+            description: desc,
+            domain: domain,
+            required_domain: requiredDomain,
+            work_item_type: domain.includes('Frontend') ? 'UI/UX' : (domain.includes('QA') ? 'Testing' : 'Development'),
+            priority: parentPriority,
+            priority_score: priorityScore,
+            predicted_complexity: complexity,
+            required_skills: skills,
+            story_points: points,
+            estimated_hours: hours,
+            status: 'To Do',
+            created_at: new Date().toISOString()
+        };
+    };
+
+    // -------------------------------------------------------------
+    // SCENARIO 1: Reporting & Document Export Stories
+    // Example: "Generate engineering reports from engineering data" / "Export engineering reports in required format"
+    // -------------------------------------------------------------
+    if (/\b(report|reports|reporting|export|download|pdf|excel|print|analytics|metrics)\b/i.test(fullText)) {
+        // Item 1: Backend Data Query & Aggregation API
+        workItems.push(makeItem(
+            `Data Pipeline & Aggregation API for ${parentTitle}`,
+            `Develop backend REST query endpoints and SQL data aggregators to extract operational engineering records.`,
+            DOMAIN_TAXONOMY.REPORTING,
+            ['SQL', 'Node.js', 'PostgreSQL'],
             12,
             2
         ));
-        workItems.push(createItem(
-            itemSeq++,
-            'Frontend Development: Password Reset Interface',
-            'Design and implement interactive password reset request form and new password submit view with client-side validation.',
-            'Frontend',
-            ['React', 'JavaScript', 'HTML/CSS'],
-            8,
+
+        // Item 2: Frontend Report View & Export Formatting
+        const isExportSpecific = /\b(export|pdf|excel|csv|download|print)\b/i.test(fullText);
+        workItems.push(makeItem(
+            isExportSpecific 
+                ? `Document Export & File Serialization (PDF/Excel) for ${parentTitle}`
+                : `Interactive Report Visualizer & Summary Dashboard for ${parentTitle}`,
+            `Implement client-side data presentation, table filtering, and document export generation (jsPDF/Excel).`,
+            DOMAIN_TAXONOMY.FRONTEND,
+            ['React', 'JavaScript', 'jsPDF', 'HTML/CSS'],
+            10,
             2
         ));
-        workItems.push(createItem(
-            itemSeq++,
-            'Backend Development: Password Reset Email Service',
-            'Configure email notification service to send secure reset token links with expiry headers.',
-            'Backend',
-            ['Node.js', 'Email API', 'OAuth'],
-            8,
-            1
-        ));
-        workItems.push(createItem(
-            itemSeq++,
-            'QA and Testing: Password Reset Automation',
-            'Create Cypress e2e test cases covering successful reset flow and invalid token/expired link scenarios.',
-            'QA/Testing',
+
+        // Item 3: QA Verification & Format Assertion
+        workItems.push(makeItem(
+            `QA Verification & Report Data Accuracy Testing for ${parentTitle}`,
+            `Automated testing to verify numerical data calculations, report boundary limits, and export format compliance.`,
+            DOMAIN_TAXONOMY.QA,
             ['QA Automation', 'Cypress'],
             6,
             1
         ));
-        return workItems;
+        return { success: true, parent_user_story_id: parentId, rule_analysis: ruleAnalysis, work_items: workItems };
     }
 
-    // Case 2: Machine Learning / AI / NLP / Classifier Stories
-    if (/\b(machine learning|nlp|spacy|scikit|svm|classifier|ai service|ml model|training dataset|deep learning)\b/i.test(text)) {
-        workItems.push(createItem(
-            itemSeq++,
-            `AI and Model Development: ${title.includes('NLP') ? 'NLP Spacy' : 'ML'} Model Pipeline`,
-            'Implement model architecture, feature preprocessing vectorizer, and hyperparameter tuning.',
-            'AI',
-            ['Python', 'ML', text.includes('nlp') ? 'NLP' : 'Scikit-Learn'],
-            16,
-            3
+    // -------------------------------------------------------------
+    // SCENARIO 2: Vessel & Equipment Asset Management
+    // Example: "Display vessel-wise equipment and materials" / "Vessel maintenance log"
+    // -------------------------------------------------------------
+    if (/\b(vessel|equipment|materials|material|spare part|machinery|allocation)\b/i.test(fullText)) {
+        const isDisplayFocus = /\b(display|view|show|screen|dashboard|interface)\b/i.test(fullText);
+
+        if (isDisplayFocus) {
+            // Focus is displaying information
+            workItems.push(makeItem(
+                `UI Component: Vessel-wise Equipment & Material View for ${parentTitle}`,
+                `Design and build responsive React data table and card views displaying vessel allocation and equipment status.`,
+                DOMAIN_TAXONOMY.FRONTEND,
+                ['React', 'JavaScript', 'HTML/CSS'],
+                12,
+                2
+            ));
+
+            workItems.push(makeItem(
+                `Backend REST API: Vessel Equipment Retrieval & Filtering for ${parentTitle}`,
+                `Develop secure REST endpoints with query filters to retrieve vessel equipment and inventory mappings.`,
+                DOMAIN_TAXONOMY.ENGINEERING_ASSET,
+                ['Node.js', 'SQL', 'PostgreSQL'],
+                10,
+                2
+            ));
+        } else {
+            // Focus is data processing / updating equipment allocation
+            workItems.push(makeItem(
+                `Database Persistence & Schema: Equipment Allocation Model for ${parentTitle}`,
+                `Design relational schemas, foreign keys, and indexes for vessel-to-equipment inventory mapping.`,
+                DOMAIN_TAXONOMY.DATABASE,
+                ['SQL', 'PostgreSQL'],
+                10,
+                2
+            ));
+
+            workItems.push(makeItem(
+                `Backend Logic: Vessel Equipment Allocation Handler for ${parentTitle}`,
+                `Build transactional logic, quantity validation, and status transitions for vessel assets.`,
+                DOMAIN_TAXONOMY.ENGINEERING_ASSET,
+                ['Node.js', 'JavaScript', 'SQL'],
+                12,
+                2
+            ));
+
+            workItems.push(makeItem(
+                `Frontend Interactive UI: Vessel Equipment Selection & Form for ${parentTitle}`,
+                `Build equipment selector components, search dialogs, and allocation confirmation views.`,
+                DOMAIN_TAXONOMY.FRONTEND,
+                ['React', 'JavaScript', 'HTML/CSS'],
+                8,
+                1
+            ));
+        }
+
+        workItems.push(makeItem(
+            `QA Integration & Verification for ${parentTitle}`,
+            `Automate test scenarios verifying vessel equipment linkage, boundary limits, and error handling.`,
+            DOMAIN_TAXONOMY.QA,
+            ['QA Automation', 'Cypress'],
+            6,
+            1
         ));
-        workItems.push(createItem(
-            itemSeq++,
-            'Backend Development: ML Inference REST API',
-            'Expose model prediction endpoint with input JSON validation and response serialization.',
-            'Backend',
-            ['Python', 'Node.js', 'REST API'],
+        return { success: true, parent_user_story_id: parentId, rule_analysis: ruleAnalysis, work_items: workItems };
+    }
+
+    // -------------------------------------------------------------
+    // SCENARIO 3: Labour, Cost & Overtime Calculations
+    // Example: "Calculate overtime based on business rules" / "Labor cost allocation"
+    // -------------------------------------------------------------
+    if (/\b(overtime|wage|rate|cost|costing|hour|working hours|labour|labor|timesheet|payroll)\b/i.test(fullText)) {
+        // Item 1: Business Logic Engine
+        workItems.push(makeItem(
+            `Business Rules Calculation Engine: Overtime & Cost Logic for ${parentTitle}`,
+            `Implement business rule algorithms for overtime multipliers, shift allowances, and cost threshold checks.`,
+            DOMAIN_TAXONOMY.LABOUR_COST,
+            ['Node.js', 'JavaScript', 'SQL'],
+            14,
+            2
+        ));
+
+        // Item 2: Database Schema & Transaction Model
+        workItems.push(makeItem(
+            `Database Schema & Audit Model: Hours & Cost Records for ${parentTitle}`,
+            `Create tables and stored queries for historical rate tracking, timestamps, and auditable calculations.`,
+            DOMAIN_TAXONOMY.DATABASE,
+            ['SQL', 'PostgreSQL'],
             10,
             2
         ));
-        workItems.push(createItem(
-            itemSeq++,
-            'Frontend Development: Model Evaluation Dashboard',
-            'Build frontend dashboard component to render prediction scores, model status, and confidence metrics.',
-            'Frontend',
+
+        // Item 3: Frontend Time/Cost Review View
+        workItems.push(makeItem(
+            `Frontend UI: Overtime Review & Calculation Breakdown for ${parentTitle}`,
+            `Develop review screen displaying hours worked, rule-applied breakdowns, and manager sign-off controls.`,
+            DOMAIN_TAXONOMY.FRONTEND,
+            ['React', 'JavaScript', 'HTML/CSS'],
+            8,
+            1
+        ));
+
+        // Item 4: QA Edge-Case & Math Validation Testing
+        workItems.push(makeItem(
+            `QA Math & Boundary Verification Testing for ${parentTitle}`,
+            `Execute comprehensive test cases for standard, holiday, weekend rates, and edge-case calculation verification.`,
+            DOMAIN_TAXONOMY.QA,
+            ['QA Automation', 'Cypress'],
+            6,
+            1
+        ));
+        return { success: true, parent_user_story_id: parentId, rule_analysis: ruleAnalysis, work_items: workItems };
+    }
+
+    // -------------------------------------------------------------
+    // SCENARIO 4: Work Order Management & Materials Requisition
+    // Example: "Add materials required for a work order" / "Approve or reject work orders"
+    // -------------------------------------------------------------
+    if (/\b(work order|repair|defect|materials required|maintenance request|supervisor approval)\b/i.test(fullText)) {
+        workItems.push(makeItem(
+            `Backend REST API: Work Order & Materials Management for ${parentTitle}`,
+            `Develop REST services for work order lifecycle, item validation, and status transitions.`,
+            DOMAIN_TAXONOMY.ENGINEERING_ASSET,
+            ['Node.js', 'JavaScript', 'SQL', 'PostgreSQL'],
+            14,
+            2
+        ));
+
+        workItems.push(makeItem(
+            `Frontend Interface: Work Order Details & Materials Requisition for ${parentTitle}`,
+            `Create interactive forms for adding required materials, quantity pickers, and approval actions.`,
+            DOMAIN_TAXONOMY.FRONTEND,
+            ['React', 'JavaScript', 'HTML/CSS'],
+            10,
+            2
+        ));
+
+        workItems.push(makeItem(
+            `QA Automation: Work Order Workflow & State Transitions for ${parentTitle}`,
+            `Automated test suite verifying material reservation, authorization barriers, and status persistence.`,
+            DOMAIN_TAXONOMY.QA,
+            ['QA Automation', 'Cypress'],
+            6,
+            1
+        ));
+        return { success: true, parent_user_story_id: parentId, rule_analysis: ruleAnalysis, work_items: workItems };
+    }
+
+    // -------------------------------------------------------------
+    // SCENARIO 5: AI / Machine Learning / NLP Stories
+    // -------------------------------------------------------------
+    if (/\b(machine learning|nlp|spacy|scikit|svm|classifier|ai service|model inference|prediction)\b/i.test(fullText)) {
+        workItems.push(makeItem(
+            `AI Model Pipeline & Inference Architecture for ${parentTitle}`,
+            `Implement model feature extraction vectorizer, trained inference pipeline, and confidence evaluation.`,
+            DOMAIN_TAXONOMY.AI_ML,
+            ['Python', 'ML', fullText.includes('nlp') ? 'NLP' : 'Scikit-Learn'],
+            16,
+            3
+        ));
+
+        workItems.push(makeItem(
+            `Backend REST API: AI Model Prediction Endpoint for ${parentTitle}`,
+            `Develop high-throughput REST endpoint exposing model inference with input validation and audit logging.`,
+            DOMAIN_TAXONOMY.API_INTEGRATION,
+            ['Python', 'Node.js', 'JavaScript'],
+            10,
+            2
+        ));
+
+        workItems.push(makeItem(
+            `Frontend Dashboard: AI Prediction & Confidence Display for ${parentTitle}`,
+            `Build visual prediction cards, confidence badges, and actionable suggestion interfaces.`,
+            DOMAIN_TAXONOMY.FRONTEND,
             ['React', 'JavaScript', 'Tailwind'],
             8,
             1
         ));
-        return workItems;
+        return { success: true, parent_user_story_id: parentId, rule_analysis: ruleAnalysis, work_items: workItems };
     }
 
-    // Case 3: Work Order / Repair / Defect Management Stories
-    if (/\b(defect|repair|work order|vessel|equipment|overtime|labor|labour|cost|costing|approve|supervisor)\b/i.test(text)) {
-        workItems.push(createItem(
-            itemSeq++,
-            'Backend Development: API & Business Logic',
-            'Build transactional database queries, status state transitions, and business rule validations.',
-            'Backend',
-            ['JavaScript', 'SQL', 'Node.js', 'PostgreSQL'],
-            14,
-            2
-        ));
-        workItems.push(createItem(
-            itemSeq++,
-            'Frontend Development: User Interface & Component View',
-            'Develop responsive React UI component with data tables, action dialogs, and validation prompts.',
-            'Frontend',
-            ['React', 'JavaScript', 'HTML/CSS'],
-            10,
-            2
-        ));
-        if (text.includes('export') || text.includes('pdf') || text.includes('excel') || text.includes('print')) {
-            workItems.push(createItem(
-                itemSeq++,
-                'Frontend Development: Report Export & Formatting',
-                'Generate formatted PDF/Excel document exports for data records.',
-                'Frontend',
-                ['React', 'jsPDF', 'JavaScript'],
-                6,
-                1
-            ));
-        }
-        workItems.push(createItem(
-            itemSeq++,
-            'QA and Testing: Integration & Verification',
-            'Execute test scripts for positive workflows, edge cases, and permission checks.',
-            'QA/Testing',
-            ['QA Automation', 'Cypress'],
-            6,
-            1
-        ));
-        return workItems;
-    }
-
-    // Case 4: General Software Feature Decomposition (Rule-Based Fallback)
+    // -------------------------------------------------------------
+    // SCENARIO 6: General Agile Software Feature (Deterministic Decomposition)
+    // -------------------------------------------------------------
     const baseHoursPerPoint = 6;
     const totalHours = totalPoints * baseHoursPerPoint;
 
-    workItems.push(createItem(
-        itemSeq++,
-        'Backend Development: Server API & Database Logic',
-        `Build REST endpoints, service controller logic, and database schemas for backend handling.`,
-        'Backend',
-        ['Node.js', 'JavaScript', 'SQL', 'PostgreSQL'],
-        Math.round(totalHours * 0.45),
+    // 1. Backend Service
+    workItems.push(makeItem(
+        `Backend REST API & Business Logic: ${parentTitle}`,
+        `Implement service controller, validation schemas, and REST endpoints for ${parentTitle}.`,
+        DOMAIN_TAXONOMY.BACKEND,
+        ['Node.js', 'JavaScript', 'SQL'],
+        Math.max(8, Math.round(totalHours * 0.45)),
         Math.max(1, Math.round(totalPoints * 0.4))
     ));
 
-    workItems.push(createItem(
-        itemSeq++,
-        'Frontend Development: User Interface & Views',
-        `Design and implement interactive web UI view and state management for frontend users.`,
-        'Frontend',
+    // 2. Frontend View
+    workItems.push(makeItem(
+        `Frontend UI Component & State Management: ${parentTitle}`,
+        `Design interactive interface components, form handling, and user feedback views for ${parentTitle}.`,
+        DOMAIN_TAXONOMY.FRONTEND,
         ['React', 'JavaScript', 'HTML/CSS'],
-        Math.round(totalHours * 0.35),
+        Math.max(6, Math.round(totalHours * 0.35)),
         Math.max(1, Math.round(totalPoints * 0.4))
     ));
 
-    workItems.push(createItem(
-        itemSeq++,
-        'QA and Testing: Integration & Automated Testing',
-        `Write automated unit and end-to-end integration tests to verify acceptance criteria.`,
-        'QA/Testing',
+    // 3. QA Testing
+    workItems.push(makeItem(
+        `QA Integration & Automated Verification: ${parentTitle}`,
+        `Develop automated test cases verifying functional acceptance criteria and edge cases for ${parentTitle}.`,
+        DOMAIN_TAXONOMY.QA,
         ['QA Automation', 'Cypress'],
-        Math.round(totalHours * 0.20),
+        Math.max(4, Math.round(totalHours * 0.20)),
         Math.max(1, Math.round(totalPoints * 0.2))
     ));
 
-    return workItems;
-}
-
-
-
-// ================= MAIN DECOMPOSITION HANDLER =================
-/**
- * Main Hybrid User Story Decomposition function.
- * Connects 1. Rule-Based Layer + 2. LLM Generation Layer.
- */
-async function decomposeUserStory(story) {
-    // Step 1: Rule-Based Decomposition
-    const ruleAnalysis = analyzeRuleBasedBoundaries(story);
-
-    // Step 2: LLM-Assisted Generation
-    const workItems = await generateWorkItemsWithLLM(story, ruleAnalysis);
-
     return {
         success: true,
-        parent_user_story_id: story.story_id || story.id || story.user_story_id,
+        parent_user_story_id: parentId,
         rule_analysis: ruleAnalysis,
         work_items: workItems
     };
 }
 
-function extractDomainAndSkills(titleOrText) {
-    const text = (titleOrText || '').toLowerCase();
-
-    if (/\b(machine learning|nlp|spacy|scikit|svm|deep learning|neural network|tensorflow|pytorch|classifier|ai service|ml model|training dataset)\b/i.test(text)) {
-        return { domain: 'AI', required_skills: ['Python', 'ML', 'Scikit-Learn'] };
-    }
-    if (/\b(enter|input|form|ui|ux|frontend|react|dashboard|dark mode|css|tailwind|export|pdf|excel|component|layout|view|display|screen|button|render)\b/i.test(text)) {
-        return { domain: 'Frontend', required_skills: ['JavaScript', 'React', 'Tailwind'] };
-    }
-    if (/\b(test|qa|cypress|selenium|unit test|jest|audit check|verification|verify|validation|validate)\b/i.test(text)) {
-        return { domain: 'QA', required_skills: ['QA Automation', 'Cypress'] };
-    }
-    if (/\b(devops|docker|kubernetes|aws|cloud|ci\/cd|pipeline|deploy|nginx|dockerfile)\b/i.test(text)) {
-        return { domain: 'DevOps', required_skills: ['Docker', 'DevOps', 'AWS'] };
-    }
-    return { domain: 'Backend', required_skills: ['JavaScript', 'Node.js', 'PostgreSQL'] };
-}
-
 module.exports = {
+    DOMAIN_TAXONOMY,
+    classifyDomain,
+    detectRequiredSkills,
+    calculateComplexity,
+    calculatePriorityScore,
+    mapToAllocationDomain,
     analyzeRuleBasedBoundaries,
-    generateWorkItemsWithLLM,
-    decomposeUserStory,
-    extractDomainAndSkills
+    decomposeUserStory
 };
