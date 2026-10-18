@@ -8,6 +8,9 @@
  * 4. Integration with PostgreSQL work_items table and Resource Management allocation algorithm
  */
 
+const axios = require('axios');
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:5001/predict';
+
 // ================= 1. DOMAIN TAXONOMY & NORMALIZATION =================
 const DOMAIN_TAXONOMY = {
     REPORTING: 'Reporting/Analytics',
@@ -308,6 +311,100 @@ function calculatePriorityScore(priorityStr, storyPoints) {
     return Math.min(100, Math.max(10, base + pts * 2));
 }
 
+/**
+ * Predicts complexity for a single work item using the ML service (ml-service/app.py).
+ * Uses priority, estimated_hours, and story_points.
+ * Safely falls back to calculateComplexity() if ML service fails, times out, or returns invalid values.
+ */
+async function predictComplexityWithML(priority, hours, storyPoints, storyId = 'WI-01', fallbackText = '') {
+    const fallbackComplexity = calculateComplexity(hours, storyPoints, fallbackText);
+    const serviceUrl = process.env.ML_SERVICE_URL || ML_SERVICE_URL;
+
+    try {
+        const payload = {
+            tasks: [{
+                story_id: String(storyId || 'WI-01'),
+                priority: String(priority || 'MEDIUM').toUpperCase(),
+                estimated_hours: Number(hours) || 8,
+                story_points: Number(storyPoints) || 2
+            }]
+        };
+
+        const response = await axios.post(serviceUrl, payload, {
+            timeout: 2500,
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const pred = response?.data?.predictions?.[0];
+        if (pred && pred.predicted_complexity) {
+            const normalized = String(pred.predicted_complexity).toUpperCase();
+            if (['HIGH', 'MEDIUM', 'LOW'].includes(normalized)) {
+                return normalized;
+            }
+        }
+    } catch (err) {
+        // Fallback safely to rule-based prediction
+    }
+
+    return fallbackComplexity;
+}
+
+/**
+ * Batch-predicts complexity for an array of work items using the existing ML service.
+ * Handles missing values, network timeouts, and maps predicted_complexity to HIGH, MEDIUM, or LOW.
+ * Falls back to calculateComplexity() on any ML service failure.
+ */
+async function predictBatchComplexityWithML(workItems) {
+    if (!Array.isArray(workItems) || workItems.length === 0) return workItems;
+
+    const serviceUrl = process.env.ML_SERVICE_URL || ML_SERVICE_URL;
+
+    try {
+        const tasks = workItems.map(item => ({
+            story_id: String(item.work_item_id || item.story_id || 'WI-01'),
+            priority: String(item.priority || 'MEDIUM').toUpperCase(),
+            estimated_hours: Number(item.estimated_hours) || 8,
+            story_points: Number(item.story_points) || 2
+        }));
+
+        const response = await axios.post(serviceUrl, { tasks }, {
+            timeout: 3000,
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (response && response.data && Array.isArray(response.data.predictions)) {
+            const predMap = new Map();
+            for (const p of response.data.predictions) {
+                if (p && p.story_id && p.predicted_complexity) {
+                    predMap.set(String(p.story_id), String(p.predicted_complexity).toUpperCase());
+                }
+            }
+
+            for (const item of workItems) {
+                const mlComp = predMap.get(String(item.work_item_id));
+                if (mlComp && ['HIGH', 'MEDIUM', 'LOW'].includes(mlComp)) {
+                    item.predicted_complexity = mlComp;
+                }
+            }
+        }
+    } catch (err) {
+        console.warn(`[DecompositionEngine] ML service call failed (${err.message}). Using rule-based calculateComplexity fallback.`);
+    }
+
+    // Safety check: ensure every work item has a valid complexity
+    for (const item of workItems) {
+        if (!item.predicted_complexity || !['HIGH', 'MEDIUM', 'LOW'].includes(item.predicted_complexity)) {
+            item.predicted_complexity = calculateComplexity(
+                item.estimated_hours,
+                item.story_points,
+                `${item.title || ''} ${item.description || ''}`
+            );
+        }
+    }
+
+    return workItems;
+}
+
 // ================= 4. AGILE DECOMPOSITION PIPELINE =================
 /**
  * Analyzes rule-based boundaries (CRUD, Workflow, Data, Validation).
@@ -355,7 +452,7 @@ function analyzeRuleBasedBoundaries(story) {
  * Core User Story Decomposition function.
  * Generates granular, technically accurate work items with proper domains, skills, hours, and complexity.
  */
-function decomposeUserStory(story) {
+async function decomposeUserStory(story) {
     const parentId = story.story_id || story.id || story.user_story_id || 'US-01';
     const cleanSid = String(parentId).replace(/[^a-zA-Z0-9]/g, '');
     const parentTitle = story.title || story.user_story || story.requirement_sentence || 'User Story Requirement';
@@ -371,7 +468,7 @@ function decomposeUserStory(story) {
     const workItems = [];
     let seq = 1;
 
-    // Helper to build a work item
+    // Helper to build a work item with rule-based complexity as default/fallback
     const makeItem = (subTitle, desc, domainTaxonomy, customSkills = null, hours = 8, points = 2) => {
         const domain = domainTaxonomy;
         const requiredDomain = mapToAllocationDomain(domain);
@@ -403,6 +500,17 @@ function decomposeUserStory(story) {
             estimated_hours: hours,
             status: 'To Do',
             created_at: new Date().toISOString()
+        };
+    };
+
+    // Helper to finalize work items using ML service predictions with rule-based fallback
+    const finalizeResult = async (items) => {
+        await predictBatchComplexityWithML(items);
+        return {
+            success: true,
+            parent_user_story_id: parentId,
+            rule_analysis: ruleAnalysis,
+            work_items: items
         };
     };
 
@@ -443,7 +551,7 @@ function decomposeUserStory(story) {
             6,
             1
         ));
-        return { success: true, parent_user_story_id: parentId, rule_analysis: ruleAnalysis, work_items: workItems };
+        return await finalizeResult(workItems);
     }
 
     // -------------------------------------------------------------
@@ -510,7 +618,7 @@ function decomposeUserStory(story) {
             6,
             1
         ));
-        return { success: true, parent_user_story_id: parentId, rule_analysis: ruleAnalysis, work_items: workItems };
+        return await finalizeResult(workItems);
     }
 
     // -------------------------------------------------------------
@@ -557,7 +665,7 @@ function decomposeUserStory(story) {
             6,
             1
         ));
-        return { success: true, parent_user_story_id: parentId, rule_analysis: ruleAnalysis, work_items: workItems };
+        return await finalizeResult(workItems);
     }
 
     // -------------------------------------------------------------
@@ -591,7 +699,7 @@ function decomposeUserStory(story) {
             6,
             1
         ));
-        return { success: true, parent_user_story_id: parentId, rule_analysis: ruleAnalysis, work_items: workItems };
+        return await finalizeResult(workItems);
     }
 
     // -------------------------------------------------------------
@@ -624,7 +732,7 @@ function decomposeUserStory(story) {
             8,
             1
         ));
-        return { success: true, parent_user_story_id: parentId, rule_analysis: ruleAnalysis, work_items: workItems };
+        return await finalizeResult(workItems);
     }
 
     // -------------------------------------------------------------
@@ -663,12 +771,7 @@ function decomposeUserStory(story) {
         Math.max(1, Math.round(totalPoints * 0.2))
     ));
 
-    return {
-        success: true,
-        parent_user_story_id: parentId,
-        rule_analysis: ruleAnalysis,
-        work_items: workItems
-    };
+    return await finalizeResult(workItems);
 }
 
 module.exports = {
@@ -679,5 +782,7 @@ module.exports = {
     calculatePriorityScore,
     mapToAllocationDomain,
     analyzeRuleBasedBoundaries,
-    decomposeUserStory
+    decomposeUserStory,
+    predictComplexityWithML,
+    predictBatchComplexityWithML
 };
