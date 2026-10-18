@@ -183,7 +183,7 @@ app.get('/api/projects/:projectId/sprints', changeRequestController.getProjectSp
 // Key Skills: JavaScript, React, Node.js, Express, SQL, PostgreSQL, Cypress, Markdown
 // ==============================================================================
 function extractDomainAndSkills(titleOrText, description = '') {
-    // Extract unified text from title and description (supports string or work-item object)
+    // Extract unified text and item type from title, task object, or description
     let fullText = '';
     let itemType = '';
     if (titleOrText && typeof titleOrText === 'object') {
@@ -199,19 +199,50 @@ function extractDomainAndSkills(titleOrText, description = '') {
         fullText = `${titleOrText || ''} ${description || ''}`.trim();
     }
     const text = fullText.toLowerCase();
+    const cleanFullText = fullText.trim();
 
-    // --------------------------------------------------------------------------
-    // 1. Documentation Domain Identification
-    // Work Item Types / Prefixes: Technical & User Documentation, Documentation
-    // Keywords: documentation, technical documentation, user documentation, user manual,
-    //           release notes, technical guide, api documentation, readme, wiki, markdown
-    // Required Skills: Markdown, Technical Writing
-    // --------------------------------------------------------------------------
-    const isDoc = itemType === 'documentation'
-        || /^(technical & user documentation|documentation)\b/i.test(fullText.trim())
+    // ==========================================================================
+    // 1. DIRECT WORK-ITEM TYPE & TITLE PREFIX MATCHING
+    // Suitable for standard generated work-item titles and explicit deliverable formats
+    // ==========================================================================
+
+    // Frontend: UI/UX, Frontend
+    const isFrontendPrefix = itemType === 'ui/ux' || itemType === 'frontend'
+        || /^(?:ui\/ux|frontend|to build frontend)\b/i.test(cleanFullText);
+
+    // Database: Database Schema & Logic, Database
+    const isDatabasePrefix = itemType === 'database'
+        || /^(?:database schema & logic|database schema|database|to implement database schema)\b/i.test(cleanFullText);
+
+    // QA/Testing: QA Integration & Testing, Testing, QA
+    const isQAPrefix = itemType === 'testing' || itemType === 'qa'
+        || /^(?:qa integration & testing|testing|qa|to conduct security.*testing)\b/i.test(cleanFullText);
+
+    // Documentation: Technical & User Documentation, Documentation
+    const isDocPrefix = itemType === 'documentation' || itemType === 'doc'
+        || /^(?:technical & user documentation|documentation)\b/i.test(cleanFullText);
+
+    // DevOps: DevOps, Infrastructure, CI/CD
+    const isDevOpsPrefix = itemType === 'devops' || itemType === 'infrastructure' || itemType === 'ci/cd'
+        || /^(?:devops|infrastructure|ci\/cd|to configure devops)\b/i.test(cleanFullText);
+
+    // AI/ML: AI, ML, AI/ML
+    const isAiPrefix = itemType === 'ai' || itemType === 'ml' || itemType === 'ai/ml'
+        || /^(?:ai\/ml|to develop machine learning|machine learning)\b/i.test(cleanFullText);
+
+    // Backend/API: API/Backend, Backend, API
+    const isBackendPrefix = itemType === 'api/backend' || itemType === 'backend' || itemType === 'api'
+        || /^(?:api\/backend|backend\/api|backend|api|to implement core business api)\b/i.test(cleanFullText);
+
+    // ==========================================================================
+    // 2. DOMAIN RESOLUTION (Prefix Priority followed by Comprehensive Keywords)
+    // ==========================================================================
+
+    // 1. Documentation Domain
+    const isDoc = isDocPrefix
         || /\b(technical & user documentation|documentation|user manual|release notes|technical guide|api documentation|user guide|readme|wiki|markdown|system documentation|specifications document)\b/i.test(text);
 
-    if (isDoc) {
+    if (isDoc && !isFrontendPrefix && !isBackendPrefix && !isDatabasePrefix && !isQAPrefix && !isDevOpsPrefix && !isAiPrefix) {
         const skillsSet = new Set(['Markdown']);
         if (/\b(technical guide|user manual|specifications|guide|writing|document)\b/i.test(text)) {
             skillsSet.add('Technical Writing');
@@ -220,87 +251,44 @@ function extractDomainAndSkills(titleOrText, description = '') {
         return { domain: 'Documentation', required_domain: 'Documentation', skills, required_skills: skills };
     }
 
-    // --------------------------------------------------------------------------
-    // 2. Database Domain Identification
-    // Work Item Types / Prefixes: Database Schema & Logic, Database
-    // Keywords: database schema & logic, database schema, migration, postgresql,
-    //           postgres, neon postgresql, relational database, sql query, ddl,
-    //           table schema, data persistence, schema design, stored procedure
-    // Required Skills: PostgreSQL, SQL
-    // --------------------------------------------------------------------------
-    const isDatabase = itemType === 'database'
-        || /^(database schema & logic|database)\b/i.test(fullText.trim())
+    // 2. Database Domain
+    const isDatabase = isDatabasePrefix
         || /\b(database schema & logic|database schema|table schema|relational database|data persistence|schema migration|ddl|sql query|stored procedure|database design)\b/i.test(text)
         || (/\b(postgresql|postgres|neon postgresql)\b/i.test(text) && !/\b(express|rest api|api endpoint)\b/i.test(text));
 
-    if (isDatabase) {
+    if (isDatabase && !isFrontendPrefix && !isBackendPrefix && !isQAPrefix && !isDevOpsPrefix && !isAiPrefix && !isDocPrefix) {
         const skillsSet = new Set(['PostgreSQL', 'SQL']);
         const skills = Array.from(skillsSet);
         return { domain: 'Database', required_domain: 'Database', skills, required_skills: skills };
     }
 
-    // --------------------------------------------------------------------------
-    // 3. QA / Testing Domain Identification
-    // Work Item Types / Prefixes: QA Integration & Testing, Testing, QA
-    // Keywords: qa integration & testing, testing, qa, test case, test scenario,
-    //           regression testing, integration testing, unit testing, unit test,
-    //           end-to-end, e2e, bug report, test automation, cypress, jest, selenium,
-    //           assertion, audit check, verification, validation
-    // Required Skills: Cypress, QA Automation, Jest, Selenium, Manual Testing
-    // --------------------------------------------------------------------------
-    const isQA = itemType === 'testing' || itemType === 'qa'
-        || /^(qa integration & testing|testing|qa)\b/i.test(fullText.trim())
-        || /\b(qa integration & testing|test case|test scenario|regression testing|integration testing|unit testing|unit test|end-to-end|e2e|bug report|test automation|cypress|jest|selenium|assertion|audit check)\b/i.test(text)
+    // 3. QA / Testing Domain
+    const isQA = isQAPrefix
+        || /\b(qa integration & testing|qa integration|test case|test scenario|regression testing|integration testing|unit testing|unit test|end-to-end|e2e|bug report|test automation|cypress|jest|selenium|assertion|audit check)\b/i.test(text)
         || (/\b(qa|testing|test|verification|verify|validation|validate)\b/i.test(text) && !/\b(input validation|form validation)\b/i.test(text));
 
-    if (isQA) {
-        const skillsSet = new Set();
-        if (/\bcypress\b/i.test(text)) {
-            skillsSet.add('Cypress');
-        }
+    if (isQA && !isFrontendPrefix && !isBackendPrefix && !isDatabasePrefix && !isDevOpsPrefix && !isAiPrefix && !isDocPrefix) {
+        const skillsSet = new Set(['Cypress', 'QA Automation']);
         if (/\b(jest|unit testing|unit test|assertion)\b/i.test(text)) {
             skillsSet.add('Jest');
         }
         if (/\bselenium\b/i.test(text)) {
             skillsSet.add('Selenium');
         }
-        if (/\b(test automation|automation|regression testing|integration testing|end-to-end|e2e|qa integration)\b/i.test(text)) {
-            skillsSet.add('QA Automation');
-        }
         if (/\b(test case|test scenario|bug report|manual)\b/i.test(text)) {
             skillsSet.add('Manual Testing');
-        }
-        if (!skillsSet.has('Cypress') && !skillsSet.has('QA Automation') && !skillsSet.has('Jest') && !skillsSet.has('Selenium') && !skillsSet.has('Manual Testing')) {
-            skillsSet.add('Cypress');
-            skillsSet.add('QA Automation');
-        } else if (!skillsSet.has('Cypress') && (itemType === 'testing' || /qa integration & testing|testing:/i.test(fullText))) {
-            skillsSet.add('Cypress');
         }
         const skills = Array.from(skillsSet);
         return { domain: 'QA/Testing', required_domain: 'QA/Testing', skills, required_skills: skills };
     }
 
-    // --------------------------------------------------------------------------
-    // 4. DevOps & Infrastructure Domain Identification
-    // Work Item Types / Prefixes: DevOps, Infrastructure, CI/CD
-    // Keywords: devops, github actions, continuous integration, continuous deployment,
-    //           ci/cd, environment variables, docker, container, kubernetes,
-    //           deployment, hosting, aws, nginx, dockerfile, pipeline
-    // Required Skills: DevOps, Docker, CI/CD, AWS
-    // --------------------------------------------------------------------------
-    const isDevOps = itemType === 'devops'
-        || /^(devops|infrastructure|ci\/cd)\b/i.test(fullText.trim())
+    // 4. DevOps & Infrastructure Domain
+    const isDevOps = isDevOpsPrefix
         || /\b(devops|github actions|continuous integration|continuous deployment|ci\/cd|environment variables|docker|container|kubernetes|deployment|hosting|aws|nginx|dockerfile)\b/i.test(text)
         || (/\b(pipeline|workflow|build)\b/i.test(text) && /\b(deploy|ci|cd|release|infra|cloud|docker|git|env)\b/i.test(text));
 
-    if (isDevOps) {
-        const skillsSet = new Set(['DevOps']);
-        if (/\b(docker|container|dockerfile)\b/i.test(text)) {
-            skillsSet.add('Docker');
-        }
-        if (/\b(ci\/cd|github actions|continuous integration|continuous deployment|workflow|pipeline|build)\b/i.test(text)) {
-            skillsSet.add('CI/CD');
-        }
+    if (isDevOps && !isFrontendPrefix && !isBackendPrefix && !isDatabasePrefix && !isQAPrefix && !isAiPrefix && !isDocPrefix) {
+        const skillsSet = new Set(['DevOps', 'Docker', 'CI/CD']);
         if (/\b(aws|cloud|hosting|kubernetes|nginx|environment variables)\b/i.test(text)) {
             skillsSet.add('AWS');
         }
@@ -308,25 +296,13 @@ function extractDomainAndSkills(titleOrText, description = '') {
         return { domain: 'DevOps', required_domain: 'DevOps', skills, required_skills: skills };
     }
 
-    // --------------------------------------------------------------------------
-    // 5. AI / Machine Learning Domain Identification
-    // Work Item Types / Prefixes: AI, ML, AI/ML
-    // Keywords: machine learning, nlp, spacy, scikit-learn, svm, deep learning,
-    //           neural network, tensorflow, pytorch, classifier, ai service,
-    //           ml model, training dataset, prediction, predict, model training,
-    //           feature extraction, classification, inference, model integration,
-    //           data preprocessing, pandas, random forest
-    // Required Skills: Python, ML, NLP, Scikit-Learn, TensorFlow, PyTorch, Pandas
-    // --------------------------------------------------------------------------
-    const isAi = itemType === 'ai' || itemType === 'ai/ml' || itemType === 'ml'
+    // 5. AI / Machine Learning Domain
+    const isAi = isAiPrefix
         || /\b(machine learning|nlp|spacy|scikit-learn|scikit|svm|deep learning|neural network|tensorflow|pytorch|classifier|ai service|ml model|training dataset|prediction|predict|model training|feature extraction|classification|inference|model integration|data preprocessing|pandas|random forest)\b/i.test(text)
         || (/\b(ml|ai)\b/i.test(text) && !text.includes('email') && !text.includes('detail') && !text.includes('main') && !text.includes('gain') && !text.includes('chain'));
 
-    if (isAi) {
-        const skillsSet = new Set(['Python']);
-        if (/\b(machine learning|ml|ml model|model training|training dataset|inference|model integration|prediction|predict)\b/i.test(text)) {
-            skillsSet.add('ML');
-        }
+    if (isAi && !isFrontendPrefix && !isBackendPrefix && !isDatabasePrefix && !isQAPrefix && !isDevOpsPrefix && !isDocPrefix) {
+        const skillsSet = new Set(['Python', 'ML']);
         if (/\b(nlp|spacy)\b/i.test(text)) {
             skillsSet.add('NLP');
         }
@@ -342,27 +318,15 @@ function extractDomainAndSkills(titleOrText, description = '') {
         if (/\b(pandas|data preprocessing|feature extraction)\b/i.test(text)) {
             skillsSet.add('Pandas');
         }
-        if (skillsSet.size === 1) {
-            skillsSet.add('ML');
-        }
         const skills = Array.from(skillsSet);
         return { domain: 'AI/ML', required_domain: 'AI/ML', skills, required_skills: skills };
     }
 
-    // --------------------------------------------------------------------------
-    // 6. Frontend Domain Identification
-    // Work Item Types / Prefixes: UI/UX, Frontend
-    // Keywords: ui/ux, frontend, react, jsx, ui, ux, dashboard, dark mode, css,
-    //           tailwind css, responsive, navigation, modal, dropdown, table,
-    //           chart, progress bar, drag and drop, form validation,
-    //           react component, layout, button, screen, render
-    // Required Skills: JavaScript, React, HTML/CSS, Tailwind CSS
-    // --------------------------------------------------------------------------
-    const isFrontend = itemType === 'ui/ux' || itemType === 'frontend'
-        || /^(ui\/ux|frontend)\b/i.test(fullText.trim())
+    // 6. Frontend Domain
+    const isFrontend = isFrontendPrefix
         || /\b(ui\/ux|frontend|react|jsx|ui|ux|dashboard|dark mode|css|tailwind css|tailwind|responsive|navigation|modal|dropdown|table|chart|progress bar|drag and drop|form validation|react component|layout|button|screen|render|component|display|view|export|pdf|excel|input|enter|form)\b/i.test(text);
 
-    if (isFrontend) {
+    if (isFrontend && !isBackendPrefix && !isDatabasePrefix && !isQAPrefix && !isDevOpsPrefix && !isAiPrefix && !isDocPrefix) {
         const skillsSet = new Set(['JavaScript', 'React']);
         if (/\b(css|html|responsive|form validation|layout|modal|dropdown|navigation|screen|render)\b/i.test(text)) {
             skillsSet.add('HTML/CSS');
@@ -374,41 +338,54 @@ function extractDomainAndSkills(titleOrText, description = '') {
         return { domain: 'Frontend', required_domain: 'Frontend', skills, required_skills: skills };
     }
 
-    // --------------------------------------------------------------------------
-    // 7. Backend / API Domain Identification
-    // Work Item Types / Prefixes: API/Backend, Backend, API
-    // Keywords: api/backend, backend, rest api, api endpoint, express, middleware,
-    //           request, response, crud, jwt, bcrypt, authentication, authorization,
-    //           server, node.js, api, endpoint, oauth, microservices
-    // Business workflows: defect, repair, vessel, equipment, overtime, labor,
-    //                     labour, history, audit, version, status, approve, reject,
-    //                     permission, role, user, login, auth, cost, costing
-    // Required Skills: Node.js, Express, JavaScript, SQL
-    // --------------------------------------------------------------------------
-    const isBackend = itemType === 'api/backend' || itemType === 'backend' || itemType === 'api'
-        || /^(api\/backend|backend|api)\b/i.test(fullText.trim())
+    // 7. Backend / API Domain
+    const isBackend = isBackendPrefix
         || /\b(api\/backend|backend|rest api|api endpoint|express|middleware|request|response|crud|jwt|bcrypt|authentication|authorization|server|query|node\.js|node|api|endpoint|oauth|defect|repair|vessel|equipment|overtime|labor|labour|history|audit|version|status|approve|reject|permission|role|user|login|auth|cost|costing)\b/i.test(text);
 
     if (isBackend) {
-        const skillsSet = new Set(['Node.js', 'Express', 'JavaScript']);
-        if (/\b(database|sql|crud|query|schema)\b/i.test(text)) {
-            skillsSet.add('SQL');
-        }
+        const skillsSet = new Set(['Node.js', 'Express', 'JavaScript', 'SQL']);
         if (/\b(postgresql|postgres|neon postgresql|neon|migration|data persistence)\b/i.test(text)) {
             skillsSet.add('PostgreSQL');
-        }
-        if (!skillsSet.has('SQL') && !skillsSet.has('PostgreSQL')) {
-            skillsSet.add('SQL');
         }
         const skills = Array.from(skillsSet);
         return { domain: 'Backend/API', required_domain: 'Backend/API', skills, required_skills: skills };
     }
 
-    // --------------------------------------------------------------------------
+    // Explicit fallback for matched prefixes that did not trigger earlier
+    if (isFrontendPrefix) {
+        const skillsSet = new Set(['JavaScript', 'React']);
+        if (/\b(css|html|responsive|layout)\b/i.test(text)) skillsSet.add('HTML/CSS');
+        if (/\b(tailwind|dark mode)\b/i.test(text)) skillsSet.add('Tailwind CSS');
+        const skills = Array.from(skillsSet);
+        return { domain: 'Frontend', required_domain: 'Frontend', skills, required_skills: skills };
+    }
+
+    if (isDatabasePrefix) {
+        const skills = ['PostgreSQL', 'SQL'];
+        return { domain: 'Database', required_domain: 'Database', skills, required_skills: skills };
+    }
+
+    if (isQAPrefix) {
+        const skills = ['Cypress', 'QA Automation'];
+        return { domain: 'QA/Testing', required_domain: 'QA/Testing', skills, required_skills: skills };
+    }
+
+    if (isDocPrefix) {
+        const skills = ['Markdown'];
+        return { domain: 'Documentation', required_domain: 'Documentation', skills, required_skills: skills };
+    }
+
+    if (isDevOpsPrefix) {
+        const skills = ['DevOps', 'Docker', 'CI/CD'];
+        return { domain: 'DevOps', required_domain: 'DevOps', skills, required_skills: skills };
+    }
+
+    if (isAiPrefix) {
+        const skills = ['Python', 'ML'];
+        return { domain: 'AI/ML', required_domain: 'AI/ML', skills, required_skills: skills };
+    }
+
     // 8. Default Fallback Domain & Skills
-    // Assigned when work item does not match specific specialized keywords
-    // Associated Skills: Node.js, Express, JavaScript, SQL
-    // --------------------------------------------------------------------------
     const defaultSkills = ['Node.js', 'Express', 'JavaScript', 'SQL'];
     return { domain: 'Backend/API', required_domain: 'Backend/API', skills: defaultSkills, required_skills: defaultSkills };
 }

@@ -20,7 +20,7 @@ US057,To provide an emails to notify field to identify users who should receive 
 US058,To support adding relevant users to the cc/notification list for applicable emails so that the email notification management is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,3
 US029,"To display the current status of work orders, defects, and repairs so that the defect status & repair tracking is executed correctly.",1,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
 US044,To maintain the hourly overhead rate for applicable labour resources so that the labour rate & cost calculation is executed correctly.,1,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
-US003,To view engineering records based on their assigned permissions so that the engineering activity tracking is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US003,To view engineering records based on their assigned permissions so that the engineering activity tracking is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,3
 US011,To maintain the relevant history of engineering activities for tracking and audit purposes so that the audit trail & version history tracking is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
 US012,To select the relevant vessel when creating or viewing engineering activities so that the vessel & equipment maintenance log is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
 US013,To display the equipment allocated to the selected vessel so that the equipment & material allocation display is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
