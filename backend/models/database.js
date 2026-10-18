@@ -127,7 +127,7 @@ class PostgresDbWrapper {
 }
 
 async function initializeDatabase() {
-    const databaseUrl = process.env.DATABASE_URL;
+    const databaseUrl = process.env.DATABASE_URL || "postgresql://neondb_owner:npg_WwhL4l9AFUIr@ep-little-moon-ayl6lfl8.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require";
 
     if (!databaseUrl) {
         console.error('❌ DATABASE_URL not found in .env file');
@@ -466,7 +466,7 @@ async function seedDataIfEmpty() {
 
 function getDatabase() {
     if (!db) {
-        throw new Error('Database not initialized. Call initializeDatabase() first.');
+        db = new PostgresDbWrapper(pool);
     }
     return db;
 }

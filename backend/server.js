@@ -175,38 +175,219 @@ app.use('/api/change-requests', changeRequestRoutes);
 app.get('/api/projects', changeRequestController.getAllProjects);
 app.get('/api/projects/:projectId/sprints', changeRequestController.getProjectSprints);
 
-function extractDomainAndSkills(titleOrText) {
-    const text = (titleOrText || '').toLowerCase();
-    if (/\b(machine learning|nlp|spacy|scikit|svm|deep learning|neural network|tensorflow|pytorch|classifier|ai service|ml model|training dataset)\b/i.test(text) || (/\b(ml|ai)\b/i.test(text) && !text.includes('email') && !text.includes('detail') && !text.includes('main'))) {
-        let skills = ['Python', 'ML'];
-        if (text.includes('nlp') || text.includes('spacy')) skills.push('NLP');
-        if (text.includes('svm') || text.includes('scikit')) skills.push('Scikit-Learn');
-        return { domain: 'AI', required_domain: 'AI', skills, required_skills: skills };
+// ==============================================================================
+// KEYWORD-BASED DOMAIN & REQUIRED SKILLS IDENTIFICATION ENGINE
+// Dynamically extracts technical domain and required developer skills from
+// work-item titles, task-type keywords, and descriptions.
+// Supported Domains: Frontend, Backend/API, Database, QA/Testing, DevOps, AI/ML, Documentation
+// Key Skills: JavaScript, React, Node.js, Express, SQL, PostgreSQL, Cypress, Markdown
+// ==============================================================================
+function extractDomainAndSkills(titleOrText, description = '') {
+    // Extract unified text and item type from title, task object, or description
+    let fullText = '';
+    let itemType = '';
+    if (titleOrText && typeof titleOrText === 'object') {
+        itemType = (titleOrText.work_item_type || titleOrText.type || '').trim().toLowerCase();
+        fullText = [
+            titleOrText.title || titleOrText.name || '',
+            titleOrText.work_item_type || titleOrText.type || '',
+            titleOrText.description || '',
+            titleOrText.user_story || '',
+            description || ''
+        ].filter(Boolean).join(' ');
+    } else {
+        fullText = `${titleOrText || ''} ${description || ''}`.trim();
     }
-    if (/\b(enter|input|form|ui|ux|frontend|react|dashboard|dark mode|css|tailwind|export|pdf|excel|component|layout|view|display|screen|button|render)\b/i.test(text)) {
-        let skills = ['JavaScript', 'React'];
-        if (text.includes('dark mode') || text.includes('css') || text.includes('tailwind')) skills.push('Tailwind');
-        if (text.includes('pdf') || text.includes('excel') || text.includes('export') || text.includes('print')) skills.push('jsPDF');
-        if (text.includes('enter') || text.includes('input') || text.includes('form')) skills.push('HTML/CSS');
-        return { domain: 'Frontend', required_domain: 'Frontend', skills, required_skills: skills };
+    const text = fullText.toLowerCase();
+    const cleanFullText = fullText.trim();
+
+    // ==========================================================================
+    // 1. DIRECT WORK-ITEM TYPE & TITLE PREFIX MATCHING
+    // Suitable for standard generated work-item titles and explicit deliverable formats
+    // ==========================================================================
+
+    // Frontend: UI/UX, Frontend
+    const isFrontendPrefix = itemType === 'ui/ux' || itemType === 'frontend'
+        || /^(?:ui\/ux|frontend|to build frontend)\b/i.test(cleanFullText);
+
+    // Database: Database Schema & Logic, Database
+    const isDatabasePrefix = itemType === 'database'
+        || /^(?:database schema & logic|database schema|database|to implement database schema)\b/i.test(cleanFullText);
+
+    // QA/Testing: QA Integration & Testing, Testing, QA
+    const isQAPrefix = itemType === 'testing' || itemType === 'qa'
+        || /^(?:qa integration & testing|testing|qa|to conduct security.*testing)\b/i.test(cleanFullText);
+
+    // Documentation: Technical & User Documentation, Documentation
+    const isDocPrefix = itemType === 'documentation' || itemType === 'doc'
+        || /^(?:technical & user documentation|documentation)\b/i.test(cleanFullText);
+
+    // DevOps: DevOps, Infrastructure, CI/CD
+    const isDevOpsPrefix = itemType === 'devops' || itemType === 'infrastructure' || itemType === 'ci/cd'
+        || /^(?:devops|infrastructure|ci\/cd|to configure devops)\b/i.test(cleanFullText);
+
+    // AI/ML: AI, ML, AI/ML
+    const isAiPrefix = itemType === 'ai' || itemType === 'ml' || itemType === 'ai/ml'
+        || /^(?:ai\/ml|to develop machine learning|machine learning)\b/i.test(cleanFullText);
+
+    // Backend/API: API/Backend, Backend, API
+    const isBackendPrefix = itemType === 'api/backend' || itemType === 'backend' || itemType === 'api'
+        || /^(?:api\/backend|backend\/api|backend|api|to implement core business api)\b/i.test(cleanFullText);
+
+    // ==========================================================================
+    // 2. DOMAIN RESOLUTION (Prefix Priority followed by Comprehensive Keywords)
+    // ==========================================================================
+
+    // 1. Documentation Domain
+    const isDoc = isDocPrefix
+        || /\b(technical & user documentation|documentation|user manual|release notes|technical guide|api documentation|user guide|readme|wiki|markdown|system documentation|specifications document)\b/i.test(text);
+
+    if (isDoc && !isFrontendPrefix && !isBackendPrefix && !isDatabasePrefix && !isQAPrefix && !isDevOpsPrefix && !isAiPrefix) {
+        const skillsSet = new Set(['Markdown']);
+        if (/\b(technical guide|user manual|specifications|guide|writing|document)\b/i.test(text)) {
+            skillsSet.add('Technical Writing');
+        }
+        const skills = Array.from(skillsSet);
+        return { domain: 'Documentation', required_domain: 'Documentation', skills, required_skills: skills };
     }
-    if (/\b(test|qa|cypress|selenium|unit test|jest|audit check|verification|verify|validation|validate)\b/i.test(text)) {
-        const skills = ['QA Automation', 'Cypress'];
+
+    // 2. Database Domain
+    const isDatabase = isDatabasePrefix
+        || /\b(database schema & logic|database schema|table schema|relational database|data persistence|schema migration|ddl|sql query|stored procedure|database design)\b/i.test(text)
+        || (/\b(postgresql|postgres|neon postgresql)\b/i.test(text) && !/\b(express|rest api|api endpoint)\b/i.test(text));
+
+    if (isDatabase && !isFrontendPrefix && !isBackendPrefix && !isQAPrefix && !isDevOpsPrefix && !isAiPrefix && !isDocPrefix) {
+        const skillsSet = new Set(['PostgreSQL', 'SQL']);
+        const skills = Array.from(skillsSet);
+        return { domain: 'Database', required_domain: 'Database', skills, required_skills: skills };
+    }
+
+    // 3. QA / Testing Domain
+    const isQA = isQAPrefix
+        || /\b(qa integration & testing|qa integration|test case|test scenario|regression testing|integration testing|unit testing|unit test|end-to-end|e2e|bug report|test automation|cypress|jest|selenium|assertion|audit check)\b/i.test(text)
+        || (/\b(qa|testing|test|verification|verify|validation|validate)\b/i.test(text) && !/\b(input validation|form validation)\b/i.test(text));
+
+    if (isQA && !isFrontendPrefix && !isBackendPrefix && !isDatabasePrefix && !isDevOpsPrefix && !isAiPrefix && !isDocPrefix) {
+        const skillsSet = new Set(['Cypress', 'QA Automation']);
+        if (/\b(jest|unit testing|unit test|assertion)\b/i.test(text)) {
+            skillsSet.add('Jest');
+        }
+        if (/\bselenium\b/i.test(text)) {
+            skillsSet.add('Selenium');
+        }
+        if (/\b(test case|test scenario|bug report|manual)\b/i.test(text)) {
+            skillsSet.add('Manual Testing');
+        }
+        const skills = Array.from(skillsSet);
         return { domain: 'QA/Testing', required_domain: 'QA/Testing', skills, required_skills: skills };
     }
-    if (/\b(devops|docker|kubernetes|aws|cloud|ci\/cd|pipeline|deploy|nginx|dockerfile)\b/i.test(text)) {
-        const skills = ['Docker', 'DevOps'];
+
+    // 4. DevOps & Infrastructure Domain
+    const isDevOps = isDevOpsPrefix
+        || /\b(devops|github actions|continuous integration|continuous deployment|ci\/cd|environment variables|docker|container|kubernetes|deployment|hosting|aws|nginx|dockerfile)\b/i.test(text)
+        || (/\b(pipeline|workflow|build)\b/i.test(text) && /\b(deploy|ci|cd|release|infra|cloud|docker|git|env)\b/i.test(text));
+
+    if (isDevOps && !isFrontendPrefix && !isBackendPrefix && !isDatabasePrefix && !isQAPrefix && !isAiPrefix && !isDocPrefix) {
+        const skillsSet = new Set(['DevOps', 'Docker', 'CI/CD']);
+        if (/\b(aws|cloud|hosting|kubernetes|nginx|environment variables)\b/i.test(text)) {
+            skillsSet.add('AWS');
+        }
+        const skills = Array.from(skillsSet);
         return { domain: 'DevOps', required_domain: 'DevOps', skills, required_skills: skills };
     }
-    if (/\b(defect|repair|vessel|equipment|overtime|labor|labour|history|audit|version|status|approve|reject|permission|role|user|login|auth|database|sql|postgres|backend|api|server|crud|link|assign|cost|costing)\b/i.test(text)) {
-        let skills = ['JavaScript', 'SQL'];
-        if (text.includes('login') || text.includes('auth') || text.includes('permission') || text.includes('role')) skills.push('OAuth');
-        if (text.includes('database') || text.includes('sql') || text.includes('postgres') || text.includes('history') || text.includes('audit') || text.includes('version')) skills.push('PostgreSQL');
-        if (text.includes('api') || text.includes('backend') || text.includes('defect') || text.includes('repair') || text.includes('approve') || text.includes('reject')) skills.push('Node.js');
-        return { domain: 'Backend', required_domain: 'Backend', skills, required_skills: skills };
+
+    // 5. AI / Machine Learning Domain
+    const isAi = isAiPrefix
+        || /\b(machine learning|nlp|spacy|scikit-learn|scikit|svm|deep learning|neural network|tensorflow|pytorch|classifier|ai service|ml model|training dataset|prediction|predict|model training|feature extraction|classification|inference|model integration|data preprocessing|pandas|random forest)\b/i.test(text)
+        || (/\b(ml|ai)\b/i.test(text) && !text.includes('email') && !text.includes('detail') && !text.includes('main') && !text.includes('gain') && !text.includes('chain'));
+
+    if (isAi && !isFrontendPrefix && !isBackendPrefix && !isDatabasePrefix && !isQAPrefix && !isDevOpsPrefix && !isDocPrefix) {
+        const skillsSet = new Set(['Python', 'ML']);
+        if (/\b(nlp|spacy)\b/i.test(text)) {
+            skillsSet.add('NLP');
+        }
+        if (/\b(scikit|scikit-learn|svm|random forest|classifier|classification)\b/i.test(text)) {
+            skillsSet.add('Scikit-Learn');
+        }
+        if (/\btensorflow\b/i.test(text)) {
+            skillsSet.add('TensorFlow');
+        }
+        if (/\bpytorch\b/i.test(text)) {
+            skillsSet.add('PyTorch');
+        }
+        if (/\b(pandas|data preprocessing|feature extraction)\b/i.test(text)) {
+            skillsSet.add('Pandas');
+        }
+        const skills = Array.from(skillsSet);
+        return { domain: 'AI/ML', required_domain: 'AI/ML', skills, required_skills: skills };
     }
-    const defaultSkills = ['JavaScript', 'SQL', 'Node.js'];
-    return { domain: 'Backend', required_domain: 'Backend', skills: defaultSkills, required_skills: defaultSkills };
+
+    // 6. Frontend Domain
+    const isFrontend = isFrontendPrefix
+        || /\b(ui\/ux|frontend|react|jsx|ui|ux|dashboard|dark mode|css|tailwind css|tailwind|responsive|navigation|modal|dropdown|table|chart|progress bar|drag and drop|form validation|react component|layout|button|screen|render|component|display|view|export|pdf|excel|input|enter|form)\b/i.test(text);
+
+    if (isFrontend && !isBackendPrefix && !isDatabasePrefix && !isQAPrefix && !isDevOpsPrefix && !isAiPrefix && !isDocPrefix) {
+        const skillsSet = new Set(['JavaScript', 'React']);
+        if (/\b(css|html|responsive|form validation|layout|modal|dropdown|navigation|screen|render)\b/i.test(text)) {
+            skillsSet.add('HTML/CSS');
+        }
+        if (/\b(tailwind|tailwind css|dark mode)\b/i.test(text)) {
+            skillsSet.add('Tailwind CSS');
+        }
+        const skills = Array.from(skillsSet);
+        return { domain: 'Frontend', required_domain: 'Frontend', skills, required_skills: skills };
+    }
+
+    // 7. Backend / API Domain
+    const isBackend = isBackendPrefix
+        || /\b(api\/backend|backend|rest api|api endpoint|express|middleware|request|response|crud|jwt|bcrypt|authentication|authorization|server|query|node\.js|node|api|endpoint|oauth|defect|repair|vessel|equipment|overtime|labor|labour|history|audit|version|status|approve|reject|permission|role|user|login|auth|cost|costing)\b/i.test(text);
+
+    if (isBackend) {
+        const skillsSet = new Set(['Node.js', 'Express', 'JavaScript', 'SQL']);
+        if (/\b(postgresql|postgres|neon postgresql|neon|migration|data persistence)\b/i.test(text)) {
+            skillsSet.add('PostgreSQL');
+        }
+        const skills = Array.from(skillsSet);
+        return { domain: 'Backend/API', required_domain: 'Backend/API', skills, required_skills: skills };
+    }
+
+    // Explicit fallback for matched prefixes that did not trigger earlier
+    if (isFrontendPrefix) {
+        const skillsSet = new Set(['JavaScript', 'React']);
+        if (/\b(css|html|responsive|layout)\b/i.test(text)) skillsSet.add('HTML/CSS');
+        if (/\b(tailwind|dark mode)\b/i.test(text)) skillsSet.add('Tailwind CSS');
+        const skills = Array.from(skillsSet);
+        return { domain: 'Frontend', required_domain: 'Frontend', skills, required_skills: skills };
+    }
+
+    if (isDatabasePrefix) {
+        const skills = ['PostgreSQL', 'SQL'];
+        return { domain: 'Database', required_domain: 'Database', skills, required_skills: skills };
+    }
+
+    if (isQAPrefix) {
+        const skills = ['Cypress', 'QA Automation'];
+        return { domain: 'QA/Testing', required_domain: 'QA/Testing', skills, required_skills: skills };
+    }
+
+    if (isDocPrefix) {
+        const skills = ['Markdown'];
+        return { domain: 'Documentation', required_domain: 'Documentation', skills, required_skills: skills };
+    }
+
+    if (isDevOpsPrefix) {
+        const skills = ['DevOps', 'Docker', 'CI/CD'];
+        return { domain: 'DevOps', required_domain: 'DevOps', skills, required_skills: skills };
+    }
+
+    if (isAiPrefix) {
+        const skills = ['Python', 'ML'];
+        return { domain: 'AI/ML', required_domain: 'AI/ML', skills, required_skills: skills };
+    }
+
+    // 8. Default Fallback Domain & Skills
+    const defaultSkills = ['Node.js', 'Express', 'JavaScript', 'SQL'];
+    return { domain: 'Backend/API', required_domain: 'Backend/API', skills: defaultSkills, required_skills: defaultSkills };
 }
 
 function getPriorityRank(p, text = '') {
@@ -251,20 +432,28 @@ function sortStoriesByDependencyTier(stories) {
         }
     });
 
-    // 2. Sort by Epic creation order first, then requirement_order / story_id within each Epic
+    // 2. Sort by Priority (CRITICAL -> HIGH -> MEDIUM -> LOW) first, then Dependency Tier, then Epic / Story Order
+    const priorityWeights = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
     sorted.sort((a, b) => {
+        const pA = priorityWeights[(a.priority || 'MEDIUM').toUpperCase()] ?? (a.priorityRank ?? 2);
+        const pB = priorityWeights[(b.priority || 'MEDIUM').toUpperCase()] ?? (b.priorityRank ?? 2);
+        if (pA !== pB) return pA - pB;
+
+        // Next by Dependency Tier (Tier 1: Backend/DB before Tier 2: Logic before Tier 3: Frontend before Tier 4: QA)
+        const tA = Number(a.dependency_tier ?? a.dependencyTier ?? 2);
+        const tB = Number(b.dependency_tier ?? b.dependencyTier ?? 2);
+        if (tA !== tB) return tA - tB;
+
+        // Next by story points / hours (larger tasks scheduled first)
+        const spA = Number(a.story_points ?? a.points ?? 0);
+        const spB = Number(b.story_points ?? b.points ?? 0);
+        if (spA !== spB) return spB - spA;
+
         const epicA = (a.epic || 'General Epic').trim();
         const epicB = (b.epic || 'General Epic').trim();
         const epicOrderA = epicMinOrder[epicA] !== undefined ? epicMinOrder[epicA] : 999999;
         const epicOrderB = epicMinOrder[epicB] !== undefined ? epicMinOrder[epicB] : 999999;
-
-        if (epicOrderA !== epicOrderB) {
-            return epicOrderA - epicOrderB;
-        }
-
-        const orderA = a.requirement_order !== undefined && a.requirement_order !== null ? Number(a.requirement_order) : 999999;
-        const orderB = b.requirement_order !== undefined && b.requirement_order !== null ? Number(b.requirement_order) : 999999;
-        if (orderA !== orderB) return orderA - orderB;
+        if (epicOrderA !== epicOrderB) return epicOrderA - epicOrderB;
 
         const idA = parseInt(String(a.story_id || a.user_story_id || a.id || '').replace(/\D/g, '')) || 0;
         const idB = parseInt(String(b.story_id || b.user_story_id || b.id || '').replace(/\D/g, '')) || 0;
@@ -313,16 +502,51 @@ app.get('/api/sprints/:sprintId/tasks', async (req, res) => {
             }
         }
 
+        function formatSubTaskDeliverableTitle(rawTitle, domainHint) {
+            if (!rawTitle) return '';
+            let str = String(rawTitle).trim();
+            if (/^To (implement|build|conduct|configure|develop|integrate)\b/i.test(str) && !/As a\s+/i.test(str)) {
+                return str;
+            }
+            let clean = str.replace(/\[Part\s*\d+[^\]]*\]/gi, '').trim();
+            clean = clean.replace(/^(?:as\s+(?:an?|the)\s+[^,]+,\s*)?i\s+want\s+(?:to\s+)?/i, '').trim();
+            clean = clean.replace(/^the\s+system\s+(?:shall|should|must)\s+(?:allow\s+[^,]+\s+to\s+)?/i, '').trim();
+            clean = clean.replace(/^the\s+system\s+(?:shall|should|must)\s+/i, '').trim();
+            clean = clean.replace(/^to\s+/i, '').trim();
+
+            const coreAction = clean.split(/\s+so\s+that\s+|\s+in\s+order\s+to\s+/i)[0].trim();
+            const capAction = coreAction ? (coreAction.charAt(0).toUpperCase() + coreAction.slice(1)) : 'Core Capability';
+
+            const lower = str.toLowerCase();
+            const d = (domainHint || '').toLowerCase();
+
+            if (d.includes('front') || /\b(view|display|ui|ux|frontend|react|screen|dashboard|form|input|button|render|dark mode|export|pdf|excel)\b/i.test(lower)) {
+                return `To build Frontend UI View, Input Validation & Testing for ${capAction}`;
+            }
+            if (d.includes('qa') || /\b(test|qa|cypress|selenium|jest|unit test|audit check|verification|verify|validation|validate)\b/i.test(lower)) {
+                return `To conduct Security, Edge Case Testing & QA Verification for ${capAction}`;
+            }
+            if (d.includes('devops') || /\b(devops|docker|kubernetes|aws|cloud|ci\/cd|pipeline|deploy|nginx)\b/i.test(lower)) {
+                return `To configure DevOps Pipeline, Docker & Infrastructure for ${capAction}`;
+            }
+            if (d.includes('ai') || /\b(machine learning|ml|ai|nlp|spacy|scikit|svm|deep learning|neural network|tensorflow|pytorch)\b/i.test(lower)) {
+                return `To develop Machine Learning Model & AI Inference Service for ${capAction}`;
+            }
+
+            return `To implement Core Business API & Database Logic for ${capAction}`;
+        }
+
         const sortedStories = sortStoriesByDependencyTier(tasks);
 
         const mappedTasks = sortedStories.map((t, idx) => {
-            const taskTitle = t.title || t.user_story || 'User Story Requirement';
-            const parsed = extractDomainAndSkills(taskTitle);
+            const rawTitle = t.title || t.user_story || 'User Story Requirement';
+            const subTaskTitle = formatSubTaskDeliverableTitle(rawTitle, t.domain || t.required_domain);
+            const parsed = extractDomainAndSkills(subTaskTitle);
             return {
                 id: t.story_id || t.user_story_id || `US-${idx + 1}`,
                 story_id: t.story_id || t.user_story_id || `US-${idx + 1}`,
-                title: taskTitle,
-                user_story: taskTitle,
+                title: subTaskTitle,
+                user_story: rawTitle,
                 description: t.description || t.acceptance_criteria || '',
                 priority: (t.priority || 'MEDIUM').toUpperCase(),
                 hours: (Number(t.story_points) || 5) * 6,
@@ -1962,21 +2186,16 @@ function allocateTasks(tasks, developers, currentProjectId) {
     if (!tasks || !Array.isArray(tasks) || tasks.length === 0) return [];
     if (!developers || !Array.isArray(developers) || developers.length === 0) return [];
 
-    // STEP 1 — Process work items by priority (CRITICAL → HIGH → MEDIUM → LOW)
+    // Step 1: The system sorts tasks based on priority (CRITICAL -> HIGH -> MEDIUM -> LOW)
     const priorityOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
-
-    // Preserve relative order for items with same priority
-    const tasksWithIndex = tasks.map((task, idx) => ({ task, idx }));
-    tasksWithIndex.sort((a, b) => {
-        const pA = priorityOrder[(a.task.priority || 'MEDIUM').toUpperCase()] ?? 2;
-        const pB = priorityOrder[(b.task.priority || 'MEDIUM').toUpperCase()] ?? 2;
-        if (pA !== pB) return pA - pB;
-        return a.idx - b.idx;
+    const sortedTasks = [...tasks].sort((a, b) => {
+        const pA = priorityOrder[String(a.priority || 'MEDIUM').toUpperCase()] ?? 2;
+        const pB = priorityOrder[String(b.priority || 'MEDIUM').toUpperCase()] ?? 2;
+        return pA - pB;
     });
-    const sortedTasks = tasksWithIndex.map(item => item.task);
 
-    // Initialize developer capacity tracking using existing cross-project load logic
-    let devs = developers.map(dev => {
+    // Initialize developer capacity tracking
+    const devs = developers.map(dev => {
         const capacity = (dev.capacity_hours !== undefined && dev.capacity_hours !== null && !isNaN(Number(dev.capacity_hours))) ? Number(dev.capacity_hours) : 40;
         const commitments = dev.project_commitments || [];
         const otherProjectHours = commitments
@@ -1997,12 +2216,12 @@ function allocateTasks(tasks, developers, currentProjectId) {
 
     const assignments = [];
 
+    // Step 2: For each task
     for (const task of sortedTasks) {
         const estHours = Number(task.estimated_hours) || (Number(task.story_points) ? Number(task.story_points) * 6 : 16);
         const taskDomainNorm = normalizeDomainString(task.required_domain || task.domain);
         const requiredSkills = task.required_skills || task.skills || [];
 
-        // ML Complexity Prediction (HIGH / MEDIUM / LOW)
         let rawComplexity = task.predicted_complexity || task.complexity;
         if (!rawComplexity) {
             const sp = Number(task.story_points) || 0;
@@ -2013,44 +2232,61 @@ function allocateTasks(tasks, developers, currentProjectId) {
         }
         const predictedComplexity = String(rawComplexity).toUpperCase();
 
-        // STEP 2 — Filter Developers by Remaining Capacity: Exclude developers with remaining <= 0
-        const availableDevs = devs.filter(dev => dev.remaining > 0);
+        // Check developers who match the required domain and have enough available capacity
+        const domainMatchingDevs = devs.filter(dev => 
+            normalizeDomainString(dev.primary_domain) === taskDomainNorm && dev.remaining >= estHours
+        );
 
-        if (availableDevs.length === 0) {
-            continue; // Cannot assign work to a developer who has no available capacity
+        let candidatePool = [];
+        let isFallback = false;
+
+        if (domainMatchingDevs.length > 0) {
+            candidatePool = domainMatchingDevs;
+        } else {
+            // Fallback: If no domain-matching developer is available, select an available developer with enough capacity
+            const availableFallbackDevs = devs.filter(dev => dev.remaining >= estHours);
+            if (availableFallbackDevs.length > 0) {
+                candidatePool = availableFallbackDevs;
+                isFallback = true;
+            }
         }
 
-        // STEP 3, 4, 5 — Evaluate Candidates
-        const evaluatedCandidates = availableDevs.map(dev => {
-            const devDomainNorm = normalizeDomainString(dev.primary_domain);
-            
-            // Step 3 — Compare Domains: Exact domain match (higher ranking) vs no match (lower ranking)
-            const exactDomainMatch = devDomainNorm === taskDomainNorm;
+        // If no developer has enough capacity even with fallback
+        if (candidatePool.length === 0) {
+            assignments.push({
+                story_id: task.story_id || task.id || task.taskId,
+                taskId: task.story_id || task.id || task.taskId,
+                title: task.title || task.user_story || 'User Story Requirement',
+                developer_id: null,
+                developerId: null,
+                developer_name: null,
+                allocated_hours: 0,
+                allocatedHours: 0,
+                predicted_complexity: predictedComplexity,
+                matched_domain: taskDomainNorm,
+                domain_match: false,
+                is_fallback: false,
+                skill_match_score: 0,
+                complexity_suitability_score: 0,
+                composite_allocation_score: 0,
+                unassigned_reason: `No available developer with sufficient capacity (${estHours}h required)`
+            });
+            continue;
+        }
 
-            // Step 4 — Calculate Required Skill-Match Percentage
+        // Calculate the percentage of required skills that each developer has
+        const evaluatedCandidates = candidatePool.map(dev => {
             const skillMatchPct = calculateSkillMatchPercentage(dev.languages, requiredSkills);
-
-            // Step 5 — Complexity & Seniority Suitability
             const senioritySuitability = calculateComplexitySenioritySuitability(predictedComplexity, dev.role);
-
             return {
                 ...dev,
-                exactDomainMatch,
                 skillMatchPct,
                 senioritySuitability
             };
         });
 
-        // STEP 6 — Rank All Eligible Developers
-        // Order of ranking:
-        // 1. Exact domain match first
-        // 2. Higher skill-match percentage first
-        // 3. Better complexity/seniority suitability first
-        // 4. Higher remaining capacity first
+        // The developer with the highest skill match is selected
         evaluatedCandidates.sort((a, b) => {
-            if (a.exactDomainMatch !== b.exactDomainMatch) {
-                return (b.exactDomainMatch ? 1 : 0) - (a.exactDomainMatch ? 1 : 0);
-            }
             if (b.skillMatchPct !== a.skillMatchPct) {
                 return b.skillMatchPct - a.skillMatchPct;
             }
@@ -2065,22 +2301,15 @@ function allocateTasks(tasks, developers, currentProjectId) {
 
         const chosen = evaluatedCandidates[0];
 
-        // STEP 7 — Allocate Hours and Update Capacity
-        const allocHours = Math.min(estHours, chosen.remaining);
-
-        if (allocHours <= 0) {
-            continue;
-        }
-
-        // Immediately update developer remaining capacity
-        const masterDev = devs.find(d => d.id === chosen.id);
+        // Their remaining capacity is updated after assignment
+        chosen.remaining -= estHours;
+        const masterDev = devs.find(d => String(d.id) === String(chosen.id));
         if (masterDev) {
-            masterDev.remaining -= allocHours;
+            masterDev.remaining -= estHours;
         }
-        chosen.remaining -= allocHours;
 
         const maxSuitability = predictedComplexity === 'HIGH' ? 3 : 2;
-        const suitabilityScore = Math.round((chosen.senioritySuitability / maxSuitability) * 100);
+        const suitabilityScore = Math.round(((chosen.senioritySuitability || 2) / maxSuitability) * 100);
 
         assignments.push({
             story_id: task.story_id || task.id || task.taskId,
@@ -2089,10 +2318,15 @@ function allocateTasks(tasks, developers, currentProjectId) {
             developer_id: chosen.id,
             developerId: chosen.id,
             developer_name: chosen.name,
-            allocated_hours: allocHours,
-            allocatedHours: allocHours,
+            allocated_hours: estHours,
+            allocatedHours: estHours,
+            developer_capacity: chosen.capacity_hours,
+            developer_remaining_after: chosen.remaining,
+            remaining_capacity: chosen.remaining,
             predicted_complexity: predictedComplexity,
-            matched_domain: taskDomainNorm,
+            matched_domain: chosen.primary_domain,
+            domain_match: !isFallback,
+            is_fallback: isFallback,
             skill_match_score: Math.round(chosen.skillMatchPct),
             complexity_suitability_score: suitabilityScore,
             composite_allocation_score: Math.round(chosen.skillMatchPct)
@@ -3793,23 +4027,40 @@ app.post('/api/task-assignments', async (req, res) => {
             devMap[String(d.id)] = d;
         });
 
-        // Map and validate assignments that have a valid developer_id and story_id
-        const validAssignments = (assignments || []).filter(a => {
-            if (!a || (!a.story_id && !a.id)) return false;
+        // Map and validate assignments with strict domain matching
+        const validAssignments = [];
+        const devAllocatedHours = {};
+
+        for (const a of (assignments || [])) {
+            if (!a || (!a.story_id && !a.id)) continue;
             const devId = a.developer_id !== undefined && a.developer_id !== null ? String(a.developer_id) : null;
-            return devId && devId !== '0' && devId !== 'null' && devId !== 'undefined';
-        }).map(a => {
-            const devIdStr = String(a.developer_id);
-            const matchedDev = devMap[devIdStr] || {};
-            return {
+            if (!devId || devId === '0' || devId === 'null' || devId === 'undefined') continue;
+
+            const matchedDev = devMap[devId];
+            if (!matchedDev) continue;
+
+            const devDomain = normalizeDomainString(matchedDev.primary_domain);
+            const taskDomain = normalizeDomainString(a.matched_domain || a.required_domain || a.domain || (extractDomainAndSkills(a.title || '')?.domain));
+
+            // STRICT DOMAIN MATCH: Only save if developer domain matches task domain!
+            if (devDomain !== taskDomain) {
+                console.warn(`[Save Filtered] Domain mismatch: Task ${a.story_id} (${taskDomain}) cannot be saved to developer ${matchedDev.name} (${devDomain})`);
+                continue;
+            }
+
+            const hrs = Number(a.allocated_hours) || 16;
+            const currentTotal = (devAllocatedHours[devId] || 0) + hrs;
+            devAllocatedHours[devId] = currentTotal;
+
+            validAssignments.push({
                 story_id: a.story_id || a.id,
-                developer_id: a.developer_id,
+                developer_id: matchedDev.id,
                 developer_name: a.developer_name || matchedDev.name || 'Software Engineer',
                 developer_role: a.developer_role || matchedDev.role || 'Software Engineer',
-                allocated_hours: Number(a.allocated_hours) || 35,
+                allocated_hours: hrs,
                 predicted_complexity: a.predicted_complexity || 'MEDIUM'
-            };
-        });
+            });
+        }
 
         if (validAssignments.length === 0) {
             return res.status(400).json({ error: 'No active task assignments provided to save.' });
@@ -3991,6 +4242,93 @@ app.post('/api/task-assignments', async (req, res) => {
     }
 });
 
+// ================= GET TASK ASSIGNMENTS (Load Saved Allocations) =================
+// Returns previously saved allocations for a given sprint + project so the frontend
+// can restore the allocation board without re-running the algorithm.
+app.get('/api/task-assignments', async (req, res) => {
+    try {
+        const { sprint_id, project_id } = req.query;
+        if (!sprint_id) {
+            return res.status(400).json({ error: 'sprint_id is required' });
+        }
+
+        const sprintIdStr = String(sprint_id).startsWith('SPR-') ? String(sprint_id) : `SPR-0${sprint_id}`;
+
+        // Load all saved allocations for this sprint, joined with developer, story, and work_item data
+        let sql = `
+            SELECT
+                a.story_id,
+                a.story_id        AS "taskId",
+                COALESCE(w.title, u.title, a.story_id) AS title,
+                a.developer_id,
+                a.developer_id    AS "developerId",
+                COALESCE(d.name, 'Unassigned')  AS developer_name,
+                COALESCE(d.role, 'Software Engineer') AS developer_role,
+                COALESCE(d.primary_domain, 'backend') AS developer_domain,
+                COALESCE(d.capacity_hours, 40)  AS developer_capacity,
+                COALESCE(d.languages, '[]')     AS developer_skills,
+                a.allocated_hours,
+                a.allocated_hours AS "allocatedHours",
+                COALESCE(a.predicted_complexity, w.predicted_complexity, 'MEDIUM') AS predicted_complexity,
+                COALESCE(w.priority, u.priority, 'MEDIUM')  AS priority,
+                COALESCE(w.story_points, u.story_points, 5) AS story_points,
+                COALESCE(w.estimated_hours, a.allocated_hours, 16) AS estimated_hours,
+                COALESCE(w.required_domain, w.domain, d.primary_domain, 'backend') AS required_domain,
+                COALESCE(w.required_skills, ARRAY[]::text[]) AS required_skills,
+                COALESCE(w.story_id, u.story_id) AS parent_story_id,
+                COALESCE(w.project_id, u.project_id) AS project_id
+            FROM allocations a
+            LEFT JOIN developers d ON CAST(a.developer_id AS TEXT) = CAST(d.id AS TEXT)
+            LEFT JOIN user_stories u ON a.story_id = u.story_id OR a.story_id = u.user_story_id
+            LEFT JOIN work_items w ON a.story_id = w.work_item_id
+            WHERE a.sprint_id = $1
+        `;
+        const params = [sprintIdStr];
+
+        if (project_id) {
+            sql += ` AND (COALESCE(w.project_id, u.project_id) = $2 OR COALESCE(w.project_id, u.project_id) IS NULL)`;
+            params.push(String(project_id));
+        }
+
+        sql += ' ORDER BY a.created_at ASC';
+
+        const result = await pool.query(sql, params);
+        const rows = result.rows || [];
+
+        // Normalise each row so fields match what allocateTasks() returns
+        const assignments = rows.map(r => ({
+            story_id: r.story_id,
+            taskId: r.story_id,
+            title: r.title,
+            developer_id: r.developer_id ?? null,
+            developerId: r.developer_id ?? null,
+            developer_name: r.developer_id ? r.developer_name : null,
+            developer_role: r.developer_role,
+            developer_domain: normalizeDomainString(r.developer_domain),
+            developer_capacity: Number(r.developer_capacity) || 40,
+            developer_skills: r.developer_skills,
+            allocated_hours: Number(r.allocated_hours) || 0,
+            allocatedHours: Number(r.allocated_hours) || 0,
+            predicted_complexity: r.predicted_complexity,
+            priority: r.priority,
+            story_points: Number(r.story_points) || 5,
+            estimated_hours: Number(r.estimated_hours) || 16,
+            required_domain: normalizeDomainString(r.required_domain),
+            required_skills: r.required_skills,
+            parent_story_id: r.parent_story_id,
+            project_id: r.project_id,
+            matched_domain: normalizeDomainString(r.required_domain),
+            // Assignments loaded from DB are always domain-validated (saved with strict checks)
+            domain_match: true
+        }));
+
+        res.json({ success: true, assignments, sprint_id: sprintIdStr });
+    } catch (error) {
+        console.error('[GET /api/task-assignments] error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ================= RESOURCE ALLOCATION DASHBOARD API =================
 app.get('/api/resource-allocations/dashboard', async (req, res) => {
     try {
@@ -4114,7 +4452,8 @@ if (typeof module !== 'undefined' && module.exports) {
         calculateSkillMatchPercentage,
         calculateComplexitySenioritySuitability,
         getSeniorityRank,
-        normalizeDomainString
+        normalizeDomainString,
+        extractDomainAndSkills
     };
 }
 
