@@ -283,18 +283,18 @@ function calculateComplexity(hours, storyPoints, titleOrText = '') {
     const text = String(titleOrText).toLowerCase();
 
     // High complexity indicators
-    if (pts >= 8 || hrs >= 16 || /\b(machine learning|nlp|spacy|deep learning|security|encryption|oauth|audit tracking|emergency override)\b/i.test(text)) {
+    if (pts >= 8 || hrs >= 48 || /\b(machine learning|nlp|spacy|deep learning|security|encryption|oauth|audit tracking|emergency override)\b/i.test(text)) {
         return 'HIGH';
     }
     // Low complexity indicators
-    if (pts <= 2 && hrs <= 8 && /\b(button|label|text field|minor|display only|view|static)\b/i.test(text)) {
+    if (pts <= 2 && hrs <= 16 && /\b(button|label|text field|minor|display only|view|static)\b/i.test(text)) {
         return 'LOW';
     }
     // Default
-    if (pts >= 5 || hrs >= 12) {
+    if (pts >= 4 || hrs >= 20) {
         return 'MEDIUM';
     }
-    return hrs <= 8 ? 'LOW' : 'MEDIUM';
+    return hrs <= 16 ? 'LOW' : 'MEDIUM';
 }
 
 /**
@@ -360,10 +360,10 @@ async function predictBatchComplexityWithML(workItems) {
     const serviceUrl = process.env.ML_SERVICE_URL || ML_SERVICE_URL;
 
     try {
-        const tasks = workItems.map(item => ({
-            story_id: String(item.work_item_id || item.story_id || 'WI-01'),
+        const tasks = workItems.map((item, idx) => ({
+            story_id: String(item.work_item_id || item.story_id || item.id || `WI-${idx + 1}`),
             priority: String(item.priority || 'MEDIUM').toUpperCase(),
-            estimated_hours: Number(item.estimated_hours) || 8,
+            estimated_hours: Number(item.estimated_hours) || (Number(item.story_points) ? Number(item.story_points) * 6 : 8),
             story_points: Number(item.story_points) || 2
         }));
 
@@ -380,8 +380,13 @@ async function predictBatchComplexityWithML(workItems) {
                 }
             }
 
-            for (const item of workItems) {
-                const mlComp = predMap.get(String(item.work_item_id));
+            for (let idx = 0; idx < workItems.length; idx++) {
+                const item = workItems[idx];
+                const key = String(item.work_item_id || item.story_id || item.id || `WI-${idx + 1}`);
+                const mlComp = predMap.get(key)
+                    || (item.work_item_id && predMap.get(String(item.work_item_id)))
+                    || (item.story_id && predMap.get(String(item.story_id)))
+                    || (item.id && predMap.get(String(item.id)));
                 if (mlComp && ['HIGH', 'MEDIUM', 'LOW'].includes(mlComp)) {
                     item.predicted_complexity = mlComp;
                 }

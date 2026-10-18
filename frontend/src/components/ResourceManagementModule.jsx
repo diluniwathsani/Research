@@ -603,6 +603,7 @@ export default function ResourceManagementModule({
               required_domain: subDetected.required_domain,
               skills: subDetected.skills,
               required_skills: subDetected.required_skills,
+              predicted_complexity: sub.predicted_complexity || t.predicted_complexity || 'MEDIUM',
               gherkin_criteria: sub.gherkin_criteria || '',
               start_date: sub.start_date || null,
               end_date: sub.end_date || null
@@ -623,6 +624,7 @@ export default function ResourceManagementModule({
             required_domain: detected.required_domain,
             skills: detected.skills,
             required_skills: detected.required_skills,
+            predicted_complexity: t.predicted_complexity || 'MEDIUM',
             sub_tasks: normalizedSubTasks,
             start_date: t.start_date || null,
             end_date: t.end_date || null
@@ -675,6 +677,7 @@ export default function ResourceManagementModule({
               required_domain: detected.required_domain,
               skills: detected.skills,
               required_skills: detected.required_skills,
+              predicted_complexity: t.predicted_complexity || 'MEDIUM',
               sub_tasks: t.sub_tasks || []
             };
           });
@@ -778,6 +781,7 @@ export default function ResourceManagementModule({
             required_domain: detected.required_domain,
             skills: detected.skills,
             required_skills: detected.required_skills,
+            predicted_complexity: sub.predicted_complexity || story.predicted_complexity || 'MEDIUM',
             status: sub.status || 'To Do',
             start_date: sub.start_date || null,
             end_date: sub.end_date || null
@@ -798,6 +802,7 @@ export default function ResourceManagementModule({
         required_domain: detected.required_domain,
         skills: detected.skills,
         required_skills: detected.required_skills,
+        predicted_complexity: story.predicted_complexity || 'MEDIUM',
         priority: (story.priority || story.priority_tier || 'MEDIUM').toUpperCase(),
         sprint_number: currentSprintNum
       }];
@@ -935,8 +940,8 @@ export default function ResourceManagementModule({
         if (!complexity) {
           const sp  = Number(item.story_points) || 0;
           const hrs = Number(item.estimated_hours) || 0;
-          if (sp >= 8 || hrs >= 12) complexity = 'HIGH';
-          else if (sp >= 5 || hrs >= 8) complexity = 'MEDIUM';
+          if (sp >= 8 || hrs >= 48) complexity = 'HIGH';
+          else if (sp >= 4 || hrs >= 20) complexity = 'MEDIUM';
           else complexity = 'LOW';
         }
         complexity = complexity.toUpperCase();
