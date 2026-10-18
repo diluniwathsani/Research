@@ -163,11 +163,107 @@ def extract_core_action(raw_title):
         return action[0].upper() + action[1:]
     return "Core Functionality"
 
+def analyze_story_process_tier(title, desc=""):
+    """
+    Computes architectural and process dependency tier (0 to 7) for a user story.
+    Enforces MVP hierarchy:
+      Tier 0: Foundational Auth, Roles, Permissions & Security
+      Tier 1: Master Asset & Defect/Repair Catalog Models
+      Tier 2: Core Work Order Lifecycle & Transaction Management
+      Tier 3: Execution, Time Tracking & Material Usage
+      Tier 4: Vessel Allocations, Costing & Overtime Rules
+      Tier 5: Job Cards, Filtering & Query Engine
+      Tier 6: Email Notifications & Communication
+      Tier 7: Secondary Reporting, Audit Trail & Exports
+    """
+    text = f"{title or ''} {desc or ''}".lower()
+
+    # Tier 0: Foundational Auth, Permissions & Security
+    if re.search(r'\b(permission|permissions|permitted|role|user roles|access control|security|auth|login|assigned permissions)\b', text) and not re.search(r'\b(approve or reject work orders|approve work order|approve the eork|defect|repair|overtime|notification|report)\b', text):
+        return 0, 'FOUNDATION_AUTH_SECURITY'
+
+    # Tier 1: Defect & Repair Initiation / Master Catalogs
+    if re.search(r'\b(defect|defects|defect record|defect records|repair record|repair records|repair activity|repair activities)\b', text) and not re.search(r'\b(link defects|link repair|display the current status|work order|job card)\b', text):
+        return 1, 'DEFECT_REPAIR_INITIATION'
+
+    # Tier 2: Core Work Order Management & Workflow Approvals
+    if re.search(r'\b(work order|work orders|create work order|enter.*work order|view existing work orders|edit work order|link defects|link repair|update the status of a work order|approve work order|approve the eork orders|approve or reject work orders)\b', text):
+        return 2, 'WORK_ORDER_CORE'
+
+    # Tier 3: Work Order Execution, Time Entry, Status & Materials Allocation
+    if re.search(r'\b(start date and time|end date and time|estimated working hours|actual working hours|display the current status|assign engineers or labour|add materials|workshop and warehouse materials|stock category)\b', text):
+        return 3, 'WORK_ORDER_EXECUTION_RESOURCES'
+
+    # Tier 4: Offshore Vessels, Costing & Overtime Business Rules
+    if re.search(r'\b(vessel-wise|select the relevant vessel|equipment allocated to the selected vessel|materials allocated to the selected vessel|field name specifications|hourly labour rate|hourly overhead rate|estimated cost of a work order|third-party vessel costs|calculate labour costs|overtime|exceeding 9 hours|saturday working hours|sunday working hours|1\.5 times)\b', text):
+        return 4, 'VESSEL_COSTING_OVERTIME'
+
+    # Tier 5: Job Cards & Search / Filtering
+    if re.search(r'\b(job card|job cards|search functionality|filter engineering records)\b', text):
+        return 5, 'JOB_CARDS_SEARCH_FILTER'
+
+    # Tier 6: Email Notifications & Communication Templates
+    if re.search(r'\b(send notifications|emails to notify|cc/notification|approved templates|template confirmation)\b', text):
+        return 6, 'NOTIFICATIONS_TEMPLATES'
+
+    # Tier 7: Audit Trail, Reports & Activity History
+    if re.search(r'\b(audit trail|date/time associated with applicable record|engineering reports|reports to be filtered|reports to be exported|history of engineering activities|version history of work order|version history)\b', text):
+        return 7, 'AUDIT_REPORTS_HISTORY'
+
+    return 3, 'GENERAL_FEATURE'
+
+def infer_comprehensive_dependencies(story_list):
+    """
+    Infers logical technical and workflow DAG dependencies across all user stories
+    to guarantee that Core Foundation & MVP prerequisites strictly precede dependent features.
+    """
+    id_map = {s['story_id']: s for s in story_list}
+    
+    # Identify key milestone blockers
+    auth_role_ids = [s['story_id'] for s in story_list if analyze_story_process_tier(s.get('title', ''), s.get('description', ''))[0] == 0]
+    defect_repair_ids = [s['story_id'] for s in story_list if analyze_story_process_tier(s.get('title', ''), s.get('description', ''))[0] == 1]
+    work_order_core_ids = [s['story_id'] for s in story_list if analyze_story_process_tier(s.get('title', ''), s.get('description', ''))[0] == 2]
+    
+    primary_auth = auth_role_ids[0] if auth_role_ids else None
+    primary_wo = work_order_core_ids[0] if work_order_core_ids else None
+    primary_defect = defect_repair_ids[0] if defect_repair_ids else None
+
+    for s in story_list:
+        sid = s['story_id']
+        tier, grp = analyze_story_process_tier(s.get('title', ''), s.get('description', ''))
+        s['dependency_tier'] = tier
+        s['process_group'] = grp
+        
+        deps = set(s.get('dependencies', []))
+        
+        # Rule 1: All business workflows and asset queries require baseline Auth & Permissions
+        if tier > 0 and primary_auth and sid != primary_auth:
+            if tier >= 2 or 'view' in s.get('title', '').lower() or 'manage' in s.get('title', '').lower():
+                deps.add(primary_auth)
+
+        # Rule 2: Linking repairs and defects to Work Orders requires Work Order & Defect Core to exist
+        if tier == 2:
+            title_lower = s.get('title', '').lower()
+            if 'link defect' in title_lower and primary_defect:
+                deps.add(primary_defect)
+            if 'approve' in title_lower and primary_wo and sid != primary_wo:
+                deps.add(primary_wo)
+
+        # Rule 3: Execution, labor assignment, and materials require Core Work Orders
+        if tier in [3, 4] and primary_wo and sid != primary_wo:
+            deps.add(primary_wo)
+
+        # Rule 4: Job card generation, exports, emails, and reporting require Work Order and Costing to exist
+        if tier in [5, 6, 7] and primary_wo and sid != primary_wo:
+            deps.add(primary_wo)
+            
+        s['dependencies'] = sorted(list(deps))
+
 def decompose_story_ai(story):
     """
     Decomposes a complex parent story into 2-3 distinct, atomic child sub-stories
-    following INVEST principles, with Fibonacci estimation and BDD acceptance criteria.
-    Each child sub-task has a unique, specialized technical deliverable title.
+    following INVEST principles, with Fibonacci estimation, domain-specific effort hours,
+    and BDD acceptance criteria.
     """
     sid = story.get('story_id', 'US001')
     raw_title = story.get('title', 'Feature Story')
@@ -181,14 +277,28 @@ def decompose_story_ai(story):
     
     t_lower = raw_title.lower()
     
-    if points >= 8 or any(k in t_lower for k in ["full", "complete", "system", "module", "management", "platform", "dashboard", "engine"]):
-        p1 = max(2, int(points * 0.4))
-        p2 = max(2, int(points * 0.35))
-        p3 = max(1, points - p1 - p2)
-        fib = [1, 2, 3, 5, 8]
-        p1 = min(fib, key=lambda x: abs(x - p1))
-        p2 = min(fib, key=lambda x: abs(x - p2))
-        p3 = max(1, points - (p1 + p2))
+    # 3-part decomposition for larger or complex stories (>= 5 pts)
+    if points >= 5 or any(k in t_lower for k in ["full", "complete", "system", "module", "management", "platform", "dashboard", "engine"]):
+        # Domain effort weights: Backend (45%), Frontend (35%), QA/Testing (20%)
+        # Exact integer partition guaranteeing sum(sub_pts) == points
+        if points <= 5:
+            p1 = 2  # Backend
+            p2 = 2  # Frontend
+            p3 = max(1, points - p1 - p2)  # QA
+        else:
+            p1 = max(2, int(round(points * 0.45)))
+            p2 = max(2, int(round(points * 0.35)))
+            p3 = max(1, points - (p1 + p2))
+        
+        # Ensure exact match
+        if p1 + p2 + p3 != points:
+            diff = points - (p1 + p2 + p3)
+            p1 += diff
+
+        total_base_hours = points * 8
+        h1 = max(6, int(round(total_base_hours * 0.45)))
+        h2 = max(5, int(round(total_base_hours * 0.35)))
+        h3 = max(4, total_base_hours - (h1 + h2))
         
         sub1_id = f"{sid}.1"
         sub2_id = f"{sid}.2"
@@ -206,6 +316,10 @@ def decompose_story_ai(story):
                 "description": f"Backend persistence layer, database schemas, and REST endpoints for {core_action}.",
                 "epic": epic,
                 "story_points": p1,
+                "points": p1,
+                "estimated_hours": h1,
+                "hours": h1,
+                "domain": "Backend",
                 "priority_tier": tier,
                 "dependencies": deps,
                 "gherkin_criteria": generate_gherkin_scenarios(sub1_title, desc, epic),
@@ -218,6 +332,10 @@ def decompose_story_ai(story):
                 "description": f"Responsive user interface, real-time client state binding, and interactive UX for {core_action}.",
                 "epic": epic,
                 "story_points": p2,
+                "points": p2,
+                "estimated_hours": h2,
+                "hours": h2,
+                "domain": "Frontend",
                 "priority_tier": tier,
                 "dependencies": [sub1_id],
                 "gherkin_criteria": generate_gherkin_scenarios(sub2_title, desc, epic),
@@ -230,6 +348,10 @@ def decompose_story_ai(story):
                 "description": f"Security verification, exception handling, automated tests, and edge case coverage for {core_action}.",
                 "epic": epic,
                 "story_points": p3,
+                "points": p3,
+                "estimated_hours": h3,
+                "hours": h3,
+                "domain": "QA",
                 "priority_tier": "LOW" if tier == "LOW" else "MEDIUM",
                 "dependencies": [sub2_id],
                 "gherkin_criteria": generate_gherkin_scenarios(sub3_title, desc, epic),
@@ -237,11 +359,13 @@ def decompose_story_ai(story):
             }
         ]
     else:
-        p1 = max(2, int(points * 0.6))
+        # 2-part decomposition for smaller stories (e.g. 2-3 points)
+        p1 = max(1, points // 2)
         p2 = max(1, points - p1)
-        fib = [1, 2, 3, 5]
-        p1 = min(fib, key=lambda x: abs(x - p1))
-        p2 = max(1, points - p1)
+        
+        total_base_hours = points * 8
+        h1 = max(4, int(round(total_base_hours * 0.55)))
+        h2 = max(4, total_base_hours - h1)
         
         sub1_id = f"{sid}.1"
         sub2_id = f"{sid}.2"
@@ -257,6 +381,10 @@ def decompose_story_ai(story):
                 "description": f"Fundamental API logic, database handlers, and data transactions for {core_action}.",
                 "epic": epic,
                 "story_points": p1,
+                "points": p1,
+                "estimated_hours": h1,
+                "hours": h1,
+                "domain": "Backend",
                 "priority_tier": tier,
                 "dependencies": deps,
                 "gherkin_criteria": generate_gherkin_scenarios(sub1_title, desc, epic),
@@ -269,6 +397,10 @@ def decompose_story_ai(story):
                 "description": f"Client-facing components, interactive handlers, input validation, and user feedback for {core_action}.",
                 "epic": epic,
                 "story_points": p2,
+                "points": p2,
+                "estimated_hours": h2,
+                "hours": h2,
+                "domain": "Frontend",
                 "priority_tier": tier,
                 "dependencies": [sub1_id],
                 "gherkin_criteria": generate_gherkin_scenarios(sub2_title, desc, epic),
@@ -317,17 +449,10 @@ def attach_subtasks_to_tasks(task_list, force_high_critical=True):
         if force_high_critical and (raw_tier in ['CRITICAL', 'HIGH'] or str(task.get('priority', '')).upper() in ['CRITICAL', 'HIGH']):
             generated = decompose_story_ai(task)
             sub_tasks = []
-            pts = int(task.get('story_points') or task.get('points', 3))
-            pts_left = pts
-            n_subs = len(generated)
             for i, sub in enumerate(generated):
-                if i == n_subs - 1:
-                    sub_pt = max(1, pts_left)
-                else:
-                    sub_pt = max(1, pts // n_subs)
-                    pts_left -= sub_pt
-                
-                sub_id = f"{sid}.{i+1}"
+                sub_id = sub.get('story_id') or f"{sid}.{i+1}"
+                sub_pt = int(sub.get('story_points') or sub.get('points', 1))
+                sub_hrs = int(sub.get('estimated_hours') or sub.get('hours', sub_pt * 8))
                 sub_tasks.append({
                     "id": sub_id,
                     "story_id": sub_id,
@@ -336,14 +461,15 @@ def attach_subtasks_to_tasks(task_list, force_high_critical=True):
                     "description": sub.get('description', ''),
                     "points": sub_pt,
                     "story_points": sub_pt,
-                    "estimated_hours": sub_pt * 8,
-                    "hours": sub_pt * 8,
+                    "estimated_hours": sub_hrs,
+                    "hours": sub_hrs,
+                    "domain": sub.get('domain', 'Backend'),
                     "status": task.get('status', 'To Do'),
                     "priority_tier": tier,
                     "priority": task.get('priority', 'HIGH'),
                     "assigned_developer": task.get('assigned_developer'),
                     "gherkin_criteria": sub.get('gherkin_criteria', ''),
-                    "dependencies": [f"{sid}.{i}"] if i > 0 else []
+                    "dependencies": sub.get('dependencies', [])
                 })
             task['sub_tasks'] = sub_tasks
             task['is_decomposed'] = True
@@ -459,8 +585,17 @@ def load_initial_sprint_tasks():
             with open(persisted_path, "r", encoding="utf-8") as pf:
                 saved = json.load(pf)
                 if saved.get('tasks') and len(saved['tasks']) > 0:
-                    loaded_tasks = attach_subtasks_to_tasks(saved['tasks'], force_high_critical=True)
-                    print(f"[OK] Loaded {len(loaded_tasks)} persisted user stories from disk with sub-tasks.")
+                    raw_tasks = saved['tasks']
+                    # Ensure dependencies are populated
+                    has_deps = any(t.get('dependencies') and len(t['dependencies']) > 0 for t in raw_tasks)
+                    if not has_deps:
+                        infer_comprehensive_dependencies(raw_tasks)
+                        ilp_out = ilp_solver.solve_ilp(raw_tasks, capacities=saved.get('capacities', [55, 55, 55, 55, 55]))
+                        if ilp_out.get('status') == 'success':
+                            dev_out = dev_allocator.allocate_tasks_to_developers(ilp_out['tasks'])
+                            raw_tasks = dev_out['tasks']
+                    loaded_tasks = attach_subtasks_to_tasks(raw_tasks, force_high_critical=True)
+                    print(f"[OK] Loaded {len(loaded_tasks)} persisted user stories from disk with sub-tasks and comprehensive dependencies.")
                     try:
                         with open(persisted_path, "w", encoding="utf-8") as pf:
                             json.dump({"tasks": loaded_tasks, "capacities": saved.get('capacities', [55, 55, 55, 55, 55]), "config": saved.get('config', {})}, pf, indent=2)
@@ -509,12 +644,7 @@ def load_initial_sprint_tasks():
                             "badge_color": ai['badge_color']
                         })
                     if stories:
-                        auth_db_ids = [s['story_id'] for s in stories if 'database' in s['title'].lower() or 'auth' in s['title'].lower() or 'security' in s['title'].lower()]
-                        if auth_db_ids:
-                            primary_blocker = auth_db_ids[0]
-                            for s in stories:
-                                if s['story_id'] != primary_blocker and ('export' in s['title'].lower() or 'report' in s['title'].lower() or 'filter' in s['title'].lower() or 'dashboard' in s['title'].lower()):
-                                    s['dependencies'] = [primary_blocker]
+                        infer_comprehensive_dependencies(stories)
                         total_pts = sum(s['story_points'] for s in stories)
                         num_sprints = max(2, min(6, int(math.ceil(total_pts / 60.0))))
                         cap = int(math.ceil(total_pts / float(num_sprints))) + 5
@@ -1032,10 +1162,18 @@ def import_requirements_to_sprint():
 
         converted_stories = []
         for idx, req in enumerate(req_list, 1):
-            text = req.get('requirement_sentence') or req.get('description') or req.get('title') or ''
-            epic = req.get('epic') or 'General Module'
-            feature = req.get('feature') or ''
-            raw_title = req.get('user_story') or (f"{feature}: {text[:60]}" if feature else text[:70])
+            if isinstance(req, str):
+                text = req
+                epic = 'General Module'
+                feature = ''
+                raw_title = text[:70]
+            elif isinstance(req, dict):
+                text = req.get('requirement_sentence') or req.get('description') or req.get('title') or ''
+                epic = req.get('epic') or 'General Module'
+                feature = req.get('feature') or ''
+                raw_title = req.get('user_story') or (f"{feature}: {text[:60]}" if feature else text[:70])
+            else:
+                continue
             title = clean_story_title_text(raw_title)
             desc = text
 
@@ -1069,13 +1207,8 @@ def import_requirements_to_sprint():
                 "badge_color": ai_pred['badge_color']
             })
 
-        # Infer logical prerequisites
-        auth_db_ids = [s['story_id'] for s in converted_stories if 'database' in s['title'].lower() or 'auth' in s['title'].lower() or 'security' in s['title'].lower()]
-        if auth_db_ids:
-            primary_blocker = auth_db_ids[0]
-            for s in converted_stories:
-                if s['story_id'] != primary_blocker and ('export' in s['title'].lower() or 'report' in s['title'].lower() or 'filter' in s['title'].lower() or 'dashboard' in s['title'].lower()):
-                    s['dependencies'] = [primary_blocker]
+        # Infer comprehensive workflow and MVP architectural dependencies
+        infer_comprehensive_dependencies(converted_stories)
 
         # Keep user stories intact as 1-to-1 atomic stories (no sub-story decomposition)
         # Calculate estimated number of sprints needed
@@ -2442,12 +2575,24 @@ def api_apply_decomposition():
             
         parent_task['is_decomposed'] = True
         pts = int(parent_task.get('story_points') or parent_task.get('points', 3))
-        pts_left = pts
         n_subs = len(sub_stories)
+        total_base_hours = pts * 8
         formatted_sub_tasks = []
         for i, sub in enumerate(sub_stories):
-            sub_pt = int(sub.get('story_points') or max(1, pts // n_subs))
+            sub_pt = int(sub.get('story_points') or sub.get('points') or max(1, pts // n_subs))
             sub_id = sub.get('story_id') or f"{parent_id}.{i+1}"
+            sub_domain = sub.get('domain') or ('Backend' if i == 0 else ('Frontend' if i == 1 else 'QA'))
+            
+            # Domain-weighted hours calculation
+            if sub.get('estimated_hours'):
+                sub_hrs = int(sub.get('estimated_hours'))
+            else:
+                if n_subs == 3:
+                    weight = 0.45 if i == 0 else (0.35 if i == 1 else 0.20)
+                else:
+                    weight = 0.55 if i == 0 else 0.45
+                sub_hrs = max(4, int(round(total_base_hours * weight)))
+                
             formatted_sub_tasks.append({
                 "id": sub_id,
                 "story_id": sub_id,
@@ -2456,8 +2601,9 @@ def api_apply_decomposition():
                 "description": sub.get('description', ''),
                 "points": sub_pt,
                 "story_points": sub_pt,
-                "estimated_hours": sub_pt * 8,
-                "hours": sub_pt * 8,
+                "estimated_hours": sub_hrs,
+                "hours": sub_hrs,
+                "domain": sub_domain,
                 "status": sub.get('status', parent_task.get('status', 'To Do')),
                 "priority_tier": sub.get('priority_tier', parent_task.get('priority_tier', 'MEDIUM')),
                 "assigned_developer": parent_task.get('assigned_developer'),

@@ -3,11 +3,16 @@ const path = require('path');
 
 const isWin = process.platform === 'win32';
 
+const localAppPython = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Python', 'bin', 'python.exe') : null;
+const pythonBin = isWin && localAppPython && require('fs').existsSync(localAppPython)
+  ? localAppPython
+  : 'python';
+
 const services = [
   { name: 'EXPRESS-BACKEND', color: '\x1b[36m', command: 'node', args: ['backend/server.js'] },
-  { name: 'FLASK-API',       color: '\x1b[33m', command: 'python', args: ['backend/api.py'] },
-  { name: 'ML-SERVICE',      color: '\x1b[35m', command: 'python', args: ['ml-service/app.py'] },
-  { name: 'FRONTEND',        color: '\x1b[32m', cwd: path.join(__dirname, 'frontend'), command: isWin ? 'cmd.exe' : 'npm', args: isWin ? ['/c', 'npm', 'run', 'dev'] : ['run', 'dev'] }
+  { name: 'FLASK-API',       color: '\x1b[33m', command: pythonBin, args: ['backend/api.py'] },
+  { name: 'ML-SERVICE',      color: '\x1b[35m', command: pythonBin, args: ['ml-service/app.py'] },
+  { name: 'FRONTEND',        color: '\x1b[32m', cwd: path.join(__dirname, 'frontend'), command: isWin ? 'cmd.exe' : 'npm', args: isWin ? ['/c', 'npm', 'run', 'dev', '--', '--host', '127.0.0.1'] : ['run', 'dev', '--', '--host', '127.0.0.1'] }
 ];
 
 const children = [];
