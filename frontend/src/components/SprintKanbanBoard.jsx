@@ -151,29 +151,29 @@ export default function SprintKanbanBoard({
       id: "To Do", 
       title: "To Do", 
       icon: "📝", 
-      color: "border-slate-700 bg-slate-900/60", 
-      badge: "bg-slate-800 text-slate-300 border-slate-700" 
+      color: "border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/60", 
+      badge: "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700" 
     },
     { 
       id: "In Progress", 
       title: "In Progress", 
       icon: "⚡", 
-      color: "border-sky-500/40 bg-sky-950/20", 
-      badge: "bg-sky-500/15 text-sky-300 border-sky-500/40" 
+      color: "border-sky-300 dark:border-sky-500/40 bg-sky-50/70 dark:bg-sky-950/20", 
+      badge: "bg-sky-100 dark:bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-300 dark:border-sky-500/40" 
     },
     { 
       id: "QA Review", 
       title: "QA Review", 
       icon: "🔍", 
-      color: "border-amber-500/40 bg-amber-950/20", 
-      badge: "bg-amber-500/15 text-amber-300 border-amber-500/40" 
+      color: "border-amber-300 dark:border-amber-500/40 bg-amber-50/70 dark:bg-amber-950/20", 
+      badge: "bg-amber-100 dark:bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-500/40" 
     },
     { 
       id: "Done", 
       title: "Done", 
       icon: "✅", 
-      color: "border-emerald-500/40 bg-emerald-950/20", 
-      badge: "bg-emerald-500/15 text-emerald-300 border-emerald-500/40" 
+      color: "border-emerald-300 dark:border-emerald-500/40 bg-emerald-50/70 dark:bg-emerald-950/20", 
+      badge: "bg-emerald-100 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-500/40" 
     }
   ];
 
@@ -212,6 +212,16 @@ export default function SprintKanbanBoard({
     return deps.filter(depId => !isPrereqDone(depId));
   };
 
+  // Helper to get all dependent stories that require this story as a prerequisite
+  const getDependentStories = (storyId) => {
+    return (tasks || []).filter(t => (t.dependencies || []).includes(storyId));
+  };
+
+  // Helper to get active (unfinished) dependent stories waiting on this story
+  const getActiveDependentStories = (storyId) => {
+    return (tasks || []).filter(t => t.status !== "Done" && (t.dependencies || []).includes(storyId));
+  };
+
   // Unblocked & Blocked Stories calculation
   const unblockedStories = filteredTasks.filter(t => {
     if (t.status === "Done") return false;
@@ -223,6 +233,13 @@ export default function SprintKanbanBoard({
     if (t.status === "Done") return false;
     const deps = t.dependencies || [];
     return deps.length > 0 && deps.some(dId => !isPrereqDone(dId));
+  });
+
+  // Active Blocker Stories (must be finished first to unblock others)
+  const activeBlockerStories = filteredTasks.filter(t => {
+    if (t.status === "Done") return false;
+    const sid = t.story_id || t.id;
+    return getActiveDependentStories(sid).length > 0;
   });
 
   // Drag & Drop Handlers
@@ -263,10 +280,21 @@ export default function SprintKanbanBoard({
     setIsUpdating(true);
     // Optimistic UI update immediately for zero-latency card movement
     const story = tasks.find(t => (t.story_id === storyId || t.id === storyId));
-    if (story && onCardMoved) {
-      const updatedStory = { ...story, status: newStatus, sprint_number: sprintNum || story.sprint_number };
-      const updatedTasks = tasks.map(t => (t.story_id === storyId || t.id === storyId) ? updatedStory : t);
-      onCardMoved({ tasks: updatedTasks, story: updatedStory });
+    if (story) {
+      const unmet = getUnmetDeps(story);
+      if (unmet.length > 0 && (newStatus === "In Progress" || newStatus === "Done")) {
+        setActiveValidationWarning({
+          type: "DAG_DEPENDENCY_BLOCKER",
+          severity: newStatus === "Done" ? "CRITICAL" : "WARNING",
+          title: "Dependency Blocking Story Must Be Finished First",
+          message: `Story ${storyId} is blocked by prerequisite story (${unmet.join(", ")}). In Scrum, dependency blocking stories must be finished first (Done) before dependent work can proceed.`
+        });
+      }
+      if (onCardMoved) {
+        const updatedStory = { ...story, status: newStatus, sprint_number: sprintNum || story.sprint_number };
+        const updatedTasks = tasks.map(t => (t.story_id === storyId || t.id === storyId) ? updatedStory : t);
+        onCardMoved({ tasks: updatedTasks, story: updatedStory });
+      }
     }
 
     try {
@@ -314,23 +342,23 @@ export default function SprintKanbanBoard({
   };
 
   return (
-    <div className="space-y-6 text-slate-100 animate-in fade-in duration-300">
+    <div className="space-y-6 text-slate-900 dark:text-slate-100 animate-in fade-in duration-300 transition-colors">
       
       {/* Top Banner: Board Overview & Sprint Controls */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border border-indigo-500/30 rounded-2xl p-5 shadow-xl">
+      <div className="bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl backdrop-blur-md">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs uppercase tracking-wider">
+            <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-xs uppercase tracking-wider">
               <Kanban size={15} />
               <span>Auto-Generated Sprint Kanban & Real-Time Sync</span>
             </div>
-            <h3 className="text-xl font-extrabold text-white mt-1 flex items-center gap-2.5">
+            <h3 className="text-xl font-extrabold text-slate-900 dark:text-white mt-1 flex items-center gap-2.5">
               Interactive Sprint Kanban Board
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-mono font-bold">
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-500/15 dark:border-emerald-500/40 dark:text-emerald-300 font-mono font-bold">
                 ⚡ Auto-Created from Requirements
               </span>
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Automatically populated by AI ILP Optimizer. Moving stories to <strong>Done</strong> unlocks dependent DAG stories, updates Gantt timeline progress, and credits team velocity.
             </p>
           </div>
@@ -418,37 +446,44 @@ export default function SprintKanbanBoard({
         )}
 
         {/* Sprint Progress Bar & Metrics */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-4 pt-4 border-t border-slate-700/60 text-xs">
-          <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-            <span className="text-slate-400 block text-[11px]">Sprint Stories:</span>
-            <span className="text-white font-bold text-sm">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-4 pt-4 border-t border-slate-200 dark:border-slate-700/60 text-xs">
+          <div className="bg-slate-50 dark:bg-slate-950/70 p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
+            <span className="text-slate-500 dark:text-slate-400 block text-[11px]">Sprint Stories:</span>
+            <span className="text-slate-900 dark:text-white font-bold text-sm">
               {filteredTasks.length} Active Stories
             </span>
           </div>
-          <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-            <span className="text-slate-400 block text-[11px]">Sprint Velocity Done:</span>
-            <span className="text-emerald-400 font-bold text-sm font-mono">
+          <div className="bg-slate-50 dark:bg-slate-950/70 p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
+            <span className="text-slate-500 dark:text-slate-400 block text-[11px]">Sprint Velocity Done:</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-bold text-sm font-mono">
               {donePoints} / {totalPoints} pts ({progressPct}% Done)
             </span>
           </div>
-          <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-            <span className="text-slate-400 block text-[11px]">Target Capacity:</span>
-            <span className="text-indigo-300 font-bold text-sm font-mono">
+          <div className="bg-slate-50 dark:bg-slate-950/70 p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
+            <span className="text-slate-500 dark:text-slate-400 block text-[11px]">Target Capacity:</span>
+            <span className="text-indigo-600 dark:text-indigo-300 font-bold text-sm font-mono">
               {totalPoints}/{currentSprintCap} pts
             </span>
           </div>
-          <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-            <span className="text-slate-400 block text-[11px]">DAG Blocked:</span>
-            <span className="text-amber-400 font-bold text-sm flex items-center gap-1 font-mono">
-              <AlertTriangle size={13} className="text-amber-400" />
-              {blockedStories.length} Stories Blocked
+          <div className="bg-slate-50 dark:bg-slate-950/70 p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
+            <span className="text-slate-500 dark:text-slate-400 block text-[11px]">Blockers (Finish 1st):</span>
+            <span className="text-indigo-600 dark:text-indigo-400 font-bold text-sm flex items-center gap-1 font-mono">
+              <Zap size={13} className="text-yellow-500 shrink-0" />
+              {activeBlockerStories.length} Blockers
             </span>
           </div>
-          <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-            <span className="text-slate-400 block text-[11px]">DAG Unblocked Ready:</span>
-            <span className="text-emerald-300 font-bold text-sm flex items-center gap-1">
-              <Sparkles size={13} className="text-emerald-400" />
-              {unblockedStories.length} Stories Ready
+          <div className="bg-slate-50 dark:bg-slate-950/70 p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
+            <span className="text-slate-500 dark:text-slate-400 block text-[11px]">DAG Blocked:</span>
+            <span className="text-amber-600 dark:text-amber-400 font-bold text-sm flex items-center gap-1 font-mono">
+              <AlertTriangle size={13} className="text-amber-500" />
+              {blockedStories.length} Blocked
+            </span>
+          </div>
+          <div className="bg-slate-50 dark:bg-slate-950/70 p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
+            <span className="text-slate-500 dark:text-slate-400 block text-[11px]">DAG Ready:</span>
+            <span className="text-emerald-600 dark:text-emerald-300 font-bold text-sm flex items-center gap-1">
+              <Sparkles size={13} className="text-emerald-500" />
+              {unblockedStories.length} Ready
             </span>
           </div>
         </div>
@@ -500,7 +535,52 @@ export default function SprintKanbanBoard({
       {/* 4 Kanban Columns Matrix */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {COLUMNS.map((col) => {
-          const colTasks = filteredTasks.filter(t => (t.status || "To Do") === col.id);
+          // Sort cards in each column so that dependency blocking stories are displayed FIRST!
+          const sortColumnTasks = (a, b) => {
+            const aId = a.story_id || a.id;
+            const bId = b.story_id || b.id;
+            const unmetA = getUnmetDeps(a);
+            const unmetB = getUnmetDeps(b);
+            const isBlockedA = unmetA.length > 0;
+            const isBlockedB = unmetB.length > 0;
+
+            const activeUnblocksA = getActiveDependentStories(aId).length;
+            const activeUnblocksB = getActiveDependentStories(bId).length;
+
+            const totalUnblocksA = getDependentStories(aId).length;
+            const totalUnblocksB = getDependentStories(bId).length;
+
+            // 1. Dependency blockers that unblock other stories MUST be finished first -> DISPLAY FIRST!
+            if (col.id !== "Done") {
+              if (activeUnblocksA > 0 && activeUnblocksB === 0) return -1;
+              if (activeUnblocksB > 0 && activeUnblocksA === 0) return 1;
+              if (activeUnblocksA !== activeUnblocksB) return activeUnblocksB - activeUnblocksA;
+            } else {
+              // In Done column: prerequisite blockers that were completed appear first
+              if (totalUnblocksA > 0 && totalUnblocksB === 0) return -1;
+              if (totalUnblocksB > 0 && totalUnblocksA === 0) return 1;
+              if (totalUnblocksA !== totalUnblocksB) return totalUnblocksB - totalUnblocksA;
+            }
+
+            // 2. Unblocked ready-to-work stories come before Blocked stories
+            if (!isBlockedA && isBlockedB) return -1;
+            if (isBlockedA && !isBlockedB) return 1;
+
+            // 3. Priority tier: CRITICAL > HIGH > MEDIUM > LOW
+            const pWeight = { 'CRITICAL': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
+            const pA = pWeight[(a.priority_tier || a.priority || 'MEDIUM').toUpperCase()] || 2;
+            const pB = pWeight[(b.priority_tier || b.priority || 'MEDIUM').toUpperCase()] || 2;
+            if (pA !== pB) return pB - pA;
+
+            // 4. Story points (descending)
+            const ptsA = a.story_points || a.points || 0;
+            const ptsB = b.story_points || b.points || 0;
+            if (ptsA !== ptsB) return ptsB - ptsA;
+
+            return String(aId).localeCompare(String(bId));
+          };
+
+          const colTasks = filteredTasks.filter(t => (t.status || "To Do") === col.id).sort(sortColumnTasks);
           const colPoints = colTasks.reduce((acc, t) => acc + (t.story_points || t.points || 0), 0);
           const isOver = dragOverColumn === col.id;
 
@@ -543,23 +623,28 @@ export default function SprintKanbanBoard({
                     const isBlocked = unmetDeps.length > 0;
                     const isNewlyUnblocked = (task.dependencies || []).length > 0 && unmetDeps.length === 0 && col.id === "To Do";
 
+                    const activeUnblocksList = getActiveDependentStories(task.story_id || task.id);
+                    const totalUnblocksList = getDependentStories(task.story_id || task.id);
+                    const activeUnblocksCount = activeUnblocksList.length;
+                    const totalUnblocksCount = totalUnblocksList.length;
+
                     return (
                       <div
                         key={task.story_id || task.id}
                         draggable
                         onDragStart={(e) => handleDragStart(e, task.story_id || task.id)}
-                        className={`bg-slate-950/90 hover:bg-slate-900 border rounded-xl p-3.5 space-y-2.5 transition-all shadow-md cursor-grab active:cursor-grabbing hover:shadow-indigo-500/10 ${
+                        className={`bg-white dark:bg-slate-950/90 hover:bg-slate-50 dark:hover:bg-slate-900 border rounded-2xl p-3.5 space-y-2.5 transition-all shadow-sm dark:shadow-md cursor-grab active:cursor-grabbing hover:shadow-indigo-500/10 ${
                           col.id === "Done"
-                            ? "border-emerald-500/40 bg-emerald-950/10"
+                            ? "border-emerald-300 dark:border-emerald-500/40 bg-emerald-50/50 dark:bg-emerald-950/10"
                             : isBlocked && col.id !== "Done"
-                            ? "border-amber-500/70 ring-1 ring-amber-500/40 bg-amber-950/10"
-                            : "border-slate-800 hover:border-slate-700"
+                            ? "border-amber-400 dark:border-amber-500/70 ring-1 ring-amber-400/40 dark:ring-amber-500/40 bg-amber-50/50 dark:bg-amber-950/10"
+                            : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
                         }`}
                       >
                         {/* Card Header: Story ID, Priority Tier, DAG Tag & Sprint */}
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-mono font-bold text-xs text-emerald-400">
+                            <span className="font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400">
                               {task.story_id || task.id}
                             </span>
                             <span className={`px-2 py-0.2 rounded-full text-[9px] font-extrabold border ${
@@ -574,6 +659,14 @@ export default function SprintKanbanBoard({
                               <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-500/25 border border-rose-500/50 text-rose-300 flex items-center gap-0.5">
                                 <Flame size={9} className="text-amber-400" />
                                 <span>Critical Path</span>
+                              </span>
+                            )}
+
+                            {/* Dependency Blocker Tag in Header (Must be Finished First) */}
+                            {activeUnblocksCount > 0 && col.id !== "Done" && (
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-500/25 border border-indigo-500/60 text-indigo-300 flex items-center gap-1 shadow-sm">
+                                <Zap size={10} className="text-yellow-400" />
+                                <span>BLOCKER • FINISH 1ST</span>
                               </span>
                             )}
 
@@ -594,15 +687,39 @@ export default function SprintKanbanBoard({
                             )}
                           </div>
 
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300 shrink-0">
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 shrink-0">
                             Sprint {task.sprint_number || 1}
                           </span>
                         </div>
 
                         {/* Title */}
-                        <p className="text-xs font-semibold text-white leading-tight">
+                        <p className="text-xs font-semibold text-slate-900 dark:text-white leading-tight">
                           {cleanStoryTitle(task.title)}
                         </p>
+
+                        {/* Dependency Blocker Callout: Finished First requirement */}
+                        {activeUnblocksCount > 0 && col.id !== "Done" && (
+                          <div 
+                            className="p-2 rounded-xl bg-indigo-500/15 border border-indigo-500/50 text-indigo-200 text-xs flex items-center gap-2 font-semibold shadow-sm"
+                            title="In Scrum, dependency blocking stories must be finished first to unblock downstream work."
+                          >
+                            <Zap size={14} className="text-yellow-400 shrink-0" />
+                            <div className="min-w-0">
+                              <span className="font-bold text-indigo-300">Prerequisite Blocker (Finish First):</span>
+                              <span className="opacity-95 ml-1">
+                                Unblocks {activeUnblocksCount} {activeUnblocksCount === 1 ? 'story' : 'stories'} ({activeUnblocksList.map(d => d.story_id || d.id).join(", ")}).
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Delivered Blocker Callout in Done column */}
+                        {totalUnblocksCount > 0 && col.id === "Done" && (
+                          <div className="p-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-[10px] flex items-center gap-1.5 font-bold">
+                            <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />
+                            <span>✓ Finished First • Unblocked {totalUnblocksCount} downstream {totalUnblocksCount === 1 ? 'story' : 'stories'} ({totalUnblocksList.map(d => d.story_id || d.id).join(", ")})</span>
+                          </div>
+                        )}
 
                         {/* Dynamic DAG Status Badges */}
                         {isBlocked && col.id !== "Done" && (
@@ -624,10 +741,10 @@ export default function SprintKanbanBoard({
                           </div>
                         )}
 
-                        {col.id === "Done" && (
+                        {col.id === "Done" && totalUnblocksCount === 0 && (
                           <div className="p-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] flex items-center gap-1 font-bold">
                             <Check size={11} />
-                            <span>Delivered • Unblocks dependent stories</span>
+                            <span>Delivered • Done</span>
                           </div>
                         )}
 

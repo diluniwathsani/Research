@@ -128,7 +128,7 @@ function MainLayout() {
   const epicCount = new Set(requirements.map((r) => r.epic).filter(Boolean)).size;
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans transition-colors duration-200 text-slate-900 dark:text-slate-100">
+    <div className="h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans transition-colors duration-200 text-slate-900 dark:text-slate-100 overflow-hidden">
       
       {/* Top Header */}
       <Header 
@@ -156,7 +156,7 @@ function MainLayout() {
         />
 
         {/* Content View Area */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-6">
+        <main className={`flex-1 overflow-y-auto ${activeTab === 'projects' ? '' : 'p-4 sm:p-6 md:p-8 space-y-6'}`}>
           
           {activeTab === 'dashboard' && (
             <DashboardView 

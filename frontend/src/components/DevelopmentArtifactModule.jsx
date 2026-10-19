@@ -17,19 +17,22 @@ export default function DevelopmentArtifactModule({
 }) {
   const safeRequirements = Array.isArray(requirements) ? requirements : [];
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-slate-900 dark:text-slate-100 transition-colors">
       
       {/* Header Banner for Development Artifact Module */}
-      <div className="bg-gradient-to-r from-purple-950 via-slate-900 to-indigo-950 rounded-3xl p-6 md:p-8 text-white border border-purple-800/40 shadow-xl relative overflow-hidden">
+      <div className="bg-white dark:bg-slate-900/90 rounded-3xl p-6 md:p-8 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-xl relative overflow-hidden backdrop-blur-md">
         <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/20 border border-purple-400/30 text-purple-300 text-xs font-semibold mb-2">
-              <Sparkles size={14} className="text-purple-300" />
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-50 dark:bg-purple-500/20 border border-purple-200 dark:border-purple-400/30 text-purple-700 dark:text-purple-300 text-xs font-semibold mb-2">
+              <Sparkles size={14} className="text-purple-600 dark:text-purple-300" />
               <span>Module 1: Development Artifact Engineering</span>
             </div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
               Development Artifact Engineering Module
             </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xl">
+              Extract user stories, classify priority tiers, and compile requirement specifications with automated NLP pipelines.
+            </p>
           </div>
         </div>
       </div>

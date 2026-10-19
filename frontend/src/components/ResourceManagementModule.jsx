@@ -1153,18 +1153,18 @@ export default function ResourceManagementModule({
     <div className="space-y-6">
 
       {/* ------------------------------------ Header Banner ------------------------------------ */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 text-white border border-slate-800 shadow-xl relative overflow-hidden">
-        <div className="absolute -top-10 -right-10 w-48 h-48 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="bg-white dark:bg-slate-900/90 rounded-3xl p-6 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 shadow-md relative overflow-hidden transition-colors">
+        <div className="absolute -top-10 -right-10 w-48 h-48 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-semibold mb-2">
-              <Users size={14} className="text-indigo-300" />
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-500/20 border border-indigo-200 dark:border-indigo-400/30 text-indigo-700 dark:text-indigo-300 text-xs font-semibold mb-2">
+              <Users size={14} className="text-indigo-600 dark:text-indigo-300" />
               <span>Skill-Based Staff & Capacity Allocation System</span>
             </div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
               Sprint Resource Allocation Module
             </h1>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               Select project → select sprint → view sub-tasks with identified domain & skills → run allocation → save results.
             </p>
           </div>

@@ -186,12 +186,8 @@ def analyze_story_process_tier(title, desc=""):
     if re.search(r'\b(defect|defects|defect record|defect records|repair record|repair records|repair activity|repair activities)\b', text) and not re.search(r'\b(link defects|link repair|display the current status|work order|job card)\b', text):
         return 1, 'DEFECT_REPAIR_INITIATION'
 
-    # Tier 2: Core Work Order Management & Workflow Approvals
-    if re.search(r'\b(work order|work orders|create work order|enter.*work order|view existing work orders|edit work order|link defects|link repair|update the status of a work order|approve work order|approve the eork orders|approve or reject work orders)\b', text):
-        return 2, 'WORK_ORDER_CORE'
-
-    # Tier 3: Work Order Execution, Time Entry, Status & Materials Allocation
-    if re.search(r'\b(start date and time|end date and time|estimated working hours|actual working hours|display the current status|assign engineers or labour|add materials|workshop and warehouse materials|stock category)\b', text):
+    # Tier 3: Work Order Execution, Time Entry, Status & Materials Allocation (Evaluated before generic work order terms)
+    if re.search(r'\b(add materials|materials required|workshop and warehouse materials|stock category|start date and time|end date and time|estimated working hours|actual working hours|display the current status|assign engineers or labour)\b', text):
         return 3, 'WORK_ORDER_EXECUTION_RESOURCES'
 
     # Tier 4: Offshore Vessels, Costing & Overtime Business Rules
@@ -210,81 +206,147 @@ def analyze_story_process_tier(title, desc=""):
     if re.search(r'\b(audit trail|date/time associated with applicable record|engineering reports|reports to be filtered|reports to be exported|history of engineering activities|version history of work order|version history)\b', text):
         return 7, 'AUDIT_REPORTS_HISTORY'
 
+    # Tier 2: Core Work Order Management & Workflow Approvals (specific core creation/actions only)
+    if re.search(r'\b(create work order|enter.*work order details|create.*work order|view existing work orders|edit work order|link defects|link repair|update the status of a work order|approve work order|approve the eork orders|approve or reject work orders)\b', text):
+        return 2, 'WORK_ORDER_CORE'
+
     return 3, 'GENERAL_FEATURE'
 
 def infer_comprehensive_dependencies(story_list):
     """
     Infers logical technical and workflow DAG dependencies across all user stories
     to guarantee that Core Foundation & MVP prerequisites strictly precede dependent features.
+    Enforces rules:
+      - Prerequisites must be equal or higher priority than the dependent story.
+        Medium/low priority stories occurring later in the pipeline (like US016) can NEVER block high/critical stories.
+      - A story occurring later in the pipeline or sprint cannot block an earlier story.
+      - Dependency blocking stories must be finished first before dependent stories.
     """
-    id_map = {s['story_id']: s for s in story_list}
+    id_map = {s.get('story_id') or s.get('id'): s for s in story_list}
     
-    # Identify key milestone blockers
-    auth_role_ids = [s['story_id'] for s in story_list if analyze_story_process_tier(s.get('title', ''), s.get('description', ''))[0] == 0]
-    defect_repair_ids = [s['story_id'] for s in story_list if analyze_story_process_tier(s.get('title', ''), s.get('description', ''))[0] == 1]
-    work_order_core_ids = [s['story_id'] for s in story_list if analyze_story_process_tier(s.get('title', ''), s.get('description', ''))[0] == 2]
+    # Identify key milestone blockers (restricted to High/Critical priority)
+    auth_role_ids = [
+        s['story_id'] for s in story_list 
+        if analyze_story_process_tier(s.get('title', ''), s.get('description', ''))[0] == 0
+        and str(s.get('priority_tier') or s.get('priority') or '').upper() in ['HIGH', 'CRITICAL']
+    ]
+    defect_repair_ids = [
+        s['story_id'] for s in story_list 
+        if analyze_story_process_tier(s.get('title', ''), s.get('description', ''))[0] == 1
+    ]
+    work_order_core_ids = [
+        s['story_id'] for s in story_list 
+        if analyze_story_process_tier(s.get('title', ''), s.get('description', ''))[0] == 2
+        and str(s.get('priority_tier') or s.get('priority') or '').upper() in ['HIGH', 'CRITICAL']
+    ]
     
+    # Base reports story (e.g. US007)
+    report_base_ids = [
+        s['story_id'] for s in story_list
+        if 'engineering reports based on' in (s.get('title', '') + ' ' + s.get('description', '')).lower()
+        or ('report' in (s.get('title', '')).lower() and 'provide' in (s.get('title', '')).lower())
+    ]
+    primary_report = report_base_ids[0] if report_base_ids else None
+
+    # Job card base story (e.g. US054)
+    job_card_ids = [
+        s['story_id'] for s in story_list
+        if 'generate a job card' in (s.get('title', '') + ' ' + s.get('description', '')).lower()
+    ]
+    primary_job_card = job_card_ids[0] if job_card_ids else None
+
     primary_auth = auth_role_ids[0] if auth_role_ids else None
     primary_wo = work_order_core_ids[0] if work_order_core_ids else None
     primary_defect = defect_repair_ids[0] if defect_repair_ids else None
 
+    p_weight = {'CRITICAL': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1}
+
     for s in story_list:
-        sid = s['story_id']
+        sid = s.get('story_id') or s.get('id')
         tier, grp = analyze_story_process_tier(s.get('title', ''), s.get('description', ''))
         s['dependency_tier'] = tier
         s['process_group'] = grp
+        s_priority = str(s.get('priority_tier') or s.get('priority') or 'MEDIUM').upper()
+        s_p_val = p_weight.get(s_priority, 2)
+        s_sprint = int(s.get('sprint_number') or s.get('sprint') or 1)
         
-        deps = set(s.get('dependencies', []))
+        deps = set()
         
-        # Rule 1: All business workflows and asset queries require baseline Auth & Permissions
+        # Rule 1: All business workflows and asset queries require baseline Auth & Permissions (Tier 0)
         if tier > 0 and primary_auth and sid != primary_auth:
             if tier >= 2 or 'view' in s.get('title', '').lower() or 'manage' in s.get('title', '').lower():
                 deps.add(primary_auth)
 
-        # Rule 2: Linking repairs and defects to Work Orders requires Work Order & Defect Core to exist
+        # Rule 2: Linking repairs and defects requires Defect Core to exist
         if tier == 2:
             title_lower = s.get('title', '').lower()
-            if 'link defect' in title_lower and primary_defect:
+            if 'link defect' in title_lower and primary_defect and sid != primary_defect:
                 deps.add(primary_defect)
             if 'approve' in title_lower and primary_wo and sid != primary_wo:
                 deps.add(primary_wo)
 
-        # Rule 3: Execution, labor assignment, and materials require Core Work Orders
+        # Rule 3: Execution and materials require Core Work Orders (only if primary_wo exists and is high/critical)
         if tier in [3, 4] and primary_wo and sid != primary_wo:
             deps.add(primary_wo)
 
-        # Rule 4: Job card generation, exports, emails, and reporting require Work Order and Costing to exist
-        if tier in [5, 6, 7] and primary_wo and sid != primary_wo:
-            deps.add(primary_wo)
+        # Rule 4: Job card printing/exporting requires Job Card generation (US054)
+        if 'print or export the job card' in (s.get('title', '') + ' ' + s.get('description', '')).lower() or 'exporting job cards' in (s.get('title', '')).lower():
+            if primary_job_card and sid != primary_job_card:
+                deps.add(primary_job_card)
+
+        # Rule 5: Secondary reporting filters/exports (US008, US009) depend on primary report generation (US007)
+        if tier == 7:
+            title_lower = (s.get('title', '') + ' ' + s.get('description', '')).lower()
+            if ('filter' in title_lower or 'export' in title_lower) and primary_report and sid != primary_report:
+                deps.add(primary_report)
             
-        s['dependencies'] = sorted(list(deps))
+        # Prerequisite sanity validation:
+        # A medium/low priority story or later pipeline story CANNOT block a high/critical story
+        valid_deps = []
+        for d in deps:
+            dep_story = id_map.get(d)
+            if not dep_story:
+                continue
+            dep_priority = str(dep_story.get('priority_tier') or dep_story.get('priority') or 'MEDIUM').upper()
+            dep_p_val = p_weight.get(dep_priority, 2)
+            dep_sprint = int(dep_story.get('sprint_number') or dep_story.get('sprint') or 1)
+            
+            # Lower priority story cannot block higher priority story
+            if dep_p_val < s_p_val:
+                continue
+            # Later sprint cannot block earlier sprint
+            if dep_sprint > s_sprint:
+                continue
+            valid_deps.append(d)
+
+        s['dependencies'] = sorted(list(set(valid_deps)))
 
 def decompose_story_ai(story):
     """
-    Decomposes a complex parent story into 2-3 distinct, atomic child sub-stories
+    Decomposes a complex parent story into distinct, domain-specific, atomic child sub-stories
     following INVEST principles, with Fibonacci estimation, domain-specific effort hours,
     and BDD acceptance criteria.
     """
-    sid = story.get('story_id', 'US001')
+    sid = story.get('story_id') or story.get('id', 'US001')
     raw_title = story.get('title', 'Feature Story')
     title = clean_story_title_text(raw_title)
     core_action = extract_core_action(raw_title)
     desc = story.get('description', '') or story.get('reason', '')
     epic = story.get('epic', 'Core Module')
-    points = int(story.get('story_points', 5))
+    points = int(story.get('story_points') or story.get('points') or 5)
     deps = story.get('dependencies', [])
-    tier = story.get('priority_tier', 'MEDIUM')
+    tier = str(story.get('priority_tier') or story.get('priority') or 'MEDIUM').upper()
     
-    t_lower = raw_title.lower()
-    
-    # 3-part decomposition for larger or complex stories (>= 5 pts)
-    if points >= 5 or any(k in t_lower for k in ["full", "complete", "system", "module", "management", "platform", "dashboard", "engine"]):
-        # Domain effort weights: Backend (45%), Frontend (35%), QA/Testing (20%)
-        # Exact integer partition guaranteeing sum(sub_pts) == points
+    text = f"{raw_title} {desc} {epic}".lower()
+    total_base_hours = points * 8
+
+    # 1. Domain Effort Partitioning
+    if points >= 5 or any(k in text for k in ["full", "complete", "system", "module", "management", "platform", "dashboard", "engine", "report", "card", "approval", "restrict", "permission"]):
+        # 3-part decomposition: Backend (45%), Frontend (35%), QA/Testing (20%)
         if points <= 5:
-            p1 = 2  # Backend
-            p2 = 2  # Frontend
-            p3 = max(1, points - p1 - p2)  # QA
+            p1 = 2
+            p2 = 2
+            p3 = max(1, points - p1 - p2)
         else:
             p1 = max(2, int(round(points * 0.45)))
             p2 = max(2, int(round(points * 0.35)))
@@ -292,93 +354,258 @@ def decompose_story_ai(story):
         
         # Ensure exact match
         if p1 + p2 + p3 != points:
-            diff = points - (p1 + p2 + p3)
-            p1 += diff
+            p1 += (points - (p1 + p2 + p3))
 
-        total_base_hours = points * 8
         h1 = max(6, int(round(total_base_hours * 0.45)))
         h2 = max(5, int(round(total_base_hours * 0.35)))
         h3 = max(4, total_base_hours - (h1 + h2))
-        
-        sub1_id = f"{sid}.1"
-        sub2_id = f"{sid}.2"
-        sub3_id = f"{sid}.3"
-        
-        sub1_title = f"To implement Database Schema & Backend REST API for {core_action}"
-        sub2_title = f"To build Interactive UI Components & State Management for {core_action}"
-        sub3_title = f"To implement Validation, Error Handling & Automated Tests for {core_action}"
-        
-        sub_stories = [
-            {
-                "story_id": sub1_id,
+
+        # Contextual Domain Specifications
+        # A. Work Order Approvals & Status Transitions
+        if re.search(r'\b(approve or reject|approval|approve the work order|reject work order|approve work order|approve the eork)\b', text):
+            specs = [
+                ("To develop Work Order approval state machine, validation rules & status transition APIs",
+                 "Backend business logic managing Work Order approval flow, state transitions (Pending -> Approved/Rejected), and authority validation.",
+                 "Backend"),
+                ("To build approval/rejection decision modal with reason remarks & status badge actions",
+                 "Interactive UI components for reviewing Work Orders, submitting approval/rejection with mandatory comments, and updating status.",
+                 "Frontend"),
+                ("To automate approval workflow validations, unauthorized sign-off checks & status audit tests",
+                 "Automated test suite verifying permitted status transitions, ensuring remarks on rejection, and asserting audit history.",
+                 "QA")
+            ]
+        # B. Exporting / Printing Job Cards
+        elif re.search(r'\b(print or export the job card|print.*job card|export.*job card|print or export)\b', text):
+            specs = [
+                ("To implement high-resolution document generation services for PDF and Excel job card formats",
+                 "Backend document compilation service synthesizing Work Order data into structured printable files.",
+                 "Backend"),
+                ("To create one-click print preview modal and asynchronous file download handlers",
+                 "Interactive UI modal with print CSS layout preview, pagination controls, and file download triggers.",
+                 "Frontend"),
+                ("To verify print page breaks, paper layout styling & file format validation test suites",
+                 "Automated test suite asserting print media CSS formatting, page break rules, and PDF/Excel validation.",
+                 "QA")
+            ]
+        # C. Generating Job Cards
+        elif re.search(r'\b(generate a job card|generate.*job card|job card for the relevant work order|job card)\b', text):
+            specs = [
+                ("To aggregate Work Order, equipment, and vessel datasets into unified job card schemas",
+                 "Query and synthesize Work Order data, allocated equipment, labor hours, and vessel details into structured payloads.",
+                 "Backend"),
+                ("To design printable job card document view with print formatting & export triggers",
+                 "High-fidelity document layout with company branding, page-break print styles, and download triggers.",
+                 "Frontend"),
+                ("To validate job card calculation totals, export schema fidelity & print media styling tests",
+                 "Verify PDF/Excel file downloads, ensure print styling adheres to paper dimensions, and assert data fidelity.",
+                 "QA")
+            ]
+        # D. Exporting Reports
+        elif re.search(r'\b(reports to be exported|export.*reports|exporting reports)\b', text):
+            specs = [
+                ("To build tabular export generation endpoints supporting PDF, CSV and Excel formatting",
+                 "Backend export generation service streaming structured reports in CSV, Excel, and PDF formats.",
+                 "Backend"),
+                ("To create export format selector dropdown, download progress indicator & action buttons",
+                 "UI modal with format selectors, column inclusion checkboxes, and real-time download progress feedback.",
+                 "Frontend"),
+                ("To validate exported file data schema, character encoding & large dataset export stress tests",
+                 "Automated test suite verifying file structure fidelity, character escaping, and large-payload download performance.",
+                 "QA")
+            ]
+        # E. Filtering Reports
+        elif re.search(r'\b(reports to be filtered|filter.*reports|filtering reports)\b', text):
+            specs = [
+                ("To implement parameterized multi-criteria query handlers & filter indexing for reports",
+                 "Backend aggregation query handlers supporting dynamic date windows, multi-select categories, and indexing.",
+                 "Backend"),
+                ("To build faceted filter chips, date range pickers & dynamic dropdown controls",
+                 "Interactive filter bar with date range selectors, category chips, active filter badges, and reset buttons.",
+                 "Frontend"),
+                ("To test filter combination edge cases, boundary date handling & empty result states",
+                 "Automated test coverage for multi-criteria filtering, leap year/timezone edge cases, and empty report states.",
+                 "QA")
+            ]
+        # F. Generating Reports & Dashboard
+        elif re.search(r'\b(provide engineering reports|generate.*reports|engineering reports based on|dashboard|analytics)\b', text):
+            specs = [
+                ("To construct data aggregation queries, metrics summary calculations & reporting APIs",
+                 "Backend SQL aggregation pipelines computing summary metrics, entity statistics, and report feeds.",
+                 "Backend"),
+                ("To build interactive reporting dashboard with dynamic charts, filter chips & export controls",
+                 "Interactive visual analytics interface with customizable charts, status filters, and table pagination.",
+                 "Frontend"),
+                ("To verify report calculation accuracy, mathematical consistency & aggregation tests",
+                 "Automated test suite asserting aggregation mathematical correctness, boundary date handling, and export checks.",
+                 "QA")
+            ]
+        # G. Audit Trail
+        elif re.search(r'\b(audit trail|audit purposes)\b', text):
+            specs = [
+                ("To design immutable audit log schema, entity change listeners & history query endpoints",
+                 "Database audit tables and change interceptors logging user ID, timestamp, entity diffs, and historical snapshots.",
+                 "Backend"),
+                ("To build visual audit trail timeline viewer with search filters & change difference modal",
+                 "Timeline interface allowing engineers and auditors to search, filter, and inspect detailed before/after changes.",
+                 "Frontend"),
+                ("To test audit log immutability, timestamp accuracy & historical rollback verification",
+                 "Automated tests asserting audit records cannot be altered or deleted, ensuring complete traceability and compliance.",
+                 "QA")
+            ]
+        # H. Activity History & Version History
+        elif re.search(r'\b(history of engineering activities|version history)\b', text):
+            specs = [
+                ("To implement activity logging event dispatchers, session trackers & activity history tables",
+                 "Backend event dispatchers capturing engineering state changes, user interactions, and revision histories.",
+                 "Backend"),
+                ("To create activity history timeline component with search and chronological filtering",
+                 "UI component displaying chronological activity feeds, user action avatars, and version revision cards.",
+                 "Frontend"),
+                ("To verify activity logging completeness, chronological ordering & historical data integrity",
+                 "Test cases verifying log completeness, timestamp fidelity, and historical diff consistency.",
+                 "QA")
+            ]
+        # I. Status changes restricted by permission
+        elif re.search(r'\b(status changes only when|status changes based on permission)\b', text):
+            specs = [
+                ("To implement status change validation guards and permission verification middleware",
+                 "Backend validation interceptors preventing unauthorized state changes without required role credentials.",
+                 "Backend"),
+                ("To bind status change dropdowns to user roles with disabled state indicators and tooltips",
+                 "Dynamic UI controls disabling unauthorized status options with explanatory permission tooltips.",
+                 "Frontend"),
+                ("To execute status change authorization test matrix and assert unauthorized rejection",
+                 "Automated test suite checking all role-to-status transitions and ensuring non-permitted requests are rejected.",
+                 "QA")
+            ]
+        # J. Viewing records restricted by permission
+        elif re.search(r'\b(view engineering records based on|view records based on.*permission)\b', text):
+            specs = [
+                ("To implement record-level security filters & permission-bounded query endpoints",
+                 "Backend SQL query filters automatically constraining returned records based on caller's role and assigned assets.",
+                 "Backend"),
+                ("To create authorized record list view with conditional column masking & access feedback",
+                 "User interface displaying allowed records, concealing restricted data fields, and providing access info pills.",
+                 "Frontend"),
+                ("To test cross-tenant data isolation, unauthorized record access denial & permission checks",
+                 "Security test cases asserting users cannot access unassigned records via direct ID querying or API parameter tampering.",
+                 "QA")
+            ]
+        # K. Role Action Restrictions / General RBAC
+        elif re.search(r'\b(restrict users|action restriction|not permitted for their assigned role|roles and permissions|create and manage user accounts)\b', text):
+            specs = [
+                ("To implement RBAC permission models, security policies & authorization middleware",
+                 "Database schemas for roles and permissions, token claims, and backend authorization policy guards.",
+                 "Backend"),
+                ("To build permission-aware UI guards, conditional action buttons & restricted views",
+                 "Dynamic rendering of UI action buttons, route guards, and visual feedback for restricted user roles.",
+                 "Frontend"),
+                ("To execute security permission matrix tests, privilege escalation checks & access audit verification",
+                 "Automated test assertions covering positive/negative role combinations, unauthorized access denial, and security logging.",
+                 "QA")
+            ]
+        # L. Costing, Overtime & Labor Rules
+        elif re.search(r'\b(hourly labour rate|hourly overhead rate|estimated cost|third-party vessel costs|calculate labour costs|overtime|exceeding 9 hours|saturday|sunday|1\.5 times)\b', text):
+            specs = [
+                ("To engineer financial calculation engine for labour rates, overheads & overtime multiplier rules",
+                 "Calculation service handling base labor rates, overhead multipliers, 1.5x overtime rules for weekends/over-9-hours, and vessel costs.",
+                 "Backend"),
+                ("To build dynamic cost estimation breakdown card with real-time rate recalculation UI",
+                 "Visual summary card displaying itemized costs (standard labor, overtime, overheads, third-party) with live updates on input change.",
+                 "Frontend"),
+                ("To verify monetary precision, overtime threshold edge cases & automated financial test suites",
+                 "Automated tests asserting currency rounding rules, overtime threshold transitions, and rate override edge cases.",
+                 "QA")
+            ]
+        # M. Email Notifications & Communication
+        elif re.search(r'\b(send notifications|emails to notify|cc/notification|approved templates|template confirmation)\b', text):
+            specs = [
+                ("To configure asynchronous event dispatchers, message queuing & email delivery engine",
+                 "Event-driven notification broker sending emails upon key actions, managing delivery queues, and handling retries.",
+                 "Backend"),
+                ("To build notification recipient management UI with CC list editor & email template preview",
+                 "User interface for configuring email recipients, managing CC notification lists, and previewing formatted messages.",
+                 "Frontend"),
+                ("To test email delivery triggers, recipient list validation & failure notification handling",
+                 "Automated tests ensuring correct email formatting, verifying CC recipients, and asserting delivery triggers.",
+                 "QA")
+            ]
+        # N. Search & Multi-criteria Filtering
+        elif re.search(r'\b(search functionality|filter engineering records|search and filter|search for projects|filter projects)\b', text):
+            specs = [
+                ("To implement database query indexing, multi-attribute parameter filters & search APIs",
+                 "Optimized search endpoints supporting text indexing, multi-criteria filters, and fast response times.",
+                 "Backend"),
+                ("To build debounced search bar, faceted filter dropdowns & active filter chips",
+                 "Interactive UI with debounced input, multi-select filter tags, active filter pills, and clear-all controls.",
+                 "Frontend"),
+                ("To test search query performance, special character handling & empty result suggestions",
+                 "Automated test coverage for query response latency, empty result states, and multi-filter combination edge cases.",
+                 "QA")
+            ]
+        # O. Fallback: Clean Dynamic Specification
+        else:
+            short_desc = core_action[:40].rsplit(' ', 1)[0] if len(core_action) > 40 else core_action
+            specs = [
+                (f"To implement Core Business Logic, Data Models & API Services for {short_desc}",
+                 f"Backend persistence layer, domain entity validation, and REST API services for {short_desc}.",
+                 "Backend"),
+                (f"To build Interactive User Interface, Form Controls & Client State Management for {short_desc}",
+                 f"Responsive user interface, interactive handlers, real-time client state binding, and user feedback for {short_desc}.",
+                 "Frontend"),
+                (f"To implement Validation Boundaries, Automated Test Assertions & Error Handling for {short_desc}",
+                 f"Automated unit and integration test assertions, exception handling, and edge case coverage for {short_desc}.",
+                 "QA")
+            ]
+
+        pts = [p1, p2, p3]
+        hrs = [h1, h2, h3]
+        colors = ["indigo", "sky", "emerald"]
+
+        sub_stories = []
+        for i, (stitle, sdesc, sdom) in enumerate(specs):
+            sub_id = f"{sid}.{i+1}"
+            sub_stories.append({
+                "id": sub_id,
+                "story_id": sub_id,
                 "parent_id": sid,
-                "title": sub1_title,
-                "description": f"Backend persistence layer, database schemas, and REST endpoints for {core_action}.",
+                "title": stitle,
+                "description": sdesc,
                 "epic": epic,
-                "story_points": p1,
-                "points": p1,
-                "estimated_hours": h1,
-                "hours": h1,
-                "domain": "Backend",
+                "story_points": pts[i],
+                "points": pts[i],
+                "estimated_hours": hrs[i],
+                "hours": hrs[i],
+                "domain": sdom,
+                "status": story.get('status', 'To Do'),
                 "priority_tier": tier,
-                "dependencies": deps,
-                "gherkin_criteria": generate_gherkin_scenarios(sub1_title, desc, epic),
-                "badge_color": "indigo"
-            },
-            {
-                "story_id": sub2_id,
-                "parent_id": sid,
-                "title": sub2_title,
-                "description": f"Responsive user interface, real-time client state binding, and interactive UX for {core_action}.",
-                "epic": epic,
-                "story_points": p2,
-                "points": p2,
-                "estimated_hours": h2,
-                "hours": h2,
-                "domain": "Frontend",
-                "priority_tier": tier,
-                "dependencies": [sub1_id],
-                "gherkin_criteria": generate_gherkin_scenarios(sub2_title, desc, epic),
-                "badge_color": "sky"
-            },
-            {
-                "story_id": sub3_id,
-                "parent_id": sid,
-                "title": sub3_title,
-                "description": f"Security verification, exception handling, automated tests, and edge case coverage for {core_action}.",
-                "epic": epic,
-                "story_points": p3,
-                "points": p3,
-                "estimated_hours": h3,
-                "hours": h3,
-                "domain": "QA",
-                "priority_tier": "LOW" if tier == "LOW" else "MEDIUM",
-                "dependencies": [sub2_id],
-                "gherkin_criteria": generate_gherkin_scenarios(sub3_title, desc, epic),
-                "badge_color": "emerald"
-            }
-        ]
+                "priority": story.get('priority', 'HIGH'),
+                "dependencies": deps if i == 0 else [f"{sid}.{i}"],
+                "gherkin_criteria": generate_gherkin_scenarios(stitle, desc, epic),
+                "badge_color": colors[i]
+            })
+        return sub_stories
+
     else:
         # 2-part decomposition for smaller stories (e.g. 2-3 points)
         p1 = max(1, points // 2)
         p2 = max(1, points - p1)
-        
-        total_base_hours = points * 8
         h1 = max(4, int(round(total_base_hours * 0.55)))
         h2 = max(4, total_base_hours - h1)
         
         sub1_id = f"{sid}.1"
         sub2_id = f"{sid}.2"
         
-        sub1_title = f"To implement Core Business API & Database Logic for {core_action}"
-        sub2_title = f"To build Frontend UI View, Input Validation & Testing for {core_action}"
+        short_desc = core_action[:35].rsplit(' ', 1)[0] if len(core_action) > 35 else core_action
+        sub1_title = f"To implement Core Business Logic, Data Handlers & API Services for {short_desc}"
+        sub2_title = f"To build Interactive User Interface, Input Validation & Verification for {short_desc}"
         
-        sub_stories = [
+        return [
             {
                 "story_id": sub1_id,
                 "parent_id": sid,
                 "title": sub1_title,
-                "description": f"Fundamental API logic, database handlers, and data transactions for {core_action}.",
+                "description": f"Fundamental API logic, database handlers, and data transactions for {short_desc}.",
                 "epic": epic,
                 "story_points": p1,
                 "points": p1,
@@ -394,7 +621,7 @@ def decompose_story_ai(story):
                 "story_id": sub2_id,
                 "parent_id": sid,
                 "title": sub2_title,
-                "description": f"Client-facing components, interactive handlers, input validation, and user feedback for {core_action}.",
+                "description": f"Client-facing components, interactive handlers, input validation, and user feedback for {short_desc}.",
                 "epic": epic,
                 "story_points": p2,
                 "points": p2,
@@ -407,8 +634,6 @@ def decompose_story_ai(story):
                 "badge_color": "emerald"
             }
         ]
-        
-    return sub_stories
 
 def attach_subtasks_to_tasks(task_list, force_high_critical=True):
     """
@@ -424,54 +649,25 @@ def attach_subtasks_to_tasks(task_list, force_high_critical=True):
         if task.get('title'):
             task['title'] = clean_story_title_text(task['title'])
             
-        # If already decomposed and has sub_tasks, update/clean sub_tasks titles
+        # If already decomposed and has sub_tasks:
         if task.get('sub_tasks') and len(task['sub_tasks']) > 0:
             task['is_decomposed'] = True
-            core = extract_core_action(task.get('title'))
-            for sub in task['sub_tasks']:
-                sub_id_str = str(sub.get('id') or sub.get('story_id') or '')
-                old_t = str(sub.get('title') or '')
-                # If old sub task was just parent title copy or had [Part X: ...]
-                if "[Part " in old_t or "As a " in old_t or "I want to" in old_t or old_t == task.get('title'):
-                    if sub_id_str.endswith('.1'):
-                        sub['title'] = f"To implement Database Schema & Backend REST API for {core}"
-                    elif sub_id_str.endswith('.2'):
-                        sub['title'] = f"To build Interactive UI Components & State Management for {core}"
-                    elif sub_id_str.endswith('.3'):
-                        sub['title'] = f"To implement Validation, Error Handling & Automated Tests for {core}"
-                    else:
-                        sub['title'] = clean_story_title_text(old_t)
-                else:
-                    sub['title'] = clean_story_title_text(old_t)
+            # Detect legacy boilerplate titles and auto-upgrade them to contextual domain titles!
+            is_legacy_boilerplate = any("Database Schema & Backend REST API" in str(s.get('title', '')) or "Interactive UI Components & State Management" in str(s.get('title', '')) for s in task['sub_tasks'])
+            if is_legacy_boilerplate:
+                fresh_subs = decompose_story_ai(task)
+                for i, sub in enumerate(fresh_subs):
+                    if i < len(task['sub_tasks']):
+                        sub['status'] = task['sub_tasks'][i].get('status', 'To Do')
+                        if task['sub_tasks'][i].get('assigned_developer'):
+                            sub['assigned_developer'] = task['sub_tasks'][i].get('assigned_developer')
+                task['sub_tasks'] = fresh_subs
             continue
             
         # Automatically decompose CRITICAL and HIGH tasks ONLY
         if force_high_critical and (raw_tier in ['CRITICAL', 'HIGH'] or str(task.get('priority', '')).upper() in ['CRITICAL', 'HIGH']):
             generated = decompose_story_ai(task)
-            sub_tasks = []
-            for i, sub in enumerate(generated):
-                sub_id = sub.get('story_id') or f"{sid}.{i+1}"
-                sub_pt = int(sub.get('story_points') or sub.get('points', 1))
-                sub_hrs = int(sub.get('estimated_hours') or sub.get('hours', sub_pt * 8))
-                sub_tasks.append({
-                    "id": sub_id,
-                    "story_id": sub_id,
-                    "parent_id": sid,
-                    "title": clean_story_title_text(sub.get('title', f"Subtask {i+1}")),
-                    "description": sub.get('description', ''),
-                    "points": sub_pt,
-                    "story_points": sub_pt,
-                    "estimated_hours": sub_hrs,
-                    "hours": sub_hrs,
-                    "domain": sub.get('domain', 'Backend'),
-                    "status": task.get('status', 'To Do'),
-                    "priority_tier": tier,
-                    "priority": task.get('priority', 'HIGH'),
-                    "assigned_developer": task.get('assigned_developer'),
-                    "gherkin_criteria": sub.get('gherkin_criteria', ''),
-                    "dependencies": sub.get('dependencies', [])
-                })
-            task['sub_tasks'] = sub_tasks
+            task['sub_tasks'] = generated
             task['is_decomposed'] = True
         else:
             task['sub_tasks'] = []
@@ -1009,7 +1205,7 @@ def move_kanban_card():
                 dep_task = task_map.get(dep_id)
                 if dep_task:
                     dep_status = dep_task.get('status', 'To Do')
-                    if dep_status == 'To Do':
+                    if dep_status != 'Done':
                         unmet_deps.append({
                             "id": dep_id,
                             "title": dep_task.get('title', ''),
@@ -1021,9 +1217,9 @@ def move_kanban_card():
                 dep_names = ", ".join([f"{d['id']} ({d['title'][:25]}... [{d['status']}])" for d in unmet_deps])
                 warnings.append({
                     "type": "DAG_DEPENDENCY_BLOCKER",
-                    "severity": "WARNING",
-                    "title": "Prerequisite DAG Dependency Notice",
-                    "message": f"Story {story_id} was moved to '{target_status_val}'. Note: Prerequisite task(s) {dep_names} are still in 'To Do'. In Scrum, complete prerequisite stories first to maintain architectural integrity.",
+                    "severity": "CRITICAL" if target_status_val == 'Done' else "WARNING",
+                    "title": "Dependency Blocking Story Must Be Finished First",
+                    "message": f"Story {story_id} was moved to '{target_status_val}'. Prerequisite dependency story ({dep_names}) must be finished first (Done) before dependent stories can proceed.",
                     "blocking_tasks": unmet_deps
                 })
 

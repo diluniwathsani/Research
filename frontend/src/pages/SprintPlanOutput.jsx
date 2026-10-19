@@ -11,9 +11,22 @@ import SprintKanbanBoard from "../components/SprintKanbanBoard";
 import SprintBurndownAnalytics from "../components/SprintBurndownAnalytics";
 import StoryDecomposerModal from "../components/StoryDecomposerModal";
 import SprintCPMAnalyzer from "../components/SprintCPMAnalyzer";
+import SprintCapacityBar from "../components/design-system/SprintCapacityBar";
+import WorkItemCard from "../components/design-system/WorkItemCard";
 import { cleanStoryTitle } from "../utils/storyUtils";
 
-export default function SprintPlanOutput({ requirements = [], onNavigateToAddStories, onNavigateToArtifacts, onNavigateToResources }) {
+export default function SprintPlanOutput({ 
+  requirements = [], 
+  onNavigateToAddStories, 
+  onNavigateToArtifacts, 
+  onNavigateToResources,
+  activeTab: externalActiveTab,
+  setActiveTab: externalSetActiveTab,
+  onStoriesCountChange,
+  projects = [],
+  selectedProjectId = '',
+  onSelectProject
+}) {
   const [hasLoadedDemo, setHasLoadedDemo] = useState(true);
   const [sprints, setSprints] = useState([]);
   const [stats, setStats] = useState(null);
@@ -23,7 +36,9 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
   const [dagData, setDagData] = useState(null);
   const [ganttData, setGanttData] = useState(null);
   const [projectName, setProjectName] = useState("");
-  const [activeTab, setActiveTab] = useState("gantt"); // "gantt", "kanban", "plan", "burndown", "cpm", "dag", "benchmark"
+  const [internalActiveTab, setInternalActiveTab] = useState("gantt");
+  const activeTab = externalActiveTab !== undefined ? externalActiveTab : internalActiveTab;
+  const setActiveTab = externalSetActiveTab !== undefined ? externalSetActiveTab : setInternalActiveTab;
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
   const [customizerNotice, setCustomizerNotice] = useState(null);
   const [allTasks, setAllTasks] = useState([]);
@@ -31,6 +46,38 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
   const [selectedStoryToDecompose, setSelectedStoryToDecompose] = useState(null);
   const [expandedSubtasks, setExpandedSubtasks] = useState({});
   const [expandedSubtaskDetails, setExpandedSubtaskDetails] = useState({});
+
+  // Dynamic Project Dropdown Selection State
+  const [dbProjects, setDbProjects] = useState([]);
+  const [isSwitchingProject, setIsSwitchingProject] = useState(false);
+  const [currentSelectedProjectId, setCurrentSelectedProjectId] = useState(selectedProjectId || '');
+
+  useEffect(() => {
+    if (selectedProjectId) {
+      setCurrentSelectedProjectId(selectedProjectId);
+    }
+  }, [selectedProjectId]);
+
+  // Fetch projects from Express if not provided
+  useEffect(() => {
+    if (!projects || projects.length === 0) {
+      fetch('http://localhost:3000/api/projects')
+        .then(res => res.json())
+        .then(data => {
+          const list = Array.isArray(data) ? data : (data?.data || data?.projects || []);
+          if (Array.isArray(list) && list.length > 0) {
+            setDbProjects(list);
+          }
+        })
+        .catch(err => console.error("Error fetching projects:", err));
+    }
+  }, [projects]);
+
+  useEffect(() => {
+    if (onStoriesCountChange && allTasks.length > 0) {
+      onStoriesCountChange(allTasks.length);
+    }
+  }, [allTasks.length, onStoriesCountChange]);
 
   // Active roadmap holidays strictly clamped to project start and end dates
   const activeRoadmapHolidays = ganttData ? (
@@ -94,6 +141,122 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
     }
     return "POS_SYSTEM_REQUIREMENTS";
   }, [projectName, ganttData, requirements]);
+
+  // Available project list for dropdown selection
+  const projectOptions = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+
+    const addProj = (id, name, extra = {}) => {
+      if (!name) return;
+      const cleanName = String(name).trim();
+      const cleanId = String(id || cleanName);
+      if (!seen.has(cleanName.toLowerCase())) {
+        seen.add(cleanName.toLowerCase());
+        list.push({ 
+          id: cleanId, 
+          project_id: cleanId, 
+          name: cleanName, 
+          project_name: cleanName, 
+          requirement_count: extra.requirement_count || extra.requirementCount,
+          ...extra 
+        });
+      }
+    };
+
+    const sourceProjects = (projects && projects.length > 0) ? projects : dbProjects;
+    sourceProjects.forEach((p, idx) => {
+      addProj(p.project_id || p.id || `proj-${idx}`, p.project_name || p.name, p);
+    });
+
+    if (requirements && requirements.length > 0) {
+      requirements.forEach((r, idx) => {
+        const rName = r.project_name || r.batch_title || r.batch_name || r.project;
+        if (rName) {
+          addProj(r.project_id || `req-proj-${idx}`, rName, { requirement_count: 1 });
+        }
+      });
+    }
+
+    if (activeProjectTitle) {
+      addProj('current-proj', activeProjectTitle);
+    }
+
+    return list;
+  }, [projects, dbProjects, requirements, activeProjectTitle]);
+
+  // Handler to switch project from the top dropdown
+  const handleProjectChange = async (targetProjectIdOrName) => {
+    if (!targetProjectIdOrName || isSwitchingProject) return;
+    setIsSwitchingProject(true);
+
+    const selectedProj = projectOptions.find(p => 
+      String(p.project_id || p.id) === String(targetProjectIdOrName) ||
+      String(p.project_name || p.name).toLowerCase() === String(targetProjectIdOrName).toLowerCase()
+    );
+
+    const projName = selectedProj?.project_name || selectedProj?.name || targetProjectIdOrName;
+    const projId = selectedProj?.project_id || selectedProj?.id || targetProjectIdOrName;
+
+    setProjectName(projName);
+    setCurrentSelectedProjectId(projId);
+
+    try {
+      const email = localStorage.getItem('user_email') || 'default';
+      localStorage.setItem(`active_requirements_batch_${email}`, projName);
+      localStorage.setItem('active_requirements_batch', projName);
+      localStorage.setItem('active_project_name', projName);
+      localStorage.setItem('active_project_id', projId);
+    } catch (_) {}
+
+    if (onSelectProject) {
+      onSelectProject(projId);
+    }
+
+    try {
+      const reqRes = await fetch('http://localhost:3000/api/requirements');
+      const allReqs = await reqRes.json();
+      const projReqs = Array.isArray(allReqs)
+        ? allReqs.filter(r => 
+            String(r.project_id) === String(projId) ||
+            String(r.project_name || '').toLowerCase() === String(projName).toLowerCase() ||
+            String(r.batch_name || '').toLowerCase().includes(String(projName).toLowerCase())
+          )
+        : [];
+
+      if (projReqs.length > 0) {
+        await fetch('http://localhost:8082/api/import-requirements', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            requirements: projReqs,
+            project_name: projName,
+            project_id: projId,
+            timeline_settings: {
+              start_date: '2026-10-19',
+              sprint_duration_weeks: 2,
+              working_days_per_week: 5,
+              target_sprint_count: Math.max(2, Math.min(6, Math.ceil(projReqs.length / 12)))
+            }
+          })
+        });
+      }
+
+      await Promise.all([
+        fetchSprintPlan(),
+        fetchDagData(),
+        fetchGanttData()
+      ]);
+
+      setCustomizerNotice(`Active project switched to "${projName}".`);
+      setTimeout(() => setCustomizerNotice(null), 5000);
+      window.dispatchEvent(new Event('sprints-updated'));
+    } catch (err) {
+      console.error("Failed to switch project:", err);
+    } finally {
+      setIsSwitchingProject(false);
+    }
+  };
 
   const handleOpenDecomposer = (story) => {
     setSelectedStoryToDecompose(story);
@@ -1048,25 +1211,55 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
   }
 
   return (
-    <div className="space-y-6 text-slate-100 p-2 animate-in fade-in duration-300">
+    <div className="space-y-6 text-slate-900 dark:text-slate-100 transition-colors">
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border border-slate-700/80 p-5 rounded-2xl shadow-xl">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 p-5 rounded-3xl shadow-sm dark:shadow-xl backdrop-blur-md">
         <div className="space-y-1.5">
-          <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex flex-wrap items-center gap-2.5">
-            <span className="text-slate-100">Sprint Plan for:</span>
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-300 to-pink-400 font-mono tracking-wide px-3 py-1 rounded-xl bg-indigo-950/50 border border-indigo-500/40 shadow-inner">
-              {activeProjectTitle}
-            </span>
+          <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight flex flex-wrap items-center gap-3">
+            <span className="text-slate-900 dark:text-slate-100 shrink-0">Sprint Plan for:</span>
+            
+            {/* Project Selection Dropdown */}
+            <div className="relative inline-flex items-center">
+              <select
+                value={
+                  projectOptions.some(p => String(p.project_id || p.id) === String(currentSelectedProjectId))
+                    ? currentSelectedProjectId
+                    : (projectOptions.find(p => p.name.toLowerCase() === activeProjectTitle.toLowerCase())?.id || activeProjectTitle)
+                }
+                onChange={(e) => handleProjectChange(e.target.value)}
+                disabled={isSwitchingProject}
+                className="appearance-none font-mono font-bold tracking-wide text-sm sm:text-base md:text-lg pl-4 pr-10 py-1.5 rounded-2xl bg-indigo-50/90 hover:bg-indigo-100/90 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 border-2 border-indigo-300 dark:border-indigo-500/60 hover:border-indigo-500 dark:hover:border-indigo-400 text-indigo-950 dark:text-indigo-200 shadow-sm transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:opacity-60"
+                title="Select project to switch Sprint Plan, Roadmap, and Kanban view"
+              >
+                {projectOptions.map((proj) => {
+                  const pVal = String(proj.project_id || proj.id || proj.name);
+                  const pLabel = proj.project_name || proj.name || 'Agile Project';
+                  const count = proj.requirement_count ? ` (${proj.requirement_count} reqs)` : '';
+                  return (
+                    <option key={pVal} value={pVal} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-sans py-1.5 text-sm">
+                      {pLabel}{count}
+                    </option>
+                  );
+                })}
+              </select>
+              <div className="pointer-events-none absolute right-3 flex items-center text-indigo-600 dark:text-indigo-400">
+                {isSwitchingProject ? (
+                  <RefreshCw size={15} className="animate-spin text-indigo-500" />
+                ) : (
+                  <ChevronDown size={18} />
+                )}
+              </div>
+            </div>
           </h2>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             Automated Sprint Allocation, Gantt Roadmap, and Kanban Deliverables generated specifically for{" "}
-            <strong className="text-indigo-300 font-mono">{activeProjectTitle}</strong> requirements.
+            <strong className="text-indigo-600 dark:text-indigo-300 font-mono">{activeProjectTitle}</strong> requirements.
           </p>
         </div>
 
         {/* Stories and Story Points Summary Badge */}
         <div className="flex items-center gap-2">
-          <span className="text-xs font-mono font-black px-3.5 py-2 rounded-xl bg-indigo-600/20 text-indigo-200 border border-indigo-500/40 shadow-sm">
+          <span className="text-xs font-mono font-black px-3.5 py-2 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-600/20 dark:text-indigo-200 dark:border-indigo-500/40 shadow-sm">
             {allTasks.length} User Stories • {allTasks.reduce((sum, t) => sum + (t.story_points || t.points || 0), 0)} Story Points
           </span>
         </div>
@@ -1074,110 +1267,56 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
 
       {/* Customizer Success Toast */}
       {customizerNotice && (
-        <div className="p-4 rounded-xl bg-emerald-950/80 border border-emerald-500/50 text-emerald-200 text-xs font-bold flex items-center justify-between shadow-lg animate-fadeIn">
+        <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-200 dark:border-emerald-500/50 text-emerald-800 dark:text-emerald-200 text-xs font-bold flex items-center justify-between shadow-lg animate-fadeIn">
           <div className="flex items-center gap-2">
-            <CheckCircle2 size={16} className="text-emerald-400" />
+            <CheckCircle2 size={16} className="text-emerald-500 dark:text-emerald-400" />
             <span>{customizerNotice}</span>
           </div>
-          <button onClick={() => setCustomizerNotice(null)} className="text-emerald-400 hover:text-white">
+          <button onClick={() => setCustomizerNotice(null)} className="text-emerald-500 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-white">
             <X size={14} />
           </button>
         </div>
       )}
-
-      {/* Navigation Tabs Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-700 pb-3">
-        <div className="flex items-center gap-1.5 bg-slate-800/90 border border-slate-700/80 p-1.5 rounded-xl shadow-lg">
-          <button
-            onClick={() => setActiveTab("gantt")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              activeTab === "gantt" ? "bg-indigo-600 text-white shadow" : "text-slate-400 hover:text-white"
-            }`}
-          >
-            ⏱️ Gantt Timeline
-          </button>
-          <button
-            onClick={() => setActiveTab("kanban")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-              activeTab === "kanban" ? "bg-indigo-600 text-white shadow" : "text-slate-400 hover:text-white"
-            }`}
-          >
-            <span>📋 Kanban Board</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("plan")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              activeTab === "plan" ? "bg-indigo-600 text-white shadow" : "text-slate-400 hover:text-white"
-            }`}
-          >
-            📅 Sprint Plans
-          </button>
-          <button
-            onClick={() => setActiveTab("burndown")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-              activeTab === "burndown" ? "bg-indigo-600 text-white shadow" : "text-slate-400 hover:text-white"
-            }`}
-          >
-            <span>📉 Burndown & Velocity</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("cpm")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-              activeTab === "cpm" ? "bg-rose-600 text-white shadow-md shadow-rose-600/30" : "text-slate-400 hover:text-white"
-            }`}
-          >
-            <Flame size={13} className="text-amber-400" />
-            <span>Critical Path (CPM)</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("dag")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              activeTab === "dag" ? "bg-indigo-600 text-white shadow" : "text-slate-400 hover:text-white"
-            }`}
-          >
-            🔗 DAG Network
-          </button>
-          <button
-            onClick={() => setActiveTab("benchmark")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              activeTab === "benchmark" ? "bg-indigo-600 text-white shadow" : "text-slate-400 hover:text-white"
-            }`}
-          >
-            🏆 3-Way Benchmark
-          </button>
-        </div>
-      </div>
 
 
       {/* Tab 1: Sprints Breakdown View */}
       {activeTab === "plan" && (
         <div className="space-y-6 animate-in fade-in duration-300">
           {sprints.map((sprint, idx) => {
-            const currentCap = capacities[sprint.sprint_number - 1] || sprint.total_points || 30;
+            const currentCap = capacities[sprint.sprint_number - 1] || sprint.total_points || 40;
             const utilization = Math.min(100, Math.round((sprint.total_points / currentCap) * 100));
 
             return (
-              <div key={idx} className="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-6 shadow-xl space-y-4">
+              <div key={idx} className="bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl space-y-4 transition-colors">
+                {/* Production Design System Sprint Capacity Meter */}
+                <SprintCapacityBar
+                  committedPoints={sprint.total_points || 0}
+                  capacityPoints={currentCap}
+                  sprintName={`Sprint ${sprint.sprint_number} (${sprint.sprint_number === 1 ? 'MVP Core Architecture' : 'Incremental Release'})`}
+                  developerCount={5}
+                  tasksCount={sprint.stories.length}
+                />
+
                 {/* Sprint Header & Progress Bar */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-700 pb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-3 pt-2">
                   <div className="flex flex-wrap items-center gap-3">
-                    <span className="px-3 py-1.5 bg-indigo-600/30 border border-indigo-500/50 rounded-xl font-mono font-black text-sm text-indigo-300">
+                    <span className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-600/30 border border-indigo-200 dark:border-indigo-500/50 rounded-xl font-mono font-black text-sm text-indigo-700 dark:text-indigo-300">
                       SPRINT {sprint.sprint_number}
                     </span>
-                    <span className="text-xs font-bold text-slate-300">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
                       {sprint.stories.length} User Stories
                     </span>
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
                       • {sprint.total_hours} hrs effort
                     </span>
-                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-mono font-bold">
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/40 text-emerald-700 dark:text-emerald-300 font-mono font-bold">
                       {sprint.done_points || 0}/{sprint.total_points} pts Delivered ({sprint.total_points > 0 ? Math.round(((sprint.done_points || 0) / sprint.total_points) * 100) : 0}%)
                     </span>
                   </div>
 
                   {/* Dynamic Capacity Bar */}
                   <div className="flex items-center gap-3">
-                    <div className="w-36 bg-slate-900 rounded-full h-2.5 overflow-hidden border border-slate-700">
+                    <div className="w-36 bg-slate-100 dark:bg-slate-900 rounded-full h-2.5 overflow-hidden border border-slate-200 dark:border-slate-700">
                       <div 
                         className={`h-full rounded-full transition-all duration-500 ${
                           utilization > 100 ? 'bg-rose-500' : utilization >= 90 ? 'bg-emerald-500' : 'bg-indigo-500'
@@ -1185,7 +1324,7 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
                         style={{ width: `${Math.min(100, utilization)}%` }}
                       />
                     </div>
-                    <span className="text-xs font-mono font-bold text-slate-200">
+                    <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-200">
                       {sprint.total_points}/{currentCap} pts ({utilization}%)
                     </span>
                   </div>
@@ -1193,8 +1332,8 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
 
                 {/* Stories Table */}
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs text-slate-300">
-                    <thead className="bg-slate-900/80 text-slate-400 border-b border-slate-700">
+                  <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
+                    <thead className="bg-slate-50 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
                       <tr>
                         <th className="p-3">Story ID</th>
                         <th className="p-3">Title & Context</th>
@@ -1207,83 +1346,143 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
                       </tr>
                     </thead>
                     <tbody>
-                      {sprint.stories?.map((story, i) => {
-                        const tier = story.priority_tier || (story.priority === 'HIGH' ? 'HIGH' : 'LOW');
-                        const status = story.status || "To Do";
-                        const hasSubtasks = story.sub_tasks && story.sub_tasks.length > 0;
-                        const isExpanded = expandedSubtasks[story.story_id] !== false; // expanded by default
-                        const isHighOrCritical = tier === 'CRITICAL' || tier === 'HIGH' || story.priority === 'HIGH';
+                      {(() => {
+                        const rawStories = sprint.stories || [];
+                        const sortedStories = [...rawStories].sort((a, b) => {
+                          const aId = a.story_id || a.id;
+                          const bId = b.story_id || b.id;
+                          
+                          const isPrereqDone = (depId) => {
+                            const dTask = (allTasks || []).find(t => (t.story_id === depId || t.id === depId));
+                            return dTask ? dTask.status === 'Done' : false;
+                          };
+                          const isBlockedA = (a.dependencies || []).some(d => !isPrereqDone(d));
+                          const isBlockedB = (b.dependencies || []).some(d => !isPrereqDone(d));
 
-                        return (
-                          <React.Fragment key={story.story_id || i}>
-                            <tr className={`border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors ${hasSubtasks ? 'bg-slate-800/40' : ''}`}>
-                              <td className="p-3 font-mono text-emerald-400 font-bold whitespace-nowrap">
-                                <div className="flex items-center gap-1.5">
-                                  {hasSubtasks && (
-                                    <button
-                                      onClick={() => toggleSubtasks(story.story_id)}
-                                      className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-all"
-                                      title={isExpanded ? "Collapse sub-tasks" : "Expand sub-tasks"}
-                                    >
-                                      {isExpanded ? <ChevronDown size={14} className="text-indigo-400" /> : <ChevronRight size={14} className="text-slate-400" />}
-                                    </button>
-                                  )}
-                                  <span>{story.story_id}</span>
-                                </div>
-                              </td>
-                              <td className="p-3 font-semibold text-white">
-                                <div>{cleanStoryTitle(story.title)}</div>
-                                {story.reason && (
-                                  <p className="text-[10px] text-slate-400 mt-0.5">{story.reason}</p>
-                                )}
-                                {hasSubtasks && (
-                                  <div className="flex items-center gap-2 mt-1.5">
-                                    <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 text-[10px] font-bold font-mono flex items-center gap-1">
-                                      <Layers size={10} className="text-indigo-400" />
-                                      <span>🧩 Decomposed ({story.sub_tasks.length} Sub-tasks)</span>
-                                    </span>
-                                    <span className="text-[10px] text-slate-400 font-mono">
-                                      {story.sub_tasks.filter(s => s.status === 'Done').length}/{story.sub_tasks.length} Done
-                                    </span>
-                                  </div>
-                                )}
-                              </td>
-                              <td className="p-3 whitespace-nowrap">
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black border shadow-sm ${
-                                  tier === 'CRITICAL' ? 'bg-rose-500/20 text-rose-400 border-rose-500/40' :
-                                  tier === 'HIGH' ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' :
-                                  tier === 'MEDIUM' ? 'bg-sky-500/20 text-sky-400 border-sky-500/40' :
-                                  'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                                }`}>
-                                  {tier}
-                                </span>
-                              </td>
-                              <td className="p-3 text-center whitespace-nowrap">
-                                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border font-mono ${
-                                  status === 'Done' ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300' :
-                                  status === 'In Progress' ? 'bg-sky-500/15 border-sky-500/40 text-sky-300 animate-pulse' :
-                                  status === 'QA Review' ? 'bg-amber-500/15 border-amber-500/40 text-amber-300' :
-                                  'bg-slate-800 border-slate-700 text-slate-400'
-                                }`}>
-                                  {status === 'Done' ? '✓ Done' : status === 'In Progress' ? '⚡ In Progress' : status === 'QA Review' ? '🔍 QA Review' : '📝 To Do'}
-                                </span>
-                              </td>
-                              <td className="p-3 whitespace-nowrap">
-                                {story.dependencies && story.dependencies.length > 0 ? (
-                                  <div className="flex flex-wrap gap-1">
-                                    {story.dependencies.map((dep, dIdx) => (
-                                      <span key={dIdx} className="px-2 py-0.5 bg-indigo-500/10 border border-indigo-500/30 rounded-lg text-[10px] font-mono text-indigo-300">
-                                        🔗 {dep}
+                          const activeUnblocksA = (allTasks || []).filter(t => t.status !== 'Done' && (t.dependencies || []).includes(aId)).length;
+                          const activeUnblocksB = (allTasks || []).filter(t => t.status !== 'Done' && (t.dependencies || []).includes(bId)).length;
+
+                          // 1. Blocker stories first!
+                          if (activeUnblocksA > 0 && activeUnblocksB === 0) return -1;
+                          if (activeUnblocksB > 0 && activeUnblocksA === 0) return 1;
+                          if (activeUnblocksA !== activeUnblocksB) return activeUnblocksB - activeUnblocksA;
+
+                          // 2. Unblocked before blocked
+                          if (!isBlockedA && isBlockedB) return -1;
+                          if (isBlockedA && !isBlockedB) return 1;
+
+                          // 3. Priority tier
+                          const pWeight = { 'CRITICAL': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
+                          const pA = pWeight[(a.priority_tier || a.priority || 'MEDIUM').toUpperCase()] || 2;
+                          const pB = pWeight[(b.priority_tier || b.priority || 'MEDIUM').toUpperCase()] || 2;
+                          if (pA !== pB) return pB - pA;
+
+                          return String(aId).localeCompare(String(bId));
+                        });
+
+                        return sortedStories.map((story, i) => {
+                          const tier = story.priority_tier || (story.priority === 'HIGH' ? 'HIGH' : 'LOW');
+                          const status = story.status || "To Do";
+                          const hasSubtasks = story.sub_tasks && story.sub_tasks.length > 0;
+                          const isExpanded = expandedSubtasks[story.story_id] !== false; // expanded by default
+                          const isHighOrCritical = tier === 'CRITICAL' || tier === 'HIGH' || story.priority === 'HIGH';
+
+                          const activeUnblocks = (allTasks || []).filter(t => t.status !== 'Done' && (t.dependencies || []).includes(story.story_id)).map(t => t.story_id);
+                          const totalUnblocks = (allTasks || []).filter(t => (t.dependencies || []).includes(story.story_id)).map(t => t.story_id);
+
+                          return (
+                            <React.Fragment key={story.story_id || i}>
+                              <tr className={`border-b border-slate-200 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors ${hasSubtasks ? 'bg-slate-50/70 dark:bg-slate-800/40' : ''}`}>
+                                <td className="p-3 font-mono text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    {hasSubtasks && (
+                                      <button
+                                        onClick={() => toggleSubtasks(story.story_id)}
+                                        className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-all"
+                                        title={isExpanded ? "Collapse sub-tasks" : "Expand sub-tasks"}
+                                      >
+                                        {isExpanded ? <ChevronDown size={14} className="text-indigo-400" /> : <ChevronRight size={14} className="text-slate-400" />}
+                                      </button>
+                                    )}
+                                    <span>{story.story_id}</span>
+                                    {activeUnblocks.length > 0 && status !== 'Done' && (
+                                      <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-indigo-500/25 border border-indigo-500/50 text-indigo-300 flex items-center gap-0.5 shadow-sm shrink-0">
+                                        <Zap size={9} className="text-yellow-400" />
+                                        <span>Blocker • Finish 1st</span>
                                       </span>
-                                    ))}
+                                    )}
                                   </div>
-                                ) : (
-                                  <span className="text-[10px] text-slate-500 italic">None</span>
-                                )}
-                              </td>
-                              <td className="p-3 font-bold text-center font-mono text-indigo-400">
-                                {story.story_points}
-                              </td>
+                                </td>
+                                <td className="p-3 font-semibold text-white">
+                                  <div>{cleanStoryTitle(story.title)}</div>
+                                  {story.reason && (
+                                    <p className="text-[10px] text-slate-400 mt-0.5">{story.reason}</p>
+                                  )}
+                                  {hasSubtasks && (
+                                    <div className="flex items-center gap-2 mt-1.5">
+                                      <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 text-[10px] font-bold font-mono flex items-center gap-1">
+                                        <Layers size={10} className="text-indigo-400" />
+                                        <span>🧩 Decomposed ({story.sub_tasks.length} Sub-tasks)</span>
+                                      </span>
+                                      <span className="text-[10px] text-slate-400 font-mono">
+                                        {story.sub_tasks.filter(s => s.status === 'Done').length}/{story.sub_tasks.length} Done
+                                      </span>
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="p-3 whitespace-nowrap">
+                                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-black border shadow-sm ${
+                                    tier === 'CRITICAL' ? 'bg-rose-500/20 text-rose-400 border-rose-500/40' :
+                                    tier === 'HIGH' ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' :
+                                    tier === 'MEDIUM' ? 'bg-sky-500/20 text-sky-400 border-sky-500/40' :
+                                    'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                                  }`}>
+                                    {tier}
+                                  </span>
+                                </td>
+                                <td className="p-3 text-center whitespace-nowrap">
+                                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border font-mono ${
+                                    status === 'Done' ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300' :
+                                    status === 'In Progress' ? 'bg-sky-500/15 border-sky-500/40 text-sky-300 animate-pulse' :
+                                    status === 'QA Review' ? 'bg-amber-500/15 border-amber-500/40 text-amber-300' :
+                                    'bg-slate-800 border-slate-700 text-slate-400'
+                                  }`}>
+                                    {status === 'Done' ? '✓ Done' : status === 'In Progress' ? '⚡ In Progress' : status === 'QA Review' ? '🔍 QA Review' : '📝 To Do'}
+                                  </span>
+                                </td>
+                                <td className="p-3 whitespace-nowrap">
+                                  <div className="space-y-1">
+                                    {story.dependencies && story.dependencies.length > 0 ? (
+                                      <div className="flex flex-wrap gap-1 items-center">
+                                        <span className="text-[10px] text-slate-400 font-mono">Depends on:</span>
+                                        {story.dependencies.map((dep, dIdx) => (
+                                          <span key={dIdx} className="px-1.5 py-0.2 bg-indigo-500/10 border border-indigo-500/30 rounded text-[10px] font-mono text-indigo-300">
+                                            🔗 {dep}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span className="text-[10px] text-slate-500 italic block">No prerequisites</span>
+                                    )}
+
+                                    {totalUnblocks.length > 0 && (
+                                      <div className="flex flex-wrap gap-1 items-center pt-0.5">
+                                        <span className="text-[10px] text-amber-400 font-mono font-bold flex items-center gap-0.5">
+                                          <Zap size={9} className="text-yellow-400" />
+                                          <span>Unblocks:</span>
+                                        </span>
+                                        {totalUnblocks.map((uId, uIdx) => (
+                                          <span key={uIdx} className="px-1.5 py-0.2 bg-amber-500/15 border border-amber-500/30 rounded text-[10px] font-mono text-amber-300 font-bold">
+                                            ⚡ {uId}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="p-3 font-bold text-center font-mono text-indigo-400">
+                                  {story.story_points}
+                                </td>
                               <td className="p-3 text-center text-slate-400 font-mono">
                                 {story.estimated_hours} hrs
                               </td>
@@ -1502,7 +1701,8 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
                             )}
                           </React.Fragment>
                         );
-                      })}
+                      });
+                    })()}
                     </tbody>
                   </table>
                 </div>
@@ -1563,11 +1763,19 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
 
             {/* Quick Metrics Bar */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-slate-700/60 text-xs">
-              <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-                <span className="text-slate-400 block text-[11px]">Sprint Duration:</span>
-                <span className="text-white font-bold text-sm">
-                  {ganttData.config?.sprint_duration_weeks || 2} Weeks ({ganttData.sprints?.[0]?.working_days || 10} working days)
-                </span>
+              <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800 flex flex-col justify-between">
+                <div>
+                  <span className="text-slate-400 block text-[11px]">Sprint Duration:</span>
+                  <span className="text-white font-bold text-sm block">
+                    {ganttData.config?.sprint_duration_weeks || 2} Weeks ({ganttData.sprints?.[0]?.working_days || 10} working days)
+                  </span>
+                </div>
+                {(ganttData.project_start && ganttData.project_end) && (
+                  <div className="mt-1.5 pt-1.5 border-t border-slate-800/80 flex items-center gap-1 text-[11px] font-mono text-emerald-400 font-bold">
+                    <Calendar size={12} className="text-emerald-400 shrink-0" />
+                    <span>{ganttData.project_start} ➔ {ganttData.project_end}</span>
+                  </div>
+                )}
               </div>
               <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
                 <span className="text-slate-400 block text-[11px]">Total Working Days:</span>
@@ -1637,14 +1845,14 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
           </div>
 
 
-          <div className="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-6 shadow-xl space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-700 pb-3">
+          <div className="bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl space-y-6 transition-colors">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-3">
               <div>
-                <h3 className="text-base font-extrabold text-white flex items-center gap-2">
-                  <Calendar className="text-indigo-400" size={20} />
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Calendar className="text-indigo-600 dark:text-indigo-400" size={20} />
                   Agile Sprint Delivery Timeline & Gantt Schedule
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   Project Range: {ganttData.project_start} ➔ {ganttData.project_end} ({ganttData.total_calendar_days || ganttData.total_duration_days} Calendar Days)
                 </p>
               </div>
@@ -1867,14 +2075,14 @@ export default function SprintPlanOutput({ requirements = [], onNavigateToAddSto
         />
       )}
 
-      {/* Tab 4: DAG Network View */}
+      {/* Tab 4: Dependency Network View */}
       {activeTab === "dag" && dagData && (
         <div className="space-y-6 animate-in fade-in duration-300">
           <div className="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-6 shadow-xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-700 pb-3">
               <div className="flex items-center gap-2">
                 <Network className="text-indigo-400" size={22} />
-                <h3 className="text-base font-bold text-white">Directed Acyclic Graph (DAG) Prerequisite Flow</h3>
+                <h3 className="text-base font-bold text-white">Dependency Network & Prerequisite Flow</h3>
               </div>
               <span className="text-xs text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-full">
                 ✓ Validated: 0 Circular Cycles

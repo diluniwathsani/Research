@@ -1,20 +1,20 @@
 story_id,title,sprint_number,story_points,estimated_hours,priority_tier,assigned_developer,developer_id,required_skills,status,subtasks_count
-US003,To create tasks under each project so that the core functional feature is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,2
-US010,To view project progress through a dashboard so that the core functional feature is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,3
-US011,To create and manage user accounts so that the core functional feature is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,2
-US014,To receive notifications when a new task is assigned to them so that the email notification management is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,3
-US015,To export project reports for sharing with clients so that the job card export & communication is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,2
-US016,To search for projects using the project name or client name so that the engineering search & filter querying is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,3
-US017,To filter projects based on their current status so that the engineering search & filter querying is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,3
-US018,To generate project progress reports so that the engineering reporting & data analytics is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,3
-US019,To only be able to access the projects and information permitted for their role so that the role permission & action restriction is executed correctly.,1,3,24,HIGH,Unassigned Lead,DEV01,Fullstack,To Do,2
-US001,To update project details when there are changes so that the core functional feature is executed correctly.,1,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
-US002,To assign team members to projects so that the core functional feature is executed correctly.,1,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
-US004,To assign tasks to team members so that the core functional feature is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
-US005,To view the tasks assigned to them so that the core functional feature is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
-US006,To update the status of their assigned tasks so that the core functional feature is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
-US007,To view the progress of each project so that the core functional feature is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
-US008,To identify overdue tasks so that the core functional feature is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
-US009,To receive reminders when their task deadlines are approaching so that the core functional feature is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
-US012,To assign appropriate roles and permissions to users so that the core functional feature is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
-US013,To log into the system using their registered credentials so that the core functional feature is executed correctly.,2,3,24,MEDIUM,Unassigned Lead,DEV01,Fullstack,To Do,0
+US010,To view project progress through a dashboard so that the core functional feature is executed correctly.,1,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US012,To assign appropriate roles and permissions to users so that the core functional feature is executed correctly.,1,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US018,To generate project progress reports so that the engineering reporting & data analytics is executed correctly.,1,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US002,To assign team members to projects so that the core functional feature is executed correctly.,1,5,40,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US003,To create tasks under each project so that the core functional feature is executed correctly.,1,5,40,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US004,To assign tasks to team members so that the core functional feature is executed correctly.,1,5,40,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US005,To view the tasks assigned to them so that the core functional feature is executed correctly.,1,5,40,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US007,To view the progress of each project so that the core functional feature is executed correctly.,1,5,40,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US008,To identify overdue tasks so that the core functional feature is executed correctly.,1,5,40,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US011,To create and manage user accounts so that the core functional feature is executed correctly.,1,5,40,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US015,To export project reports for sharing with clients so that the job card export & communication is executed correctly.,2,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US016,To search for projects using the project name or client name so that the engineering search & filter querying is executed correctly.,2,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US017,To filter projects based on their current status so that the engineering search & filter querying is executed correctly.,2,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US006,To update the status of their assigned tasks so that the core functional feature is executed correctly.,2,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US013,To log into the system using their registered credentials so that the core functional feature is executed correctly.,2,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US001,To update project details when there are changes so that the core functional feature is executed correctly.,3,8,64,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US009,To receive reminders when their task deadlines are approaching so that the core functional feature is executed correctly.,3,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US014,To receive notifications when a new task is assigned to them so that the email notification management is executed correctly.,3,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3
+US019,To only be able to access the projects and information permitted for their role so that the role permission & action restriction is executed correctly.,3,13,104,CRITICAL,Unassigned Lead,DEV01,Fullstack,To Do,3

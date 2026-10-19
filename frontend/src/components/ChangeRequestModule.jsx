@@ -28,17 +28,20 @@ export default function ChangeRequestModule({
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 md:p-8 text-white border border-slate-800 shadow-xl relative overflow-hidden">
+      <div className="bg-white dark:bg-slate-900/90 rounded-3xl p-6 md:p-8 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 shadow-md relative overflow-hidden transition-colors">
         <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
         <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-semibold mb-2">
-              <GitPullRequest size={14} className="text-indigo-300" />
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-500/20 border border-indigo-200 dark:border-indigo-400/30 text-indigo-700 dark:text-indigo-300 text-xs font-semibold mb-2">
+              <GitPullRequest size={14} className="text-indigo-600 dark:text-indigo-300" />
               <span>Change Request Governance</span>
             </div>
-            <h1 className="text-2xl md:text-3xl font-extrabold text-white">
+            <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white">
               Change Requests
             </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Analyze architectural change impacts, evaluate blast radius, and execute intelligent sprint replanning.
+            </p>
           </div>
 
           {/* Quick Connect to Project Module Replanning Tab */}
@@ -56,13 +59,13 @@ export default function ChangeRequestModule({
         </div>
 
         {/* Sub-Navigation Tabs */}
-        <div className="mt-8 pt-4 border-t border-slate-800/80 flex flex-wrap items-center gap-2">
+        <div className="mt-8 pt-4 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-2">
           <button
             onClick={() => setSubTab('dashboard')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${
               subTab === 'dashboard'
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white'
+                : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <LayoutDashboard size={15} />
@@ -74,7 +77,7 @@ export default function ChangeRequestModule({
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${
               subTab === 'form'
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white'
+                : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <PlusCircle size={15} />
@@ -86,7 +89,7 @@ export default function ChangeRequestModule({
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${
               subTab === 'list'
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white'
+                : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <FileCheck2 size={15} />
@@ -96,7 +99,7 @@ export default function ChangeRequestModule({
           {onNavigateToReplanning && (
             <button
               onClick={onNavigateToReplanning}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 hover:text-white transition-all ml-auto"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-300 hover:bg-amber-500/20 hover:text-amber-700 dark:hover:text-white transition-all ml-auto"
             >
               <RotateCcw size={14} />
               <span>Project Module (Replanning Tab)</span>
