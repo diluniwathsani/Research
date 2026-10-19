@@ -13,6 +13,7 @@ router.get('/sprints/:sprintId/resources', changeRequestController.getSprintReso
 // Change Request CRUD, Details & Approvals
 router.post('/submit', changeRequestController.submitChangeRequest);
 router.get('/all', changeRequestController.getAllChangeRequests);
+router.get('/', changeRequestController.getAllChangeRequests);
 router.get('/stats', changeRequestController.getDashboardStats);
 router.get('/scope-creep/:projectId', changeRequestController.getScopeCreepAlert);
 router.get('/:id', changeRequestController.getChangeRequestById);

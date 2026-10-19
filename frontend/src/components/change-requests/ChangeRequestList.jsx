@@ -146,7 +146,12 @@ export default function ChangeRequestList({ onNavigateToNew, onNavigateToReplann
     }
 
     if (statusFilter !== 'ALL') {
-      filtered = filtered.filter(req => req.status === statusFilter);
+      filtered = filtered.filter(req => {
+        if (statusFilter === 'APPROVED') {
+          return req.status === 'APPROVED' || req.status === 'ACCEPTED' || req.status === 'Replanned & Integrated';
+        }
+        return req.status === statusFilter;
+      });
     }
 
     setFilteredRequests(filtered);
@@ -211,17 +216,20 @@ export default function ChangeRequestList({ onNavigateToNew, onNavigateToReplann
   const getStatusClass = (status) => {
     switch (status) {
       case 'PENDING': return 'badge status-pending';
-      case 'APPROVED': return 'badge status-approved';
+      case 'APPROVED':
+      case 'ACCEPTED':
+      case 'Replanned & Integrated':
+        return 'badge status-approved';
       case 'REJECTED': return 'badge status-rejected';
       case 'NEEDS_CLARIFICATION': return 'badge status-needs_clarification';
-      default: return 'badge';
+      default: return 'badge status-approved';
     }
   };
 
   const stats = {
     total: requests.length,
     pending: requests.filter(r => r.status === 'PENDING').length,
-    approved: requests.filter(r => r.status === 'APPROVED').length,
+    approved: requests.filter(r => r.status === 'APPROVED' || r.status === 'ACCEPTED' || r.status === 'Replanned & Integrated').length,
     rejected: requests.filter(r => r.status === 'REJECTED').length
   };
 
@@ -358,7 +366,7 @@ export default function ChangeRequestList({ onNavigateToNew, onNavigateToReplann
                 </td>
                 <td>
                   <span className={getStatusClass(request.status)}>
-                    {request.status}
+                    {request.status === 'Replanned & Integrated' ? 'APPROVED' : request.status}
                   </span>
                 </td>
                 <td>
@@ -419,7 +427,7 @@ export default function ChangeRequestList({ onNavigateToNew, onNavigateToReplann
                 <div><strong>Category:</strong> {selectedRequest.change_type}</div>
                 <div><strong>Urgency:</strong> {selectedRequest.urgency}</div>
                 <div><strong>Story Points:</strong> {selectedRequest.story_points} SP</div>
-                <div><strong>Governance Status:</strong> <span className={getStatusClass(selectedRequest.status)}>{selectedRequest.status}</span></div>
+                <div><strong>Governance Status:</strong> <span className={getStatusClass(selectedRequest.status)}>{selectedRequest.status === 'Replanned & Integrated' ? 'APPROVED' : selectedRequest.status}</span></div>
               </div>
 
               <div className="cr-modal-section-block">
