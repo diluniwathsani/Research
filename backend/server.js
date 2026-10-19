@@ -563,6 +563,10 @@ app.get('/api/sprints/:sprintId/tasks', async (req, res) => {
             };
         });
 
+        if (decompositionEngine && typeof decompositionEngine.predictBatchComplexityWithML === 'function') {
+            await decompositionEngine.predictBatchComplexityWithML(mappedTasks);
+        }
+
         res.json(mappedTasks);
     } catch (err) {
         console.error('Error fetching sprint tasks:', err);
@@ -2226,8 +2230,8 @@ function allocateTasks(tasks, developers, currentProjectId) {
         if (!rawComplexity) {
             const sp = Number(task.story_points) || 0;
             const hrs = Number(task.estimated_hours) || 0;
-            if (sp >= 8 || hrs >= 12) rawComplexity = 'HIGH';
-            else if (sp >= 5 || hrs >= 8) rawComplexity = 'MEDIUM';
+            if (sp >= 8 || hrs >= 48) rawComplexity = 'HIGH';
+            else if (sp >= 4 || hrs >= 20) rawComplexity = 'MEDIUM';
             else rawComplexity = 'LOW';
         }
         const predictedComplexity = String(rawComplexity).toUpperCase();
@@ -2360,10 +2364,15 @@ app.post('/api/allocate', async (req, res) => {
                 required_domain: t.required_domain || t.domain || 'Backend',
                 domain: t.domain || t.required_domain || 'Backend',
                 required_skills: reqSkills,
-                predicted_complexity: (t.predicted_complexity || t.complexity || 'MEDIUM').toUpperCase(),
+                predicted_complexity: (t.predicted_complexity || t.complexity || '').toUpperCase(),
                 priority: t.priority || 'MEDIUM'
             };
         });
+
+        // Call ML model to predict complexity for tasks
+        if (decompositionEngine && typeof decompositionEngine.predictBatchComplexityWithML === 'function') {
+            await decompositionEngine.predictBatchComplexityWithML(normalizedTasks);
+        }
 
         // Load developers from PostgreSQL
         const result = await pool.query(
